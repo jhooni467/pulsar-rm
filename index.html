@@ -4,6 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#080B16">
+<meta name="description" content="Stellar Music — reproductor de música local.">
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stellar">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
 <title>Pulsar RM</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -139,5 +150,16 @@
        accept="audio/*,.mp3,.m4a,.aac,.flac,.ogg,.oga,.opus,.wav,.weba" tabindex="-1">
 
 <script src="script.js"></script>
+
+<!-- Service worker (necesario para instalar como app y usar sin conexión) -->
+<script>
+  if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function (error) {
+        console.warn("Service worker no registrado:", error);
+      });
+    });
+  }
+</script>
 </body>
 </html>
