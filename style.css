@@ -1,0 +1,539 @@
+:root {
+  --bg: #080B16;
+  --surface: #111827;
+  --surface2: #192236;
+  --text: #F5F5FA;
+  --muted: #8993A8;
+  --accent: #A18AFF;
+  --danger: #FF7A8A;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Arial, sans-serif;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+button, input {
+  font: inherit;
+}
+
+button {
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  background: none;
+  touch-action: manipulation;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#app {
+  max-width: 600px;
+  margin: auto;
+  padding: 25px 22px 220px;
+}
+
+.topbar, .brand, .section-title {
+  display: flex;
+  align-items: center;
+}
+
+.topbar, .section-title {
+  justify-content: space-between;
+}
+
+.brand {
+  gap: 10px;
+  font-size: 16px;
+  letter-spacing: 3px;
+}
+
+.brand b {
+  color: var(--accent);
+}
+
+.logo {
+  color: var(--accent);
+  font-size: 27px;
+}
+
+.settings {
+  background: var(--surface);
+  border-radius: 50%;
+  width: 42px;
+  height: 42px;
+  font-size: 19px;
+}
+
+/* ---------- Vistas ---------- */
+
+.view {
+  display: none;
+}
+
+.view.active {
+  display: block;
+}
+
+.welcome {
+  margin-top: 55px;
+}
+
+.subtitle {
+  color: var(--accent);
+  font-size: 10px;
+  letter-spacing: 3px;
+  margin-bottom: 15px;
+}
+
+.welcome h1 {
+  font-size: 37px;
+  line-height: 1.2;
+  letter-spacing: -1px;
+}
+
+.description {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 13px;
+}
+
+.home-card {
+  margin-top: 35px;
+}
+
+.recent {
+  margin-top: 35px;
+}
+
+.link-btn {
+  color: var(--accent);
+  font-size: 12px;
+  padding: 6px 0 6px 10px;
+}
+
+/* ---------- Buscador ---------- */
+
+.search {
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  padding: 15px;
+  border-radius: 15px;
+  gap: 12px;
+  margin: 30px 0 40px;
+}
+
+.search span {
+  color: var(--muted);
+  font-size: 25px;
+}
+
+.search input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: white;
+  width: 100%;
+  font-size: 16px; /* 16px evita el zoom automático en móviles */
+}
+
+.section-title h2 {
+  font-size: 20px;
+}
+
+.section-title span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.tabs {
+  display: flex;
+  gap: 9px;
+  margin: 22px 0;
+  align-items: center;
+}
+
+.tabs button.active {
+  background: var(--accent);
+  color: var(--bg);
+  padding: 11px 17px;
+  border-radius: 30px;
+  font-size: 12px;
+}
+
+/* ---------- Estado vacío / botones ---------- */
+
+.empty {
+  background: linear-gradient(145deg, #151D32, #101522);
+  border: 1px solid #252D43;
+  border-radius: 23px;
+  padding: 45px 15px;
+  text-align: center;
+  margin-top: 25px;
+}
+
+.empty-icon {
+  font-size: 42px;
+  color: var(--accent);
+  margin-bottom: 17px;
+}
+
+.empty h3 {
+  font-size: 17px;
+  margin-bottom: 10px;
+}
+
+.empty p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.add-music {
+  background: var(--accent);
+  color: #080B16;
+  padding: 13px 22px;
+  border-radius: 30px;
+  font-weight: bold;
+  margin-top: 24px;
+}
+
+.add-music.small {
+  margin-top: 0;
+  padding: 11px 17px;
+  font-size: 12px;
+}
+
+/* ---------- Lista de canciones ---------- */
+
+.song-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.song-item {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 12px;
+  background: var(--surface);
+  border-radius: 15px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.song-item.playing {
+  border-color: var(--accent);
+}
+
+.song-cover {
+  width: 48px;
+  height: 48px;
+  background: var(--surface2);
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  font-size: 23px;
+  flex-shrink: 0;
+}
+
+.song-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.song-details strong,
+.song-details small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-details strong {
+  font-size: 13px;
+}
+
+.song-details small {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 5px;
+}
+
+.song-item button {
+  background: transparent;
+  color: var(--accent);
+  font-size: 18px;
+  padding: 8px;
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.song-item button.remove {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* ---------- Mini reproductor ---------- */
+
+.mini-player {
+  position: fixed;
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 24px);
+  max-width: 570px;
+  background: #151D30;
+  border: 1px solid #29334A;
+  border-radius: 18px;
+  padding: 10px 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mini-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+
+.cover {
+  width: 43px;
+  height: 43px;
+  border-radius: 10px;
+  background: var(--surface2);
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  font-size: 21px;
+  flex-shrink: 0;
+}
+
+.track-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.track-info strong,
+.track-info small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-info strong {
+  font-size: 13px;
+}
+
+.track-info small {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.round-btn {
+  background: var(--accent);
+  color: var(--bg);
+  border-radius: 50%;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+.round-btn.big {
+  width: 64px;
+  height: 64px;
+  font-size: 24px;
+}
+
+/* ---------- Pantalla Reproductor ---------- */
+
+.now-playing {
+  text-align: center;
+  padding-top: 30px;
+}
+
+.big-cover {
+  width: min(70vw, 260px);
+  height: min(70vw, 260px);
+  margin: 0 auto 28px;
+  border-radius: 26px;
+  background: linear-gradient(145deg, #151D32, #101522);
+  border: 1px solid #252D43;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  font-size: 80px;
+}
+
+.now-playing h2 {
+  font-size: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.now-playing > p {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.lyrics {
+  margin-top: 20px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.progress-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 30px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.progress-container input {
+  flex: 1;
+  accent-color: var(--accent);
+  height: 28px; /* zona táctil cómoda en Android */
+}
+
+.controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 35px;
+  margin-top: 18px;
+}
+
+.controls button {
+  font-size: 26px;
+  padding: 10px;
+}
+
+.controls .round-btn {
+  padding: 0;
+}
+
+/* ---------- Ajustes ---------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid #252D43;
+  border-radius: 18px;
+  padding: 20px;
+  margin-top: 22px;
+}
+
+.card h3 {
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+
+.card p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.danger-btn {
+  margin-top: 16px;
+  padding: 12px 20px;
+  border-radius: 30px;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* ---------- Navegación inferior ---------- */
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: #0D1321;
+  border-top: 1px solid #222B40;
+  display: flex;
+  justify-content: space-around;
+  padding: 8px 5px calc(10px + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+}
+
+.nav-item {
+  flex: 1;
+  color: var(--muted);
+  text-align: center;
+  padding: 5px 0;
+}
+
+.nav-icon {
+  display: block;
+  font-size: 20px;
+}
+
+.nav-item small {
+  display: block;
+  font-size: 10px;
+  margin-top: 5px;
+}
+
+.nav-item.selected {
+  color: var(--accent);
+}
+
+/* ---------- Aviso (toast) ---------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  background: #1D2740;
+  border: 1px solid #34405C;
+  color: var(--text);
+  padding: 12px 18px;
+  border-radius: 14px;
+  font-size: 13px;
+  z-index: 50;
+  text-align: center;
+}
