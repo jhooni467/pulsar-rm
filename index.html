@@ -4,28 +4,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#06141B">
-    <meta name="description" content="Pulsar RM - Your personal music player">
-
+    <meta name="theme-color" content="#080B16">
     <title>Pulsar RM</title>
-
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <div id="app">
-        <header class="app-header">
-            <h1>PULSAR RM</h1>
-        </header>
+<div id="app">
 
-        <main id="main-content">
-            <section id="home">
-                <h2>Tu música, tu universo.</h2>
-                <p>Bienvenido a Pulsar RM.</p>
-            </section>
-        </main>
-    </div>
+    <header class="topbar">
+        <div class="brand">
+            <span class="logo">✦</span>
+            <span>PULSAR <b>RM</b></span>
+        </div>
+        <button class="settings">⚙</button>
+    </header>
 
-    <script src="script.js"></script>
+    <main>
+        <section class="welcome">
+            <p class="subtitle">TU UNIVERSO MUSICAL</p>
+            <h1>¿Qué quieres<br>escuchar hoy?</h1>
+        </section>
+
+        <div class="search">
+            <span>⌕</span>
+            <input type="text" placeholder="Buscar canciones, artistas...">
+        </div>
+
+        <section class="library">
+            <div class="section-title">
+                <h2>Tu biblioteca</h2>
+                <span>VER TODO</span>
+            </div>
+
+            <div class="tabs">
+                <button class="active">Canciones</button>
+                <button>Álbumes</button>
+                <button>Artistas</button>
+                <button>Carpetas</button>
+            </div>
+
+            <div class="empty">
+                <div class="empty-icon">♫</div>
+                <h3>Tu música te espera</h3>
+                <p>Agrega tus archivos de audio<br>para comenzar tu universo.</p>
+                <button class="add-music">+ Agregar música</button>
+            </div>
+        </section>
+    </main>
+
+    <nav class="bottom-nav">
+        <span class="selected">⌂<small>Inicio</small></span>
+        <span>♫<small>Biblioteca</small></span>
+        <span>◉<small>Reproductor</small></span>
+        <span>⚙<small>Ajustes</small></span>
+    </nav>
+
+</div>
+
+<script src="script.js"></script>
 </body>
 </html>
