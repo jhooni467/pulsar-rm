@@ -14,44 +14,71 @@
 
     <header class="topbar">
         <div class="brand">
-            <span class="logo">✦</span>
+            <div class="logo">✦</div>
             <span>PULSAR <b>RM</b></span>
         </div>
-        <button class="settings">⚙</button>
+        <button class="settings" aria-label="Ajustes">⚙</button>
     </header>
 
     <main>
         <section class="welcome">
-            <p class="subtitle">TU UNIVERSO MUSICAL</p>
-            <h1>¿Qué quieres<br>escuchar hoy?</h1>
+            <p class="subtitle">YOUR PERSONAL MUSIC UNIVERSE</p>
+            <h1>Tu música.<br>Tu universo.</h1>
+            <p class="description">Todo lo que escuchas, en un solo lugar.</p>
         </section>
 
-        <div class="search">
+        <label class="search">
             <span>⌕</span>
-            <input type="text" placeholder="Buscar canciones, artistas...">
-        </div>
+            <input id="search" type="search" placeholder="Buscar canciones o artistas...">
+        </label>
 
         <section class="library">
             <div class="section-title">
                 <h2>Tu biblioteca</h2>
-                <span>VER TODO</span>
+                <span id="song-count">0 canciones</span>
             </div>
 
             <div class="tabs">
                 <button class="active">Canciones</button>
-                <button>Álbumes</button>
-                <button>Artistas</button>
-                <button>Carpetas</button>
             </div>
 
-            <div class="empty">
-                <div class="empty-icon">♫</div>
-                <h3>Tu música te espera</h3>
-                <p>Agrega tus archivos de audio<br>para comenzar tu universo.</p>
-                <button class="add-music">+ Agregar música</button>
+            <div id="song-list" class="song-list">
+                <div class="empty">
+                    <div class="empty-icon">♫</div>
+                    <h3>Tu música te espera</h3>
+                    <p>Importa tus archivos de audio<br>y comienza tu universo.</p>
+                    <button id="import-button" class="add-music">
+                        + Importar música
+                    </button>
+                </div>
             </div>
+
+            <input id="music-files" type="file" accept="audio/*" multiple hidden>
         </section>
     </main>
+
+    <section id="player" class="player hidden">
+        <div class="player-info">
+            <div class="cover">♫</div>
+            <div class="track-info">
+                <strong id="player-title">Sin reproducción</strong>
+                <small id="player-artist">Pulsar RM</small>
+            </div>
+            <button id="play-button" aria-label="Reproducir">▶</button>
+        </div>
+
+        <div class="progress-container">
+            <span id="current-time">0:00</span>
+            <input id="progress" type="range" min="0" max="100" value="0">
+            <span id="duration">0:00</span>
+        </div>
+
+        <div class="controls">
+            <button id="previous-button">⏮</button>
+            <button id="main-play-button">▶</button>
+            <button id="next-button">⏭</button>
+        </div>
+    </section>
 
     <nav class="bottom-nav">
         <span class="selected">⌂<small>Inicio</small></span>
