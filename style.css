@@ -1,15 +1,11 @@
 
-/* PULSAR RM — DESIGN SYSTEM */
-
 :root {
-    --background: #06141B;
-    --surface: #11212D;
-    --surface-light: #253745;
-    --text: #F9FAFA;
-    --text-muted: #9BA8AB;
-    --accent: #927AFF;
-
-    --radius: 22px;
+    --bg: #080B16;
+    --surface: #111827;
+    --surface2: #192236;
+    --text: #F5F5FA;
+    --muted: #8993A8;
+    --accent: #A18AFF;
 }
 
 * {
@@ -19,56 +15,185 @@
 }
 
 body {
-    background: var(--background);
+    background: var(--bg);
     color: var(--text);
     font-family: Arial, sans-serif;
     min-height: 100vh;
 }
 
 #app {
-    width: 100%;
     max-width: 600px;
     margin: auto;
-    padding: 24px 20px;
+    padding: 25px 22px 110px;
 }
 
-.app-header {
+.topbar, .brand, .section-title, .search {
     display: flex;
     align-items: center;
+}
+
+.topbar, .section-title {
     justify-content: space-between;
-    padding: 15px 0 35px;
 }
 
-.app-header h1 {
-    font-size: 19px;
+.brand {
+    gap: 10px;
+    font-size: 16px;
     letter-spacing: 3px;
-    font-weight: 700;
 }
 
-#home {
-    padding-top: 35px;
+.brand b {
+    color: var(--accent);
 }
 
-#home h2 {
-    font-size: 29px;
-    line-height: 1.3;
-    max-width: 300px;
-    margin-bottom: 12px;
-}
-
-#home p {
-    color: var(--text-muted);
-    font-size: 14px;
-    line-height: 1.6;
+.logo {
+    color: var(--accent);
+    font-size: 27px;
 }
 
 button {
-    border: none;
+    border: 0;
     cursor: pointer;
-    font: inherit;
+    color: inherit;
 }
 
-::selection {
-    background: var(--accent);
+.settings {
+    background: var(--surface);
+    border-radius: 50%;
+    width: 42px;
+    height: 42px;
+    font-size: 19px;
+}
+
+.welcome {
+    margin-top: 55px;
+}
+
+.subtitle {
+    color: var(--accent);
+    font-size: 10px;
+    letter-spacing: 3px;
+    margin-bottom: 13px;
+}
+
+.welcome h1 {
+    font-size: 34px;
+    line-height: 1.2;
+    letter-spacing: -1px;
+}
+
+.search {
+    background: var(--surface);
+    padding: 15px;
+    border-radius: 15px;
+    gap: 12px;
+    margin: 30px 0 40px;
+}
+
+.search span {
+    color: var(--muted);
+    font-size: 25px;
+}
+
+.search input {
+    background: transparent;
+    border: none;
+    outline: none;
     color: white;
+    width: 100%;
+    font-size: 14px;
+}
+
+.section-title h2 {
+    font-size: 20px;
+}
+
+.section-title span {
+    color: var(--accent);
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+.tabs {
+    display: flex;
+    gap: 9px;
+    overflow-x: auto;
+    margin: 22px 0;
+}
+
+.tabs button {
+    background: var(--surface);
+    color: var(--muted);
+    padding: 11px 15px;
+    border-radius: 30px;
+    white-space: nowrap;
+    font-size: 12px;
+}
+
+.tabs .active {
+    background: var(--accent);
+    color: #080B16;
+}
+
+.empty {
+    background: linear-gradient(145deg, #151D32, #101522);
+    border: 1px solid #252D43;
+    border-radius: 23px;
+    padding: 45px 15px;
+    text-align: center;
+    margin-top: 25px;
+}
+
+.empty-icon {
+    font-size: 42px;
+    color: var(--accent);
+    margin-bottom: 17px;
+}
+
+.empty h3 {
+    font-size: 17px;
+    margin-bottom: 10px;
+}
+
+.empty p {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.add-music {
+    background: var(--accent);
+    color: #080B16;
+    padding: 13px 22px;
+    border-radius: 30px;
+    font-weight: bold;
+    margin-top: 24px;
+}
+
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: #0D1321;
+    border-top: 1px solid #222B40;
+    display: flex;
+    justify-content: space-around;
+    padding: 15px 5px 20px;
+}
+
+.bottom-nav span {
+    color: var(--muted);
+    font-size: 20px;
+    text-align: center;
+}
+
+.bottom-nav small {
+    display: block;
+    font-size: 10px;
+    margin-top: 5px;
+}
+
+.bottom-nav .selected {
+    color: var(--accent);
 }
