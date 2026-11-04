@@ -98,6 +98,7 @@ button {
 
 .view.active {
   display: block;
+  animation: viewIn 0.3s ease-out backwards;
 }
 
 .welcome {
@@ -247,6 +248,7 @@ button {
   border-radius: 15px;
   border: 1px solid transparent;
   cursor: pointer;
+  transition: transform 0.12s ease, background-color 0.2s ease, border-color 0.25s ease;
 }
 
 .song-item.playing {
@@ -508,6 +510,7 @@ button {
 .nav-icon {
   display: block;
   font-size: 20px;
+  transition: transform 0.3s cubic-bezier(0.3, 1.5, 0.5, 1);
 }
 
 .nav-item small {
@@ -518,6 +521,10 @@ button {
 
 .nav-item.selected {
   color: var(--accent);
+}
+
+.nav-item.selected .nav-icon {
+  transform: translateY(-2px) scale(1.15);
 }
 
 /* ---------- Aviso (toast) ---------- */
@@ -536,4 +543,91 @@ button {
   font-size: 13px;
   z-index: 50;
   text-align: center;
+}
+
+
+/* =========================================================
+   ANIMACIONES (v0.4a)
+   Solo se animan opacity y transform: son las más fluidas en Android.
+   ========================================================= */
+
+@keyframes viewIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes itemIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes miniIn {
+  from { opacity: 0; transform: translate(-50%, 24px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translate(-50%, -12px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* Aparición escalonada de las filas (el retardo lo define --i desde el JS) */
+.song-list.animate .song-item {
+  animation: itemIn 0.35s ease-out backwards;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+/* Tarjetas y bloques que aparecen */
+.empty,
+.card,
+.now-playing {
+  animation: itemIn 0.4s ease-out backwards;
+}
+
+/* Mini reproductor y avisos */
+.mini-player {
+  animation: miniIn 0.3s ease-out;
+}
+
+.toast {
+  animation: toastIn 0.25s ease-out;
+}
+
+/* Respuesta al toque en botones */
+button {
+  transition: transform 0.12s ease, opacity 0.15s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+button:active {
+  transform: scale(0.93);
+}
+
+.round-btn:active {
+  transform: scale(0.88);
+}
+
+.song-item:active {
+  transform: scale(0.985);
+  background: var(--surface2);
+}
+
+.song-item button:active {
+  transform: scale(0.85);
+}
+
+/* Fila que se va al eliminarla */
+.song-item.leaving {
+  opacity: 0;
+  transform: translateX(28px) scale(0.98);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* Si el usuario pidió "reducir animaciones" en Android, se desactivan */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
