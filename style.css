@@ -1,0 +1,74 @@
+
+/* PULSAR RM — DESIGN SYSTEM */
+
+:root {
+    --background: #06141B;
+    --surface: #11212D;
+    --surface-light: #253745;
+    --text: #F9FAFA;
+    --text-muted: #9BA8AB;
+    --accent: #927AFF;
+
+    --radius: 22px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: var(--background);
+    color: var(--text);
+    font-family: Arial, sans-serif;
+    min-height: 100vh;
+}
+
+#app {
+    width: 100%;
+    max-width: 600px;
+    margin: auto;
+    padding: 24px 20px;
+}
+
+.app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 0 35px;
+}
+
+.app-header h1 {
+    font-size: 19px;
+    letter-spacing: 3px;
+    font-weight: 700;
+}
+
+#home {
+    padding-top: 35px;
+}
+
+#home h2 {
+    font-size: 29px;
+    line-height: 1.3;
+    max-width: 300px;
+    margin-bottom: 12px;
+}
+
+#home p {
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+button {
+    border: none;
+    cursor: pointer;
+    font: inherit;
+}
+
+::selection {
+    background: var(--accent);
+    color: white;
+}
