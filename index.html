@@ -81,6 +81,9 @@
     <!-- ============ REPRODUCTOR ============ -->
     <section id="view-player" class="view" data-view-name="player">
       <div class="now-playing">
+        <div class="player-header">
+          <button type="button" class="close-player" data-action="close" aria-label="Cerrar reproductor">⌄</button>
+        </div>
         <div class="big-cover">♫</div>
         <h2 id="player-title">Sin reproducción</h2>
         <p id="player-artist">Pulsar RM</p>
@@ -138,8 +141,6 @@
   <nav class="bottom-nav" aria-label="Navegación principal">
     <button type="button" class="nav-item" data-view="home"><span class="nav-icon">⌂</span><small>Inicio</small></button>
     <button type="button" class="nav-item" data-view="library"><span class="nav-icon">♫</span><small>Biblioteca</small></button>
-    <button type="button" class="nav-item" data-view="player"><span class="nav-icon">◉</span><small>Reproductor</small></button>
-    <button type="button" class="nav-item" data-view="settings"><span class="nav-icon">⚙</span><small>Ajustes</small></button>
   </nav>
 
 </div>

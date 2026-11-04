@@ -4,7 +4,7 @@
 
 "use strict";
 
-const APP_VERSION = "0.4a";
+const APP_VERSION = "0.4a.1";
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "aac", "flac", "ogg", "oga", "opus", "wav", "weba"];
 
 const $ = (id) => document.getElementById(id);
@@ -515,6 +515,7 @@ const Player = {
 const Router = {
   views: ["home", "library", "player", "settings"],
   current: "home",
+  lastBase: "home", // última pantalla de la barra inferior (Inicio o Biblioteca): a ella se vuelve al cerrar Reproductor o Ajustes
 
   init() {
     window.addEventListener("hashchange", () => this.show(this.fromHash()));
@@ -537,6 +538,10 @@ const Router = {
 
   show(name) {
     this.current = name;
+    if (name === "home" || name === "library") this.lastBase = name;
+    document.querySelectorAll(".settings").forEach((button) => {
+      button.classList.toggle("selected", name === "settings");
+    });
     document.querySelectorAll(".view").forEach((section) => {
       section.classList.toggle("active", section.dataset.viewName === name);
     });
@@ -593,7 +598,10 @@ const UI = {
       const viewButton = target.closest("[data-view]");
       if (viewButton) {
         event.preventDefault();
-        Router.go(viewButton.dataset.view);
+        const wanted = viewButton.dataset.view;
+        // El engranaje es un interruptor: abre Ajustes y, si ya estás en Ajustes, vuelve.
+        if (wanted === "settings" && Router.current === "settings") Router.go(Router.lastBase);
+        else Router.go(wanted);
         return;
       }
 
@@ -651,6 +659,7 @@ const UI = {
       case "next": Player.next(); break;
       case "prev": Player.previous(); break;
       case "clear": Library.clear(); break;
+      case "close": Router.go(Router.lastBase); break;
     }
   },
 

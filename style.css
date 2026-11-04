@@ -631,3 +631,27 @@ button:active {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* =========================================================
+   NAVEGACIÓN SIMPLIFICADA (v0.4a.1)
+   Ajustes: engranaje de arriba. Reproductor: tocar el mini-reproductor.
+   ========================================================= */
+
+.settings.selected {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.player-header {
+  display: flex;
+  justify-content: flex-start;
+  margin: -14px 0 6px -10px;
+}
+
+.close-player {
+  color: var(--muted);
+  font-size: 28px;
+  line-height: 1;
+  padding: 8px 14px;
+}
