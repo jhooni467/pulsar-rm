@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#080B16">
+<title>Pulsar RM</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">✦</div>
+      <span>PULSAR <b>RM</b></span>
+    </div>
+    <button type="button" class="settings" data-view="settings" aria-label="Ajustes">⚙</button>
+  </header>
+
+  <main>
+
+    <!-- ============ INICIO ============ -->
+    <section id="view-home" class="view" data-view-name="home">
+      <section class="welcome">
+        <p class="subtitle">YOUR PERSONAL MUSIC UNIVERSE</p>
+        <h1>Tu música.<br>Tu universo.</h1>
+        <p class="description">Todo lo que escuchas, en un solo lugar.</p>
+      </section>
+
+      <div class="empty home-card">
+        <div class="empty-icon">♫</div>
+        <h3 id="home-title">Tu música te espera</h3>
+        <p id="home-text">Importa tus archivos de audio<br>y comienza tu universo.</p>
+        <button type="button" class="add-music" data-action="import">+ Importar música</button>
+      </div>
+
+      <section id="recent-section" class="recent hidden">
+        <div class="section-title">
+          <h2>Añadidas recientemente</h2>
+          <button type="button" class="link-btn" data-view="library">Ver todo</button>
+        </div>
+        <div id="recent-list" class="song-list"></div>
+      </section>
+    </section>
+
+    <!-- ============ BIBLIOTECA ============ -->
+    <section id="view-library" class="view" data-view-name="library">
+      <label class="search">
+        <span>⌕</span>
+        <input id="search" type="search" placeholder="Buscar canciones o artistas..." autocomplete="off">
+      </label>
+
+      <section class="library">
+        <div class="section-title">
+          <h2>Tu biblioteca</h2>
+          <span id="song-count">0 canciones</span>
+        </div>
+
+        <div class="tabs">
+          <button type="button" class="active">Canciones</button>
+          <button type="button" class="add-music small" data-action="import">+ Importar</button>
+        </div>
+
+        <div id="song-list" class="song-list"></div>
+      </section>
+    </section>
+
+    <!-- ============ REPRODUCTOR ============ -->
+    <section id="view-player" class="view" data-view-name="player">
+      <div class="now-playing">
+        <div class="big-cover">♫</div>
+        <h2 id="player-title">Sin reproducción</h2>
+        <p id="player-artist">Pulsar RM</p>
+
+        <!-- Reservado para letras sincronizadas (fase siguiente) -->
+        <div id="lyrics" class="lyrics hidden" aria-live="polite"></div>
+
+        <div class="progress-container">
+          <span id="current-time">0:00</span>
+          <input id="progress" type="range" min="0" max="1000" value="0" aria-label="Progreso">
+          <span id="duration">0:00</span>
+        </div>
+
+        <div class="controls">
+          <button type="button" data-action="prev" aria-label="Anterior">⏮</button>
+          <button type="button" class="round-btn big" data-action="toggle" aria-label="Reproducir o pausar">▶</button>
+          <button type="button" data-action="next" aria-label="Siguiente">⏭</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ AJUSTES ============ -->
+    <section id="view-settings" class="view" data-view-name="settings">
+      <div class="section-title">
+        <h2>Ajustes</h2>
+      </div>
+
+      <div class="card">
+        <h3>Biblioteca</h3>
+        <p id="storage-info">Calculando espacio…</p>
+        <button type="button" class="danger-btn" data-action="clear">Borrar biblioteca</button>
+      </div>
+
+      <div class="card">
+        <h3>Acerca de</h3>
+        <p>Pulsar RM · versión <span id="app-version"></span></p>
+        <p>Tus canciones se guardan solo en este dispositivo.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Mini reproductor (visible en todas las pantallas menos Reproductor) -->
+  <div id="mini-player" class="mini-player hidden">
+    <button type="button" class="mini-open" data-view="player" aria-label="Abrir reproductor">
+      <span class="cover">♫</span>
+      <span class="track-info">
+        <strong id="mini-title">Sin reproducción</strong>
+        <small id="mini-artist">Pulsar RM</small>
+      </span>
+    </button>
+    <button type="button" class="round-btn" data-action="toggle" aria-label="Reproducir o pausar">▶</button>
+  </div>
+
+  <nav class="bottom-nav" aria-label="Navegación principal">
+    <button type="button" class="nav-item" data-view="home"><span class="nav-icon">⌂</span><small>Inicio</small></button>
+    <button type="button" class="nav-item" data-view="library"><span class="nav-icon">♫</span><small>Biblioteca</small></button>
+    <button type="button" class="nav-item" data-view="player"><span class="nav-icon">◉</span><small>Reproductor</small></button>
+    <button type="button" class="nav-item" data-view="settings"><span class="nav-icon">⚙</span><small>Ajustes</small></button>
+  </nav>
+
+</div>
+
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+<input id="music-files" class="sr-only" type="file" multiple
+       accept="audio/*,.mp3,.m4a,.aac,.flac,.ogg,.oga,.opus,.wav,.weba" tabindex="-1">
+
+<script src="script.js"></script>
+</body>
+</html>
