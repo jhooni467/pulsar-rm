@@ -1,10 +1,10 @@
-/* PULSAR RM 0.3 — Base estable
+/* PULSAR RM 0.4a — Base estable + animaciones
    Módulos: Store (IndexedDB) · Settings · Library · Player · Router · UI · Lyrics (reservado)
    Todos los botones usan delegación de eventos: siguen funcionando aunque el HTML se vuelva a dibujar. */
 
 "use strict";
 
-const APP_VERSION = "0.3";
+const APP_VERSION = "0.4a";
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "aac", "flac", "ogg", "oga", "opus", "wav", "weba"];
 
 const $ = (id) => document.getElementById(id);
@@ -317,6 +317,7 @@ const Library = {
     if (!confirm(`¿Eliminar "${song.name}" de la biblioteca?`)) return;
     if (Player.currentId === id) Player.stop();
     try {
+      await UI.animateOut(id);
       await Store.removeSong(id);
       this.songs = this.songs.filter((item) => item.id !== id);
       UI.renderAll();
@@ -545,6 +546,7 @@ const Router = {
       if (active) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     });
+    document.querySelectorAll(".view.active .song-list").forEach((list) => list.classList.add("animate"));
     window.scrollTo(0, 0);
     UI.updateMiniPlayer();
     if (name === "settings") UI.renderSettings();
@@ -623,7 +625,10 @@ const UI = {
       Library.importFiles(files);
     });
 
-    this.el.search.addEventListener("input", () => this.renderLibrary());
+    this.el.search.addEventListener("input", () => {
+      this.el.songList.classList.remove("animate"); // evita parpadeo mientras se escribe
+      this.renderLibrary();
+    });
 
     const progress = this.el.progress;
     progress.addEventListener("input", () => {
@@ -652,6 +657,8 @@ const UI = {
   /* ---------- Dibujo ---------- */
 
   renderAll() {
+    this.el.songList.classList.add("animate");
+    this.el.recentList.classList.add("animate");
     this.renderHome();
     this.renderLibrary();
     this.updateCount();
@@ -660,10 +667,11 @@ const UI = {
     if (Router.current === "settings") this.renderSettings();
   },
 
-  songRow(song) {
+  songRow(song, index = 0) {
+    const delay = Math.min(index, 10); // máximo 10 pasos para que nunca se sienta lento
     const duration = song.duration ? ` · ${this.formatTime(song.duration)}` : "";
     return `
-      <div class="song-item" data-song="${song.id}">
+      <div class="song-item" data-song="${song.id}" style="--i:${delay}">
         <div class="song-cover">♫</div>
         <div class="song-details">
           <strong>${this.escapeHTML(song.name)}</strong>
@@ -695,7 +703,7 @@ const UI = {
     }
     const recent = Library.songs.slice(-3).reverse();
     this.el.recentSection.classList.toggle("hidden", recent.length === 0);
-    this.el.recentList.innerHTML = recent.map((song) => this.songRow(song)).join("");
+    this.el.recentList.innerHTML = recent.map((song, i) => this.songRow(song, i)).join("");
   },
 
   renderLibrary() {
@@ -706,7 +714,7 @@ const UI = {
     if (!filtered.length) {
       this.el.songList.innerHTML = this.emptyState(Boolean(query));
     } else {
-      this.el.songList.innerHTML = filtered.map((song) => this.songRow(song)).join("");
+      this.el.songList.innerHTML = filtered.map((song, i) => this.songRow(song, i)).join("");
     }
     this.markPlaying();
   },
@@ -799,6 +807,18 @@ const UI = {
   },
 
   /* ---------- Utilidades ---------- */
+
+  prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  },
+
+  // Desvanece la fila antes de borrarla (si el usuario no pidió reducir animaciones).
+  animateOut(id) {
+    const rows = document.querySelectorAll(`[data-song="${id}"]`);
+    if (!rows.length || this.prefersReducedMotion()) return Promise.resolve();
+    rows.forEach((row) => row.classList.add("leaving"));
+    return new Promise((resolve) => setTimeout(resolve, 220));
+  },
 
   toast(message, sticky = false) {
     const box = this.el.toast;
