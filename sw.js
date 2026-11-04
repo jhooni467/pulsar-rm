@@ -1,10 +1,10 @@
-/* Stellar Music — Service Worker
+/* Pulsar RM — Service Worker
    Estrategia: "red primero, caché de respaldo".
    - Con internet: siempre carga la versión más nueva y la guarda.
    - Sin internet (o si la red tarda más de 3 s): usa la copia guardada.
    Las canciones NO pasan por aquí: viven en IndexedDB y se reproducen con URLs blob:. */
 
-const CACHE_NAME = "stellar-music-shell-v1";
+const CACHE_NAME = "pulsar-rm-shell-v1";
 
 const APP_SHELL = [
   "./",

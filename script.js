@@ -1,4 +1,4 @@
-/* STELLAR MUSIC 0.4a — Base estable + animaciones
+/* PULSAR RM 0.4a — Base estable + animaciones
    Módulos: Store (IndexedDB) · Settings · Library · Player · Router · UI · Lyrics (reservado)
    Todos los botones usan delegación de eventos: siguen funcionando aunque el HTML se vuelva a dibujar. */
 
@@ -23,7 +23,6 @@ const Store = {
       if (!("indexedDB" in window)) return resolve(false);
       let request;
       try {
-        // OJO: el nombre interno "pulsar-rm" NO se cambia; si se cambia, se pierde la biblioteca guardada.
         request = indexedDB.open("pulsar-rm", 1);
       } catch (error) {
         return resolve(false);
@@ -504,7 +503,7 @@ const Player = {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: song.name,
         artist: song.artist,
-        album: "Stellar Music"
+        album: "Pulsar RM"
       });
     } catch (error) { /* no crítico */ }
   }
@@ -761,9 +760,9 @@ const UI = {
 
   resetNowPlaying() {
     this.el.playerTitle.textContent = "Sin reproducción";
-    this.el.playerArtist.textContent = "Stellar Music";
+    this.el.playerArtist.textContent = "Pulsar RM";
     this.el.miniTitle.textContent = "Sin reproducción";
-    this.el.miniArtist.textContent = "Stellar Music";
+    this.el.miniArtist.textContent = "Pulsar RM";
     this.el.progress.value = 0;
     this.el.currentTime.textContent = "0:00";
     this.el.duration.textContent = "0:00";
@@ -875,5 +874,5 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!Store.available) {
     UI.toast("Este navegador no permite guardar la biblioteca; se perderá al cerrar.");
   }
-  console.log("Stellar Music " + APP_VERSION + " iniciado correctamente 💜");
+  console.log("Pulsar RM " + APP_VERSION + " iniciado correctamente 💜");
 });
