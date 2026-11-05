@@ -4,9 +4,9 @@
    - Sin internet (o si la red tarda más de 3 s): usa la copia guardada.
    Las canciones NO pasan por aquí: viven en IndexedDB y se reproducen con URLs blob:. */
 
-const CACHE_NAME = "pulsar-rm-shell-v1";
+const CACHE_NAME = "pulsar-rm-shell-v2";
 
-const APP_SHELL = [
+const APP_SHELL = [equalizer.js
   "./",
   "index.html",
   "style.css",
