@@ -6,7 +6,7 @@
 
 const CACHE_NAME = "pulsar-rm-shell-v2";
 
-const APP_SHELL = [equalizer.js
+const APP_SHELL = [equalizer.js]
   "./",
   "index.html",
   "style.css",
