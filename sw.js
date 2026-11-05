@@ -2,15 +2,18 @@
    Estrategia: "red primero, caché de respaldo".
    - Con internet: siempre carga la versión más nueva y la guarda.
    - Sin internet (o si la red tarda más de 3 s): usa la copia guardada.
-   Las canciones NO pasan por aquí: viven en IndexedDB y se reproducen con URLs blob:. */
+   Las canciones NO pasan por aquí: viven en IndexedDB y se reproducen con URLs blob:.
+*/
 
-const CACHE_NAME = "pulsar-rm-shell-v1";
+// v2 incorpora equalizer.js al conjunto de archivos guardados para uso sin conexión.
+const CACHE_NAME = "pulsar-rm-shell-v2";
 
 const APP_SHELL = [
   "./",
   "index.html",
   "style.css",
   "script.js",
+  "equalizer.js",
   "manifest.json",
   "icon-192.png",
   "icon-512.png",
@@ -44,9 +47,9 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;      // no tocar recursos externos
+  if (url.origin !== self.location.origin) return;
   if (!url.protocol.startsWith("http")) return;
-  if (request.headers.has("range")) return;             // el audio nunca pasa por la caché
+  if (request.headers.has("range")) return;
 
   event.respondWith(networkFirst(request));
 });
@@ -67,11 +70,9 @@ async function networkFirst(request) {
   try {
     const first = await Promise.race([network, timeout]);
     if (first) return first;
-    // La red tardó demasiado: se usa la copia guardada si existe.
     const cached = await matchCached(cache, request);
     return cached || network;
   } catch (error) {
-    // Sin conexión
     const cached = await matchCached(cache, request);
     if (cached) return cached;
     if (request.mode === "navigate") {
