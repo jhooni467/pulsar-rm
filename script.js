@@ -4,7 +4,7 @@
 
 "use strict";
 
-const APP_VERSION = "0.4a.1";
+const APP_VERSION = "0.4b";
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "aac", "flac", "ogg", "oga", "opus", "wav", "weba"];
 
 const $ = (id) => document.getElementById(id);
@@ -78,6 +78,17 @@ const Store = {
         tx.objectStore("blobs").put(blob, meta.id);
         done(meta);
       };
+    });
+  },
+
+  updateSong(meta) {
+    if (!this.available) {
+      this.memory.songs.set(meta.id, meta);
+      return Promise.resolve(meta);
+    }
+    return this._tx("songs", "readwrite", (tx, done) => {
+      const request = tx.objectStore("songs").put(meta);
+      request.onsuccess = () => done(meta);
     });
   },
 
@@ -175,6 +186,37 @@ const Lyrics = {
 };
 
 /* =========================================================
+   COVERS — carátulas (se guardan como imagen pequeña dentro de cada canción)
+   Cada carátula se convierte en una URL temporal que se reutiliza y se libera al cambiarla.
+   ========================================================= */
+const Covers = {
+  urls: new Map(),
+
+  get(song) {
+    if (!song || !song.cover) return null;
+    let url = this.urls.get(song.id);
+    if (!url) {
+      url = URL.createObjectURL(song.cover);
+      this.urls.set(song.id, url);
+    }
+    return url;
+  },
+
+  release(id) {
+    const url = this.urls.get(id);
+    if (url) {
+      URL.revokeObjectURL(url);
+      this.urls.delete(id);
+    }
+  },
+
+  releaseAll() {
+    this.urls.forEach((url) => URL.revokeObjectURL(url));
+    this.urls.clear();
+  }
+};
+
+/* =========================================================
    LIBRARY — lista de canciones e importación
    ========================================================= */
 const Library = {
@@ -229,25 +271,32 @@ const Library = {
     });
   },
 
-  buildMeta(file, duration) {
-    const cleanName = file.name.replace(/\.[^/.]+$/, "");
-    let title = cleanName;
+  // "Artista - Título.mp3" → { title, artist }. Si no hay nombre, usa "Sin título".
+  parseFileName(fileName) {
+    const cleanName = String(fileName || "").replace(/\.[^/.]+$/, "");
+    let title = cleanName.trim();
     let artist = "Archivo local";
     const parts = cleanName.split(" - ");
     if (parts.length >= 2 && parts[0].trim() && parts.slice(1).join(" - ").trim()) {
       artist = parts[0].trim();
       title = parts.slice(1).join(" - ").trim();
     }
+    return { title: title || "Sin título", artist: artist };
+  },
+
+  buildMeta(file, duration) {
+    const parsed = this.parseFileName(file.name);
     return {
-      name: title,
-      artist: artist,
+      name: parsed.title,
+      artist: parsed.artist,
       fileName: file.name,
       mime: file.type || "",
       size: file.size,
       lastModified: file.lastModified,
       duration: duration,
       addedAt: Date.now(),
-      lyrics: null
+      lyrics: null,
+      cover: null
     };
   },
 
@@ -320,6 +369,7 @@ const Library = {
       await UI.animateOut(id);
       await Store.removeSong(id);
       this.songs = this.songs.filter((item) => item.id !== id);
+      Covers.release(id);
       UI.renderAll();
     } catch (error) {
       console.error(error);
@@ -337,6 +387,7 @@ const Library = {
     try {
       await Store.clearAll();
       this.songs = [];
+      Covers.releaseAll();
       UI.renderAll();
       UI.toast("Biblioteca borrada.");
     } catch (error) {
@@ -500,10 +551,12 @@ const Player = {
   updateMediaMetadata(song) {
     if (!("mediaSession" in navigator) || typeof MediaMetadata === "undefined") return;
     try {
+      const art = Covers.get(song);
       navigator.mediaSession.metadata = new MediaMetadata({
         title: song.name,
         artist: song.artist,
-        album: "Pulsar RM"
+        album: "Pulsar RM",
+        artwork: art ? [{ src: art, sizes: "512x512", type: "image/jpeg" }] : []
       });
     } catch (error) { /* no crítico */ }
   }
@@ -539,6 +592,8 @@ const Router = {
   show(name) {
     this.current = name;
     if (name === "home" || name === "library") this.lastBase = name;
+    Editor.discard();
+    UI.closeMenu();
     document.querySelectorAll(".settings").forEach((button) => {
       button.classList.toggle("selected", name === "settings");
     });
@@ -578,6 +633,16 @@ const UI = {
       miniPlayer: $("mini-player"),
       miniTitle: $("mini-title"),
       miniArtist: $("mini-artist"),
+      miniCover: $("mini-cover"),
+      bigCover: $("big-cover"),
+      playerMenu: $("player-menu"),
+      playerMenuButton: $("player-menu-button"),
+      editSheet: $("edit-sheet"),
+      editCover: $("edit-cover"),
+      editName: $("edit-name"),
+      editArtist: $("edit-artist"),
+      editFile: $("edit-file"),
+      coverFile: $("cover-file"),
       playerTitle: $("player-title"),
       playerArtist: $("player-artist"),
       progress: $("progress"),
@@ -594,6 +659,9 @@ const UI = {
     // Todos los botones con data-action / data-view / data-play, por delegación.
     document.addEventListener("click", (event) => {
       const target = event.target;
+
+      // Cualquier toque fuera del menú ⋮ lo cierra
+      if (!target.closest("#player-menu") && !target.closest("#player-menu-button")) this.closeMenu();
 
       const viewButton = target.closest("[data-view]");
       if (viewButton) {
@@ -633,6 +701,21 @@ const UI = {
       Library.importFiles(files);
     });
 
+    this.el.coverFile.addEventListener("change", (event) => {
+      const file = event.target.files && event.target.files[0];
+      event.target.value = "";
+      if (file) Editor.setCover(file);
+    });
+
+    [this.el.editName, this.el.editArtist].forEach((input) => {
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          Editor.save();
+        }
+      });
+    });
+
     this.el.search.addEventListener("input", () => {
       this.el.songList.classList.remove("animate"); // evita parpadeo mientras se escribe
       this.renderLibrary();
@@ -660,6 +743,13 @@ const UI = {
       case "prev": Player.previous(); break;
       case "clear": Library.clear(); break;
       case "close": Router.go(Router.lastBase); break;
+      case "menu": this.toggleMenu(); break;
+      case "edit": this.closeMenu(); Editor.open(); break;
+      case "edit-cancel": Editor.close(); break;
+      case "edit-save": Editor.save(); break;
+      case "edit-pick-image": this.el.coverFile.click(); break;
+      case "edit-remove-image": Editor.removeCover(); break;
+      case "edit-reset": Editor.resetFromFile(); break;
     }
   },
 
@@ -681,9 +771,9 @@ const UI = {
     const duration = song.duration ? ` · ${this.formatTime(song.duration)}` : "";
     return `
       <div class="song-item" data-song="${song.id}" style="--i:${delay}">
-        <div class="song-cover">♫</div>
+        <div class="song-cover">${this.coverHTML(song)}</div>
         <div class="song-details">
-          <strong>${this.escapeHTML(song.name)}</strong>
+          <strong>${this.escapeHTML(song.name || "Sin título")}</strong>
           <small>${this.escapeHTML(song.artist)}${duration}</small>
         </div>
         <button type="button" data-song-play="${song.id}" aria-label="Reproducir">▶</button>
@@ -755,10 +845,7 @@ const UI = {
   /* ---------- Reproductor ---------- */
 
   showNowPlaying(song) {
-    this.el.playerTitle.textContent = song.name;
-    this.el.playerArtist.textContent = song.artist;
-    this.el.miniTitle.textContent = song.name;
-    this.el.miniArtist.textContent = song.artist;
+    this.refreshNowPlayingInfo(song);
     this.el.progress.value = 0;
     this.el.currentTime.textContent = "0:00";
     this.el.duration.textContent = this.formatTime(song.duration);
@@ -768,6 +855,8 @@ const UI = {
   },
 
   resetNowPlaying() {
+    this.setCover(this.el.bigCover, null);
+    this.setCover(this.el.miniCover, null);
     this.el.playerTitle.textContent = "Sin reproducción";
     this.el.playerArtist.textContent = "Pulsar RM";
     this.el.miniTitle.textContent = "Sin reproducción";
@@ -815,6 +904,50 @@ const UI = {
     this.el.miniPlayer.classList.toggle("hidden", !visible);
   },
 
+  /* ---------- Carátulas y menú ---------- */
+
+  coverHTML(song) {
+    const url = Covers.get(song);
+    return url ? `<img src="${url}" alt="" loading="lazy">` : "♫";
+  },
+
+  setCover(element, url) {
+    if (!element) return;
+    if (url) {
+      element.textContent = "";
+      const image = document.createElement("img");
+      image.alt = "";
+      image.src = url;
+      element.appendChild(image);
+    } else {
+      element.textContent = "♫";
+    }
+  },
+
+  // Actualiza título, artista y carátula del reproductor SIN reiniciar la barra de progreso.
+  refreshNowPlayingInfo(song) {
+    const title = song.name || "Sin título";
+    this.el.playerTitle.textContent = title;
+    this.el.playerArtist.textContent = song.artist;
+    this.el.miniTitle.textContent = title;
+    this.el.miniArtist.textContent = song.artist;
+    const url = Covers.get(song);
+    this.setCover(this.el.bigCover, url);
+    this.setCover(this.el.miniCover, url);
+  },
+
+  toggleMenu() {
+    const hide = !this.el.playerMenu.classList.contains("hidden");
+    this.el.playerMenu.classList.toggle("hidden", hide);
+    this.el.playerMenuButton.setAttribute("aria-expanded", String(!hide));
+  },
+
+  closeMenu() {
+    if (!this.el.playerMenu) return;
+    this.el.playerMenu.classList.add("hidden");
+    this.el.playerMenuButton.setAttribute("aria-expanded", "false");
+  },
+
   /* ---------- Utilidades ---------- */
 
   prefersReducedMotion() {
@@ -860,6 +993,157 @@ const UI = {
       '"': "&quot;",
       "'": "&#039;"
     })[character]);
+  }
+};
+
+/* =========================================================
+   EDITOR — editar título, artista y carátula de una canción
+   Se abre desde el menú ⋮ del reproductor completo.
+   ========================================================= */
+const Editor = {
+  songId: null,
+  pendingCover: null,   // Blob de la carátula elegida (o null si no hay)
+  coverChanged: false,
+  previewUrl: null,
+  saving: false,
+
+  isOpen() {
+    return Boolean(UI.el.editSheet) && !UI.el.editSheet.classList.contains("hidden");
+  },
+
+  open() {
+    const song = Library.byId(Player.currentId);
+    if (!song) {
+      UI.toast("Reproduce una canción para editar su información.");
+      return;
+    }
+    this.songId = song.id;
+    this.pendingCover = song.cover || null;
+    this.coverChanged = false;
+    UI.el.editName.value = song.name || "";
+    UI.el.editArtist.value = song.artist || "";
+    UI.el.editFile.textContent = "Archivo: " + song.fileName;
+    this.renderPreview();
+    UI.el.editSheet.classList.remove("hidden");
+    document.body.classList.add("no-scroll");
+  },
+
+  renderPreview() {
+    this.revokePreview();
+    if (this.pendingCover) this.previewUrl = URL.createObjectURL(this.pendingCover);
+    UI.setCover(UI.el.editCover, this.previewUrl);
+  },
+
+  revokePreview() {
+    if (this.previewUrl) {
+      URL.revokeObjectURL(this.previewUrl);
+      this.previewUrl = null;
+    }
+  },
+
+  async setCover(file) {
+    try {
+      this.pendingCover = await this.makeCoverBlob(file);
+      this.coverChanged = true;
+      this.renderPreview();
+      UI.toast("Imagen lista. Toca Guardar para aplicarla.");
+    } catch (error) {
+      console.error("No se pudo procesar la imagen:", error);
+      UI.toast("No se pudo usar esa imagen. Prueba con una JPG o PNG.");
+    }
+  },
+
+  removeCover() {
+    this.pendingCover = null;
+    this.coverChanged = true;
+    this.renderPreview();
+  },
+
+  resetFromFile() {
+    const song = Library.byId(this.songId);
+    if (!song) return;
+    const parsed = Library.parseFileName(song.fileName);
+    UI.el.editName.value = parsed.title;
+    UI.el.editArtist.value = parsed.artist;
+  },
+
+  // Recorta al centro en cuadrado, reduce a 512 px máx. y guarda como JPG ligero.
+  async makeCoverBlob(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const image = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("No se pudo leer la imagen"));
+        img.src = url;
+      });
+      const side = Math.min(image.naturalWidth, image.naturalHeight);
+      if (!side) throw new Error("La imagen está vacía");
+      const size = Math.min(512, side);
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const context = canvas.getContext("2d");
+      context.drawImage(
+        image,
+        (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side,
+        0, 0, size, size
+      );
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+      if (!blob) throw new Error("No se pudo convertir la imagen");
+      return blob;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  },
+
+  async save() {
+    if (this.saving) return;
+    const song = Library.byId(this.songId);
+    if (!song) { this.close(); return; }
+    this.saving = true;
+
+    const parsed = Library.parseFileName(song.fileName);
+    const previous = { name: song.name, artist: song.artist, cover: song.cover };
+    song.name = UI.el.editName.value.trim() || parsed.title;
+    song.artist = UI.el.editArtist.value.trim() || parsed.artist;
+    if (this.coverChanged) song.cover = this.pendingCover;
+
+    try {
+      await Store.updateSong(song);
+      if (this.coverChanged) Covers.release(song.id);
+      UI.renderAll();
+      if (Player.currentId === song.id) {
+        UI.refreshNowPlayingInfo(song);
+        Player.updateMediaMetadata(song);
+      }
+      this.close();
+      UI.toast("Información guardada.");
+    } catch (error) {
+      console.error("No se pudo guardar:", error);
+      song.name = previous.name;
+      song.artist = previous.artist;
+      song.cover = previous.cover;
+      UI.toast(error && error.name === "QuotaExceededError"
+        ? "No hay espacio suficiente para guardar."
+        : "No se pudieron guardar los cambios.");
+    } finally {
+      this.saving = false;
+    }
+  },
+
+  close() {
+    if (UI.el.editSheet) UI.el.editSheet.classList.add("hidden");
+    document.body.classList.remove("no-scroll");
+    this.revokePreview();
+    this.songId = null;
+    this.pendingCover = null;
+    this.coverChanged = false;
+  },
+
+  // Se llama al cambiar de pantalla (por ejemplo con el botón Atrás de Android).
+  discard() {
+    if (this.isOpen()) this.close();
   }
 };
 

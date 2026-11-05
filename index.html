@@ -83,8 +83,12 @@
       <div class="now-playing">
         <div class="player-header">
           <button type="button" class="close-player" data-action="close" aria-label="Cerrar reproductor">⌄</button>
+          <button type="button" id="player-menu-button" class="close-player more-btn" data-action="menu" aria-label="Más opciones" aria-haspopup="true" aria-expanded="false">⋮</button>
+          <div id="player-menu" class="popover hidden" role="menu">
+            <button type="button" role="menuitem" data-action="edit">✎&nbsp; Editar información</button>
+          </div>
         </div>
-        <div class="big-cover">♫</div>
+        <div id="big-cover" class="big-cover">♫</div>
         <h2 id="player-title">Sin reproducción</h2>
         <p id="player-artist">Pulsar RM</p>
 
@@ -129,7 +133,7 @@
   <!-- Mini reproductor (visible en todas las pantallas menos Reproductor) -->
   <div id="mini-player" class="mini-player hidden">
     <button type="button" class="mini-open" data-view="player" aria-label="Abrir reproductor">
-      <span class="cover">♫</span>
+      <span id="mini-cover" class="cover">♫</span>
       <span class="track-info">
         <strong id="mini-title">Sin reproducción</strong>
         <small id="mini-artist">Pulsar RM</small>
@@ -146,6 +150,39 @@
 </div>
 
 <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+<!-- Editar información de la canción -->
+<div id="edit-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="edit-heading">
+  <div class="sheet-backdrop" data-action="edit-cancel"></div>
+  <div class="sheet-panel">
+    <h3 id="edit-heading">Editar información</h3>
+
+    <div class="edit-cover-row">
+      <div id="edit-cover" class="edit-cover">♫</div>
+      <div class="edit-cover-actions">
+        <button type="button" class="chip-btn" data-action="edit-pick-image">Elegir imagen</button>
+        <button type="button" class="chip-btn muted" data-action="edit-remove-image">Quitar imagen</button>
+      </div>
+    </div>
+
+    <label class="field"><span>Título</span>
+      <input id="edit-name" type="text" maxlength="200" autocomplete="off" enterkeyhint="done">
+    </label>
+    <label class="field"><span>Artista</span>
+      <input id="edit-artist" type="text" maxlength="200" autocomplete="off" enterkeyhint="done">
+    </label>
+
+    <button type="button" class="link-btn reset-link" data-action="edit-reset">Usar el nombre del archivo</button>
+    <p id="edit-file" class="file-name"></p>
+
+    <div class="sheet-actions">
+      <button type="button" class="ghost-btn" data-action="edit-cancel">Cancelar</button>
+      <button type="button" class="add-music" data-action="edit-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<input id="cover-file" class="sr-only" type="file" accept="image/*" tabindex="-1">
 
 <input id="music-files" class="sr-only" type="file" multiple
        accept="audio/*,.mp3,.m4a,.aac,.flac,.ogg,.oga,.opus,.wav,.weba" tabindex="-1">
