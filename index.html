@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#080B16">
+<script>
+  /* Aplica el tema guardado antes de dibujar la página (evita el parpadeo al abrir) */
+  try { var t = localStorage.getItem("pulsar-theme"); if (t) document.documentElement.setAttribute("data-theme", t); } catch (e) {}
+</script>
 <meta name="description" content="Pulsar RM — reproductor de música local.">
 
 <!-- PWA -->
@@ -88,12 +92,32 @@
             <button type="button" role="menuitem" data-action="edit">✎&nbsp; Editar información</button>
           </div>
         </div>
-        <div id="big-cover" class="big-cover">♫</div>
+        <!-- Zona central: portada, letra o cola ("Siguiente") -->
+        <div id="stage" class="stage" data-mode="cover">
+          <div id="big-cover" class="big-cover">♫</div>
+
+          <section id="lyrics-panel" class="stage-panel hidden" aria-label="Letra">
+            <div id="lyrics-bar" class="lyrics-bar no-data no-sync">
+              <span id="lyrics-badge" class="lyrics-badge">Sin letra</span>
+              <div class="lyrics-actions">
+                <span class="delay-group">
+                  <button type="button" class="mini-btn" data-action="lyrics-earlier" aria-label="Adelantar la letra">−</button>
+                  <span id="lyrics-delay" class="delay-value">0.00 s</span>
+                  <button type="button" class="mini-btn" data-action="lyrics-later" aria-label="Retrasar la letra">+</button>
+                </span>
+                <button type="button" class="mini-btn text" data-action="lyrics-edit">✎ Editar</button>
+              </div>
+            </div>
+            <div id="lyrics" class="lyrics is-empty" aria-live="off"></div>
+          </section>
+
+          <section id="queue-panel" class="stage-panel hidden" aria-label="Siguiente">
+            <div id="queue-list" class="queue-list"></div>
+          </section>
+        </div>
+
         <h2 id="player-title">Sin reproducción</h2>
         <p id="player-artist">Pulsar RM</p>
-
-        <!-- Reservado para letras sincronizadas (fase siguiente) -->
-        <div id="lyrics" class="lyrics hidden" aria-live="polite"></div>
 
         <div class="progress-container">
           <span id="current-time">0:00</span>
@@ -106,6 +130,41 @@
           <button type="button" class="round-btn big" data-action="toggle" aria-label="Reproducir o pausar">▶</button>
           <button type="button" data-action="next" aria-label="Siguiente">⏭</button>
         </div>
+
+        <div class="player-tabs">
+          <button type="button" id="tab-lyrics" class="tab-btn" data-action="stage-lyrics" aria-pressed="false"><span aria-hidden="true">♪</span> Letra</button>
+          <button type="button" id="tab-queue" class="tab-btn" data-action="stage-queue" aria-pressed="false"><span aria-hidden="true">☰</span> Siguiente</button>
+          <button type="button" id="tab-eq" class="tab-btn" data-action="eq-open" aria-label="Abrir ecualizador">
+            <svg class="eq-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="3" x2="6" y2="21"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="18" y1="3" x2="18" y2="21"/><circle cx="6" cy="9" r="2.6" fill="currentColor"/><circle cx="12" cy="15" r="2.6" fill="currentColor"/><circle cx="18" cy="7" r="2.6" fill="currentColor"/></svg>
+            <span>Ecualizador</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ECUALIZADOR ============ -->
+    <section id="view-eq" class="view off" data-view-name="eq">
+      <div class="eq-top">
+        <button type="button" class="close-player" data-action="eq-back" aria-label="Volver al reproductor">‹</button>
+        <h2>Ecualizador</h2>
+        <label class="eq-switch">
+          <input id="eq-enabled" type="checkbox">
+          <span class="eq-switch-ui" aria-hidden="true"></span>
+          <span>Activado</span>
+        </label>
+      </div>
+
+      <div id="eq-presets" class="eq-presets" aria-label="Modos predefinidos"></div>
+      <p id="eq-custom" class="eq-custom hidden">Ajuste personalizado</p>
+
+      <div class="eq-stage">
+        <div class="eq-scale" aria-hidden="true"><span>+12</span><span>0</span><span>−12</span></div>
+        <div id="eq-bands" class="eq-bands"></div>
+      </div>
+
+      <p class="hint">Arrastra cada barra de −12 a +12 dB (frecuencias en Hz). Al tocar un modo o mover una barra, el ecualizador se activa solo.</p>
+      <div class="eq-actions">
+        <button type="button" class="ghost-btn" data-action="eq-reset">Restablecer</button>
       </div>
     </section>
 
@@ -113,6 +172,12 @@
     <section id="view-settings" class="view" data-view-name="settings">
       <div class="section-title">
         <h2>Ajustes</h2>
+      </div>
+
+      <div class="card">
+        <h3>Tema</h3>
+        <p>Elige los colores de la app.</p>
+        <div id="theme-grid" class="theme-grid" role="radiogroup" aria-label="Tema de color"></div>
       </div>
 
       <div class="card">
@@ -184,11 +249,43 @@
 
 <input id="cover-file" class="sr-only" type="file" accept="image/*" tabindex="-1">
 
+<!-- Editor de letras -->
+<div id="lyrics-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="lyrics-heading">
+  <div class="sheet-backdrop"></div>
+  <div class="sheet-panel">
+    <h3 id="lyrics-heading">Editar letra</h3>
+
+    <div class="lyrics-tools">
+      <button type="button" class="tool-btn" data-action="toggle" aria-label="Reproducir o pausar">▶</button>
+      <button type="button" class="tool-btn" data-action="lyrics-back">⟲ 3 s</button>
+      <span id="lyrics-clock" class="clock">00:00.00</span>
+      <button type="button" class="tool-btn accent" data-action="lyrics-stamp-line">⏱ Línea</button>
+      <button type="button" class="tool-btn accent" data-action="lyrics-stamp-word">⏱ Palabra</button>
+    </div>
+
+    <textarea id="lyrics-text" class="lyrics-text" wrap="off" spellcheck="false" autocapitalize="off"
+              autocomplete="off" autocorrect="off" aria-label="Texto de la letra"
+              placeholder="[00:12.50]Primera línea&#10;[00:15.00]&lt;00:15.00&gt;Pa&lt;00:15.30&gt;la&lt;00:15.60&gt;bra"></textarea>
+
+    <p class="hint">Escribe o pega la letra. «⏱ Línea» pone el tiempo actual al inicio de la línea del cursor y pasa a la siguiente; «⏱ Palabra» inserta una marca en el cursor. Admite LRC, LRC por palabras, SRT, VTT y texto simple.</p>
+
+    <div class="sheet-actions between">
+      <button type="button" class="chip-btn muted" data-action="lyrics-import">Importar archivo</button>
+      <button type="button" class="chip-btn muted danger" data-action="lyrics-clear">Borrar letra</button>
+    </div>
+    <div class="sheet-actions">
+      <button type="button" class="ghost-btn" data-action="lyrics-cancel">Cancelar</button>
+      <button type="button" class="add-music" data-action="lyrics-save">Guardar</button>
+    </div>
+  </div>
+</div>
+<input id="lyrics-file" class="sr-only" type="file" tabindex="-1">
+
+
 <input id="music-files" class="sr-only" type="file" multiple
        accept="audio/*,.mp3,.m4a,.aac,.flac,.ogg,.oga,.opus,.wav,.weba" tabindex="-1">
 
 <script src="script.js"></script>
-<script src="equalizer.js"></script>
 
 <!-- Service worker (necesario para instalar como app y usar sin conexión) -->
 <script>
