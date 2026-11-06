@@ -13,6 +13,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # v1.01: llave de firma FIJA. Antes, cada ejecucion creaba una llave debug nueva y
+      # Android rechazaba la actualizacion ("conflicto con el paquete"). Ahora la llave se
+      # crea una sola vez, se guarda en el repo (pulsar-debug.keystore) y se reutiliza siempre.
+      - name: Llave de firma estable
+        run: |
+          if [ ! -f pulsar-debug.keystore ]; then
+            keytool -genkeypair -keystore pulsar-debug.keystore \
+              -storepass android -keypass android -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+            git config user.name "github-actions"
+            git config user.email "github-actions@users.noreply.github.com"
+            git add pulsar-debug.keystore
+            git commit -m "Agregar llave de firma estable para actualizar el APK"
+            git push
+          fi
+          mkdir -p ~/.android
+          cp pulsar-debug.keystore ~/.android/debug.keystore
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -164,7 +183,7 @@ jobs:
                   os.makedirs(d, exist_ok=True)
                   im.resize((size, size), Image.LANCZOS).save(f"{d}/ic_launcher_{name}.png")
               open(f"{RES}/mipmap-anydpi-v26/ic_launcher_{name}.xml", "w").write(
-                  '<?xml version="1.1" encoding="utf-8"?>\n'
+                  '<?xml version="1.0" encoding="utf-8"?>\n'
                   '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'
                   f'    <background android:drawable="@android:color/{bg}"/>\n'
                   '    <foreground>\n'
@@ -175,7 +194,7 @@ jobs:
           # ---------- 4) Version 1.01 ----------
           gradle = MAIN.replace("src/main", "build.gradle")
           g = open(gradle, encoding="utf-8").read()
-          g, a = re.subn(r"versionCode\s+\d+", "versionCode 100", g, count=1)
+          g, a = re.subn(r"versionCode\s+\d+", "versionCode 101", g, count=1)
           g, b = re.subn(r'versionName\s+"[^"]*"', 'versionName "1.01"', g, count=1)
           assert a == 1 and b == 1, "No encontre versionCode/versionName"
           open(gradle, "w", encoding="utf-8").write(g)
