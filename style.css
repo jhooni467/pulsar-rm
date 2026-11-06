@@ -1274,7 +1274,7 @@ body.no-scroll .toast {
 .lyrics::after {
   content: "";
   display: block;
-  height: calc(var(--stage-h) / 2 - 30px);
+  height: var(--pad, calc(var(--stage-h) / 2 - 30px)); /* --pad la ajusta el JS a la altura real del panel */
 }
 
 .lyrics.is-empty {
@@ -1839,4 +1839,393 @@ body.no-scroll .toast {
 .theme-swatch[aria-checked="true"] .swatch-check {
   opacity: 1;
   transform: none;
+}
+
+
+/* =========================================================
+   v0.7 — ALEATORIO / REPETIR, ÁLBUM, PROTECCIÓN Y MODO INMERSIVO
+   ========================================================= */
+
+/* ---- Cabecera del reproductor: expandir + menú ---- */
+
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+.expand-btn svg {
+  display: block;
+}
+
+.big-cover {
+  cursor: pointer;
+}
+
+/* ---- Aleatorio y repetir ---- */
+
+.controls {
+  gap: clamp(4px, 2.5vw, 16px);
+}
+
+.controls .ctl-toggle {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0;
+}
+
+.ctl-toggle.on {
+  color: var(--accent);
+}
+
+.ctl-toggle.on::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.rep-one {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: none;
+  transform: translate(-50%, -50%);
+  font-size: 9px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.ctl-toggle.one .rep-one {
+  display: block;
+}
+
+/* ---- Editar información: enlaces y Ajustes ---- */
+
+.link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-top: 10px;
+}
+
+.link-row .reset-link {
+  margin-top: 0;
+}
+
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.card-actions .danger-btn {
+  margin-top: 0;
+}
+
+.persist-info {
+  margin-top: 8px;
+}
+
+.persist-info.warn {
+  color: var(--danger);
+}
+
+.card .hint {
+  margin-top: 12px;
+}
+
+
+/* =========================================================
+   MODO INMERSIVO
+   Siempre en oscuro, sea cual sea el tema, para que el texto se lea sobre cualquier portada.
+   ========================================================= */
+
+@keyframes imIn {
+  from { opacity: 0; transform: scale(1.03); }
+  to   { opacity: 1; transform: none; }
+}
+
+#view-immersive {
+  --text: #FFFFFF;
+  --muted: rgba(255, 255, 255, 0.72);
+  --lyric-plain: rgba(255, 255, 255, 0.85);
+  --lyric-past: rgba(255, 255, 255, 0.5);
+  --lyric-dim2: rgba(255, 255, 255, 0.4);
+  --lyric-dim: rgba(255, 255, 255, 0.34);
+}
+
+#view-immersive.active {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: block;
+  overflow: hidden;
+  background: #05060C;
+  color: #FFFFFF;
+  animation: imIn 0.35s ease-out;
+}
+
+body[data-route="immersive"] {
+  overflow: hidden;
+}
+
+body[data-route="immersive"] .topbar,
+body[data-route="immersive"] .bottom-nav {
+  display: none;
+}
+
+.im-bg {
+  position: absolute;
+  inset: -60px; /* margen extra para que el difuminado no deje bordes */
+  background: #05060C;
+  background: radial-gradient(circle at 50% 25%, color-mix(in srgb, var(--accent) 45%, #05060C), #05060C 72%);
+  background-size: cover;
+  background-position: center;
+}
+
+.im-bg.has-art {
+  filter: blur(48px) saturate(1.4) brightness(0.8);
+  transform: translateZ(0);
+}
+
+.im-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.22) 40%, rgba(0, 0, 0, 0.66) 100%);
+}
+
+.im-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 22px calc(14px + env(safe-area-inset-bottom, 0px));
+}
+
+.im-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.im-icon {
+  color: #FFFFFF;
+  font-size: 30px;
+  line-height: 1;
+  padding: 8px 14px 8px 4px;
+}
+
+.im-pill {
+  padding: 9px 16px;
+  border-radius: 30px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.im-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  text-align: center;
+}
+
+.im-cover-btn {
+  flex: none;
+  display: block;
+  border-radius: 24px;
+  transform: scale(0.88);
+  transition: transform 0.45s cubic-bezier(0.3, 1.3, 0.5, 1);
+}
+
+#view-immersive.is-playing .im-cover-btn {
+  transform: none;
+}
+
+.im-cover {
+  display: grid;
+  place-items: center;
+  width: min(78vw, 34vh, 380px);
+  height: min(78vw, 34vh, 380px);
+  border-radius: 24px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--accent);
+  font-size: 90px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  transition: width 0.35s ease, height 0.35s ease, border-radius 0.35s ease, font-size 0.35s ease;
+}
+
+.im-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.im-meta {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.im-meta h2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 24px;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.im-meta p {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Letra: aquí se coloca el mismo panel de letra del reproductor */
+.im-lyrics {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  height: 20vh;
+  min-height: 0;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22%, #000 78%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 22%, #000 78%, transparent 100%);
+}
+
+.im-lyrics > .lyrics {
+  flex: 1;
+  min-height: 0;
+  padding: 0 4px;
+  text-align: center;
+}
+
+#view-immersive.no-lyrics[data-mode="cover"] .im-lyrics {
+  display: none;
+}
+
+.im-bottom {
+  flex: none;
+}
+
+.im-bottom .progress-container {
+  margin-top: 8px;
+}
+
+.im-bottom .progress-container input {
+  accent-color: #FFFFFF;
+}
+
+.im-bottom .controls {
+  margin-top: 6px;
+}
+
+#view-immersive .round-btn {
+  background: #FFFFFF;
+  color: #0B0B12;
+}
+
+#view-immersive .ctl-toggle.on {
+  color: #FFFFFF;
+}
+
+/* ---- Modo letra: portada pequeña arriba y letra a pantalla completa ---- */
+
+#view-immersive[data-mode="lyrics"] .im-stage {
+  flex: none;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 14px;
+  padding: 6px 0 12px;
+  text-align: left;
+}
+
+#view-immersive[data-mode="lyrics"] .im-cover-btn {
+  transform: none;
+}
+
+#view-immersive[data-mode="lyrics"] .im-cover {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  font-size: 26px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+#view-immersive[data-mode="lyrics"] .im-meta h2 {
+  -webkit-line-clamp: 1;
+  font-size: 17px;
+}
+
+#view-immersive[data-mode="lyrics"] .im-meta p {
+  margin-top: 3px;
+  font-size: 13px;
+}
+
+#view-immersive[data-mode="lyrics"] .im-lyrics {
+  flex: 1;
+  height: auto;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8%, #000 92%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 8%, #000 92%, transparent 100%);
+}
+
+#view-immersive[data-mode="lyrics"] .im-lyrics > .lyrics {
+  text-align: left;
+}
+
+#view-immersive .lyric-line {
+  margin-bottom: 12px;
+  font-size: 17px;
+}
+
+#view-immersive .lyric-line.active {
+  font-size: 20px;
+}
+
+#view-immersive[data-mode="lyrics"] .lyric-line {
+  margin-bottom: 22px;
+  font-size: 24px;
+  line-height: 1.35;
+}
+
+#view-immersive[data-mode="lyrics"] .lyric-line.active {
+  font-size: 30px;
+}
+
+#view-immersive[data-mode="lyrics"] .lyric-line.plain {
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+@media (max-height: 640px) {
+  .im-cover {
+    width: min(70vw, 30vh, 380px);
+    height: min(70vw, 30vh, 380px);
+  }
 }

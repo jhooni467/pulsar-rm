@@ -4,7 +4,7 @@
 
 "use strict";
 
-const APP_VERSION = "0.6";
+const APP_VERSION = "0.7";
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "aac", "flac", "ogg", "oga", "opus", "wav", "weba"];
 
 const $ = (id) => document.getElementById(id);
@@ -160,7 +160,7 @@ const THEMES = [
 ];
 
 const Settings = {
-  defaults: { theme: "pulsar", eq: { enabled: false, preset: "flat", gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } },
+  defaults: { theme: "pulsar", playback: { shuffle: false, repeat: "off" }, eq: { enabled: false, preset: "flat", gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } },
   values: {},
 
   async load() {
@@ -456,7 +456,9 @@ const Lyrics = {
   },
 
   visible() {
-    return Boolean(this.el) && Router.current === "player" && Stage.mode === "lyrics";
+    return Boolean(this.el) && (
+      (Router.current === "player" && Stage.mode === "lyrics") || Router.current === "immersive"
+    );
   },
 
   shouldRun() {
@@ -494,6 +496,7 @@ const Lyrics = {
     this.lineEls = [];
     this.wordEls = [];
 
+    Immersive.onLyricsChange(data);
     this.el.classList.toggle("is-empty", !data);
     this.bar.classList.toggle("no-data", !data);
     this.bar.classList.toggle("no-sync", !(data && data.synced));
@@ -593,10 +596,20 @@ const Lyrics = {
       return;
     }
     this.needsCenter = false;
+    this.fitPad();
     const line = this.lineEls[index];
     const top = line.offsetTop - (this.el.clientHeight - line.offsetHeight) / 2;
     const smooth = !instant && !UI.prefersReducedMotion();
     this.el.scrollTo({ top: Math.max(0, top), behavior: smooth ? "smooth" : "auto" });
+  },
+
+  // Los espacios de arriba y abajo se ajustan a la altura real del panel (portada, letra o modo inmersivo).
+  fitPad() {
+    const height = this.el.clientHeight;
+    if (height && height !== this.padH) {
+      this.padH = height;
+      this.el.style.setProperty("--pad", Math.max(0, height / 2 - 30) + "px");
+    }
   },
 
   seekToLine(index) {
@@ -717,6 +730,19 @@ const Queue = {
       </div>`;
   },
 
+  // Ids de lo que viene después, según aleatorio / repetir.
+  upcomingIds() {
+    const songs = Library.songs;
+    if (Player.shuffle) {
+      Player.ensureOrder();
+      return Player.order.slice(Player.orderPos + 1);
+    }
+    const current = Library.indexOf(Player.currentId);
+    const after = songs.slice(current + 1).map((song) => song.id);
+    if (Player.repeat !== "all") return after;
+    return after.concat(songs.slice(0, current).map((song) => song.id));
+  },
+
   render() {
     const list = $("queue-list");
     const songs = Library.songs;
@@ -730,11 +756,15 @@ const Queue = {
         songs.slice(0, this.LIMIT).map((song, i) => this.row(song, i + 1, false)).join("");
       return;
     }
-    const upcoming = songs.slice(current + 1).concat(songs.slice(0, current));
-    const shown = upcoming.slice(0, this.LIMIT);
-    let html = `<p class="queue-label">Reproduciendo ahora</p>` + this.row(songs[current], 1, true);
-    if (!upcoming.length) {
-      html += `<p class="queue-empty">No hay más canciones: al terminar, esta se repite.</p>`;
+    const upcoming = this.upcomingIds();
+    const shown = upcoming.slice(0, this.LIMIT).map((id) => Library.byId(id)).filter(Boolean);
+    const modes = [Player.shuffle ? "aleatorio" : "", Player.repeat === "all" ? "repetir todo" : Player.repeat === "one" ? "repetir una" : ""]
+      .filter(Boolean).join(" · ");
+    let html = `<p class="queue-label">Reproduciendo ahora${modes ? " · " + modes : ""}</p>` + this.row(songs[current], 1, true);
+    if (Player.repeat === "one") {
+      html += `<p class="queue-empty">Esta canción se repite hasta que lo cambies.</p>`;
+    } else if (!upcoming.length) {
+      html += `<p class="queue-empty">${Player.repeat === "all" ? "Al terminar, vuelve a empezar." : "No hay más canciones: al terminar, la reproducción se detiene."}</p>`;
     } else {
       html += `<p class="queue-label">A continuación · ${upcoming.length}</p>` +
         shown.map((song, i) => this.row(song, i + 1, false)).join("");
@@ -1115,6 +1145,405 @@ const LyricsEditor = {
 };
 
 /* =========================================================
+   METADATA — lee título, artista, álbum y portada incrustados en el audio
+   Sin librerías: MP3 (ID3v2 y v1), M4A/MP4, FLAC y OGG (Vorbis y Opus).
+   Devuelve { title, artist, album, picture: { mime, data } } con lo que encuentre.
+   ========================================================= */
+const Metadata = {
+  MAX_PICTURE: 12 * 1024 * 1024,
+
+  async read(file) {
+    try {
+      const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+      const tag = (i, text) => text.split("").every((c, k) => head[i + k] === c.charCodeAt(0));
+      if (tag(0, "ID3")) return this.clean(await this.readID3v2(file, head));
+      if (tag(0, "fLaC")) return this.clean(await this.readFlac(file));
+      if (tag(0, "OggS")) return this.clean(await this.readOgg(file));
+      if (tag(4, "ftyp")) return this.clean(await this.readMP4(file));
+      return this.clean(await this.readID3v1(file)); // MP3 sin ID3v2
+    } catch (error) {
+      console.warn("No se pudieron leer las etiquetas de", file.name, error);
+      return {};
+    }
+  },
+
+  clean(info) {
+    const out = {};
+    ["title", "artist", "album"].forEach((key) => {
+      const value = info && typeof info[key] === "string" ? info[key].replace(/\0/g, "").trim() : "";
+      if (value) out[key] = value.slice(0, 200);
+    });
+    if (info && info.picture && info.picture.data && info.picture.data.length > 64) {
+      out.picture = { mime: this.sniffMime(info.picture.data, info.picture.mime), data: info.picture.data };
+    }
+    return out;
+  },
+
+  sniffMime(bytes, fallback) {
+    if (bytes[0] === 0xFF && bytes[1] === 0xD8) return "image/jpeg";
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) return "image/png";
+    if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return "image/gif";
+    if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+        bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return "image/webp";
+    if (fallback && /^image\//i.test(fallback)) return fallback.toLowerCase();
+    if (/^(jpe?g)$/i.test(fallback || "")) return "image/jpeg";
+    if (/^png$/i.test(fallback || "")) return "image/png";
+    return "image/jpeg";
+  },
+
+  ascii(bytes, start, length) {
+    let out = "";
+    for (let i = start; i < start + length && i < bytes.length; i++) out += String.fromCharCode(bytes[i]);
+    return out;
+  },
+
+  utf8(bytes) {
+    try { return new TextDecoder("utf-8").decode(bytes); } catch (error) { return ""; }
+  },
+
+  /* ---------- Texto con codificación (ID3) ---------- */
+
+  decodeText(bytes, encoding) {
+    try {
+      if (encoding === 1) {
+        let little = true, start = 0;
+        if (bytes[0] === 0xFE && bytes[1] === 0xFF) { little = false; start = 2; }
+        else if (bytes[0] === 0xFF && bytes[1] === 0xFE) { start = 2; }
+        return new TextDecoder(little ? "utf-16le" : "utf-16be").decode(bytes.subarray(start));
+      }
+      if (encoding === 2) return new TextDecoder("utf-16be").decode(bytes);
+      if (encoding === 3) return new TextDecoder("utf-8").decode(bytes);
+      try { return new TextDecoder("utf-8", { fatal: true }).decode(bytes); } // muchos MP3 "latin1" son UTF-8
+      catch (error) { return new TextDecoder("windows-1252").decode(bytes); }
+    } catch (error) {
+      return "";
+    }
+  },
+
+  firstValue(text) {
+    return String(text || "").split("\0").map((part) => part.trim()).find(Boolean) || "";
+  },
+
+  // Posición del terminador (1 byte, o 2 si la codificación es UTF-16) desde "from".
+  findTerminator(bytes, from, encoding) {
+    if (encoding === 1 || encoding === 2) {
+      for (let i = from; i + 1 < bytes.length; i += 2) if (bytes[i] === 0 && bytes[i + 1] === 0) return i;
+      return -1;
+    }
+    return bytes.indexOf(0, from);
+  },
+
+  /* ---------- MP3: ID3v2 ---------- */
+
+  synchsafe(bytes, i) {
+    return ((bytes[i] & 0x7F) << 21) | ((bytes[i + 1] & 0x7F) << 14) | ((bytes[i + 2] & 0x7F) << 7) | (bytes[i + 3] & 0x7F);
+  },
+
+  unsync(bytes) {
+    const out = new Uint8Array(bytes.length);
+    let n = 0;
+    for (let i = 0; i < bytes.length; i++) {
+      out[n++] = bytes[i];
+      if (bytes[i] === 0xFF && bytes[i + 1] === 0x00) i++;
+    }
+    return out.subarray(0, n);
+  },
+
+  async readID3v2(file, head) {
+    const version = head[3];
+    const flags = head[5];
+    if (version < 2 || version > 4) return this.readID3v1(file);
+    const size = Math.min(this.synchsafe(head, 6), 16 * 1024 * 1024);
+    let buf = new Uint8Array(await file.slice(10, 10 + size).arrayBuffer());
+    if (version < 4 && (flags & 0x80)) buf = this.unsync(buf);
+
+    let p = 0;
+    if (flags & 0x40 && buf.length > 4) { // cabecera extendida
+      p = version === 4
+        ? this.synchsafe(buf, 0)
+        : ((buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3]) + 4;
+    }
+
+    const idLength = version === 2 ? 3 : 4;
+    const headerLength = version === 2 ? 6 : 10;
+    const result = {};
+    let bestPicture = null;
+
+    while (p + headerLength <= buf.length) {
+      const id = this.ascii(buf, p, idLength);
+      if (!/^[A-Z0-9]{3,4}$/.test(id)) break; // relleno (ceros) o basura
+      let frameSize;
+      if (version === 2) frameSize = (buf[p + 3] << 16) | (buf[p + 4] << 8) | buf[p + 5];
+      else if (version === 3) frameSize = ((buf[p + 4] << 24) | (buf[p + 5] << 16) | (buf[p + 6] << 8) | buf[p + 7]) >>> 0;
+      else frameSize = this.synchsafe(buf, p + 4);
+      const formatFlags = version === 2 ? 0 : buf[p + 9];
+      const start = p + headerLength;
+      const end = start + frameSize;
+      if (frameSize <= 0 || end > buf.length) break;
+
+      let data = buf.subarray(start, end);
+      if (version === 4) {
+        if (formatFlags & 0x01) data = data.subarray(4);        // indicador de longitud
+        if (formatFlags & 0x02) data = this.unsync(data);        // desincronización por marco
+        if (formatFlags & 0x0C) data = null;                     // comprimido o cifrado: se omite
+      }
+
+      if (data && data.length > 1) {
+        if (id === "TIT2" || id === "TT2") result.title = this.firstValue(this.decodeText(data.subarray(1), data[0]));
+        else if (id === "TPE1" || id === "TP1") result.artist = this.firstValue(this.decodeText(data.subarray(1), data[0]));
+        else if ((id === "TPE2" || id === "TP2") && !result.albumArtist) result.albumArtist = this.firstValue(this.decodeText(data.subarray(1), data[0]));
+        else if (id === "TALB" || id === "TAL") result.album = this.firstValue(this.decodeText(data.subarray(1), data[0]));
+        else if ((id === "APIC" || id === "PIC") && data.length < this.MAX_PICTURE) {
+          const picture = this.parseAPIC(data, id === "PIC");
+          if (picture && (!bestPicture || (picture.type === 3 && bestPicture.type !== 3))) bestPicture = picture;
+        }
+      }
+      p = end;
+    }
+
+    if (!result.artist && result.albumArtist) result.artist = result.albumArtist;
+    if (bestPicture) result.picture = bestPicture;
+    if (!result.title && !result.artist) {
+      const old = await this.readID3v1(file); // por si solo trae etiquetas antiguas
+      return { ...old, ...result, picture: result.picture };
+    }
+    return result;
+  },
+
+  parseAPIC(data, isV22) {
+    const encoding = data[0];
+    let p = 1, mime;
+    if (isV22) {
+      mime = this.ascii(data, 1, 3);
+      p = 4;
+    } else {
+      const zero = data.indexOf(0, 1);
+      if (zero < 0) return null;
+      mime = this.ascii(data, 1, zero - 1);
+      p = zero + 1;
+    }
+    const type = data[p];
+    p += 1;
+    const end = this.findTerminator(data, p, encoding);
+    if (end < 0) return null;
+    p = end + ((encoding === 1 || encoding === 2) ? 2 : 1);
+    if (p >= data.length) return null;
+    return { type, mime, data: data.slice(p) };
+  },
+
+  /* ---------- MP3: ID3v1 (al final del archivo) ---------- */
+
+  async readID3v1(file) {
+    if (file.size < 128) return {};
+    const tail = new Uint8Array(await file.slice(file.size - 128).arrayBuffer());
+    if (this.ascii(tail, 0, 3) !== "TAG") return {};
+    const field = (start, length) => {
+      let text = "";
+      try { text = new TextDecoder("windows-1252").decode(tail.subarray(start, start + length)); } catch (error) { /* vacío */ }
+      return text.replace(/\0[\s\S]*$/, "").trim();
+    };
+    return { title: field(3, 30), artist: field(33, 30), album: field(63, 30) };
+  },
+
+  /* ---------- FLAC ---------- */
+
+  async readFlac(file) {
+    const result = {};
+    let pos = 4;
+    for (let guard = 0; guard < 200 && pos + 4 <= file.size; guard++) {
+      const header = new Uint8Array(await file.slice(pos, pos + 4).arrayBuffer());
+      const last = (header[0] & 0x80) !== 0;
+      const type = header[0] & 0x7F;
+      const length = (header[1] << 16) | (header[2] << 8) | header[3];
+      const bodyStart = pos + 4;
+      if (type === 4 && length < 4 * 1024 * 1024) {
+        const body = new Uint8Array(await file.slice(bodyStart, bodyStart + length).arrayBuffer());
+        Object.assign(result, this.fromVorbisTags(this.parseVorbisComment(body, 0)));
+      } else if (type === 6 && length < this.MAX_PICTURE && !result.picture) {
+        const body = new Uint8Array(await file.slice(bodyStart, bodyStart + length).arrayBuffer());
+        result.picture = this.parseFlacPicture(body);
+      }
+      pos = bodyStart + length;
+      if (last) break;
+    }
+    return result;
+  },
+
+  parseFlacPicture(bytes) {
+    try {
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      let p = 4; // tipo de imagen
+      const mimeLength = view.getUint32(p); p += 4;
+      const mime = this.ascii(bytes, p, mimeLength); p += mimeLength;
+      const descLength = view.getUint32(p); p += 4 + descLength;
+      p += 16; // ancho, alto, profundidad y colores
+      const dataLength = view.getUint32(p); p += 4;
+      if (p + dataLength > bytes.length) return null;
+      return { mime, data: bytes.slice(p, p + dataLength) };
+    } catch (error) {
+      return null;
+    }
+  },
+
+  /* ---------- Vorbis / Opus (comentarios) ---------- */
+
+  parseVorbisComment(bytes, offset) {
+    const tags = {};
+    try {
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      let p = offset;
+      p += 4 + view.getUint32(p, true); // fabricante
+      const count = view.getUint32(p, true); p += 4;
+      for (let i = 0; i < count; i++) {
+        if (p + 4 > bytes.length) break;
+        const length = view.getUint32(p, true); p += 4;
+        if (p + length > bytes.length) break; // comentario cortado (portada muy grande): se ignora
+        const text = this.utf8(bytes.subarray(p, p + length)); p += length;
+        const eq = text.indexOf("=");
+        if (eq > 0) {
+          const key = text.slice(0, eq).toUpperCase();
+          (tags[key] = tags[key] || []).push(text.slice(eq + 1));
+        }
+      }
+    } catch (error) { /* se devuelve lo leído */ }
+    return tags;
+  },
+
+  fromVorbisTags(tags) {
+    const first = (key) => (tags[key] && tags[key][0]) || "";
+    const result = {
+      title: first("TITLE"),
+      artist: first("ARTIST") || first("ALBUMARTIST"),
+      album: first("ALBUM")
+    };
+    const encoded = first("METADATA_BLOCK_PICTURE");
+    if (encoded && encoded.length < this.MAX_PICTURE * 1.4) {
+      try {
+        const binary = atob(encoded);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const picture = this.parseFlacPicture(bytes);
+        if (picture) result.picture = picture;
+      } catch (error) { /* imagen dañada */ }
+    }
+    return result;
+  },
+
+  /* ---------- OGG (Vorbis y Opus) ---------- */
+
+  async readOgg(file) {
+    const buf = new Uint8Array(await file.slice(0, 6 * 1024 * 1024).arrayBuffer());
+    const packets = this.oggPackets(buf, 2);
+    const packet = packets[1];
+    if (!packet) return {};
+    let offset = -1;
+    if (packet[0] === 0x03 && this.ascii(packet, 1, 6) === "vorbis") offset = 7;
+    else if (this.ascii(packet, 0, 8) === "OpusTags") offset = 8;
+    if (offset < 0) return {};
+    return this.fromVorbisTags(this.parseVorbisComment(packet, offset));
+  },
+
+  // Reconstruye los primeros "wanted" paquetes de un flujo Ogg (pueden abarcar varias páginas).
+  oggPackets(buf, wanted) {
+    const packets = [];
+    let parts = [], total = 0, p = 0;
+    while (p + 27 <= buf.length && packets.length < wanted) {
+      if (this.ascii(buf, p, 4) !== "OggS") break;
+      const segments = buf[p + 26];
+      let dataPos = p + 27 + segments;
+      if (dataPos > buf.length) break;
+      for (let s = 0; s < segments; s++) {
+        const lace = buf[p + 27 + s];
+        if (dataPos + lace > buf.length) return packets; // el archivo leído termina antes
+        parts.push(buf.subarray(dataPos, dataPos + lace));
+        total += lace;
+        dataPos += lace;
+        if (lace < 255) {
+          const joined = new Uint8Array(total);
+          let at = 0;
+          parts.forEach((part) => { joined.set(part, at); at += part.length; });
+          packets.push(joined);
+          parts = []; total = 0;
+          if (packets.length >= wanted) return packets;
+        }
+      }
+      p = dataPos;
+    }
+    return packets;
+  },
+
+  /* ---------- M4A / MP4 ---------- */
+
+  boxes(buf, start, end) {
+    const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    const list = [];
+    let p = start;
+    while (p + 8 <= end) {
+      let size = view.getUint32(p);
+      const type = this.ascii(buf, p + 4, 4);
+      let header = 8;
+      if (size === 1 && p + 16 <= end) {
+        size = view.getUint32(p + 8) * 4294967296 + view.getUint32(p + 12);
+        header = 16;
+      } else if (size === 0) {
+        size = end - p;
+      }
+      if (size < header) break;
+      const boxEnd = Math.min(p + size, end);
+      list.push({ type, start: p + header, end: boxEnd });
+      p += size;
+    }
+    return list;
+  },
+
+  async readMP4(file) {
+    let pos = 0;
+    for (let guard = 0; guard < 64 && pos + 8 <= file.size; guard++) {
+      const head = new DataView(await file.slice(pos, pos + 16).arrayBuffer());
+      let size = head.getUint32(0);
+      const type = this.ascii(new Uint8Array(head.buffer), 4, 4);
+      let header = 8;
+      if (size === 1) { size = head.getUint32(8) * 4294967296 + head.getUint32(12); header = 16; }
+      else if (size === 0) size = file.size - pos;
+      if (size < header) break;
+      if (type === "moov") {
+        if (size > 40 * 1024 * 1024) return {};
+        const buf = new Uint8Array(await file.slice(pos + header, pos + size).arrayBuffer());
+        return this.parseMoov(buf);
+      }
+      pos += size;
+    }
+    return {};
+  },
+
+  parseMoov(buf) {
+    const find = (list, type) => list.find((box) => box.type === type);
+    const udta = find(this.boxes(buf, 0, buf.length), "udta");
+    if (!udta) return {};
+    const meta = find(this.boxes(buf, udta.start, udta.end), "meta");
+    if (!meta) return {};
+    const ilst = find(this.boxes(buf, meta.start + 4, meta.end), "ilst"); // "meta" lleva 4 bytes de versión
+    if (!ilst) return {};
+
+    const result = {};
+    this.boxes(buf, ilst.start, ilst.end).forEach((item) => {
+      const dataBox = this.boxes(buf, item.start, item.end).find((box) => box.type === "data");
+      if (!dataBox || dataBox.end - dataBox.start <= 8) return;
+      const payload = buf.subarray(dataBox.start + 8, dataBox.end); // 4 de tipo + 4 de idioma
+      if (item.type === "\xA9nam") result.title = this.utf8(payload);
+      else if (item.type === "\xA9ART") result.artist = this.utf8(payload);
+      else if (item.type === "aART" && !result.albumArtist) result.albumArtist = this.utf8(payload);
+      else if (item.type === "\xA9alb") result.album = this.utf8(payload);
+      else if (item.type === "covr" && payload.length < this.MAX_PICTURE && !result.picture) {
+        result.picture = { mime: "", data: payload.slice() };
+      }
+    });
+    if (!result.artist && result.albumArtist) result.artist = result.albumArtist;
+    return result;
+  }
+};
+
+/* =========================================================
    COVERS — carátulas (se guardan como imagen pequeña dentro de cada canción)
    Cada carátula se convierte en una URL temporal que se reutiliza y se libera al cambiarla.
    ========================================================= */
@@ -1225,8 +1654,68 @@ const Library = {
       duration: duration,
       addedAt: Date.now(),
       lyrics: null,
-      cover: null
+      cover: null,
+      album: ""
     };
+  },
+
+  // Completa nombre, artista, álbum y portada con las etiquetas incrustadas en el archivo.
+  async applyTags(meta, file) {
+    const tags = await Metadata.read(file);
+    if (tags.title) meta.name = tags.title;
+    if (tags.artist) meta.artist = tags.artist;
+    if (tags.album) meta.album = tags.album;
+    if (tags.picture) {
+      try {
+        meta.cover = await Editor.makeCoverBlob(new Blob([tags.picture.data], { type: tags.picture.mime }));
+      } catch (error) {
+        console.warn("No se pudo usar la portada incrustada de", file.name, error);
+      }
+    }
+    return tags;
+  },
+
+  // Vuelve a leer las etiquetas de las canciones ya guardadas (sin tocar lo que editaste a mano).
+  async rescanTags() {
+    if (this.importing) { UI.toast("Espera a que termine la importación."); return; }
+    if (!this.songs.length) { UI.toast("La biblioteca está vacía."); return; }
+    this.importing = true;
+    let updated = 0;
+    try {
+      for (let i = 0; i < this.songs.length; i++) {
+        const song = this.songs[i];
+        UI.toast(`Leyendo etiquetas ${i + 1} de ${this.songs.length}…`, true);
+        const blob = await Store.getBlob(song.id);
+        if (!blob) continue;
+        const tags = await Metadata.read(blob);
+        let changed = false;
+        if (!song.userEdited) {
+          if (tags.title && tags.title !== song.name) { song.name = tags.title; changed = true; }
+          if (tags.artist && tags.artist !== song.artist) { song.artist = tags.artist; changed = true; }
+        }
+        if (tags.album && tags.album !== song.album) { song.album = tags.album; changed = true; }
+        if (!song.cover && tags.picture) {
+          try {
+            song.cover = await Editor.makeCoverBlob(new Blob([tags.picture.data], { type: tags.picture.mime }));
+            Covers.release(song.id);
+            changed = true;
+          } catch (error) { /* imagen no válida: se deja sin portada */ }
+        }
+        if (changed) {
+          await Store.updateSong(song);
+          updated++;
+        }
+      }
+      UI.renderAll();
+      const current = Library.byId(Player.currentId);
+      if (current) { UI.refreshNowPlayingInfo(current); Player.updateMediaMetadata(current); }
+      UI.toast(updated ? `${updated} ${updated === 1 ? "canción actualizada" : "canciones actualizadas"}.` : "No hay nada nuevo que leer.");
+    } catch (error) {
+      console.error("Error al leer etiquetas:", error);
+      UI.toast("No se pudieron leer todas las etiquetas.");
+    } finally {
+      this.importing = false;
+    }
   },
 
   async importFiles(fileList) {
@@ -1259,6 +1748,7 @@ const Library = {
       try {
         const duration = await this.readDuration(file);
         const meta = this.buildMeta(file, duration);
+        await this.applyTags(meta, file);
         await Store.addSong(meta, file);
         this.songs.push(meta);
         added++;
@@ -1284,9 +1774,7 @@ const Library = {
 
   async requestPersistence() {
     // Pide a Android que no borre los datos del sitio cuando falte espacio.
-    try {
-      if (navigator.storage && navigator.storage.persist) await navigator.storage.persist();
-    } catch (error) { /* no es crítico */ }
+    try { await Persistence.check(true); } catch (error) { /* no es crítico */ }
   },
 
   async remove(id) {
@@ -1335,6 +1823,10 @@ const Player = {
   objectUrl: null,
   seeking: false,
   loadToken: 0,
+  shuffle: false,
+  repeat: "off",   // "off" | "all" | "one"
+  order: [],       // orden aleatorio (ids de canciones)
+  orderPos: -1,    // posición actual dentro de "order"
 
   init() {
     const audio = this.audio;
@@ -1359,7 +1851,7 @@ const Player = {
     this.setupMediaSession();
   },
 
-  async play(id) {
+  async play(id, options = {}) {
     const song = Library.byId(id);
     if (!song) return;
 
@@ -1379,6 +1871,7 @@ const Player = {
     const previousUrl = this.objectUrl;
     this.objectUrl = URL.createObjectURL(blob);
     this.currentId = id;
+    if (this.shuffle && !options.keepOrder) this.rebuildOrder(); // elegiste una canción a mano: se mezcla el resto
     this.audio.src = this.objectUrl;
     if (previousUrl) URL.revokeObjectURL(previousUrl);
 
@@ -1402,7 +1895,8 @@ const Player = {
   toggle() {
     if (this.currentId === null) {
       if (Library.songs.length) {
-        this.play(Library.songs[0].id);
+        if (this.shuffle) this.play(this.step(1, false), { keepOrder: true });
+        else this.play(Library.songs[0].id);
       } else {
         UI.toast("Importa música para empezar.");
       }
@@ -1417,11 +1911,75 @@ const Player = {
     }
   },
 
+  /* ---------- Orden de reproducción (normal o aleatorio) ---------- */
+
+  // Lista de ids mezclada. "first" queda al principio; "avoid" no queda primero (para no repetir al empezar otra ronda).
+  makeShuffled(first = null, avoid = null) {
+    const ids = Library.songs.map((song) => song.id);
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+    if (first !== null) {
+      const at = ids.indexOf(first);
+      if (at > 0) { ids.splice(at, 1); ids.unshift(first); }
+    } else if (avoid !== null && ids.length > 1 && ids[0] === avoid) {
+      ids.push(ids.shift());
+    }
+    return ids;
+  },
+
+  rebuildOrder() {
+    const known = this.currentId !== null && Library.byId(this.currentId);
+    this.order = this.makeShuffled(known ? this.currentId : null);
+    this.orderPos = known ? 0 : -1;
+  },
+
+  // Si la biblioteca cambió (se añadió o borró música), se vuelve a mezclar conservando la canción actual.
+  ensureOrder() {
+    const songs = Library.songs;
+    const ids = new Set(this.order);
+    const valid = this.order.length === songs.length &&
+      songs.every((song) => ids.has(song.id)) &&
+      (this.currentId === null || this.order[this.orderPos] === this.currentId);
+    if (!valid) this.rebuildOrder();
+  },
+
+  // Devuelve el id de la canción a la que hay que saltar (o null si la lista terminó).
+  // auto = true cuando la canción acabó sola; false cuando la persona pulsó Siguiente/Anterior.
+  step(direction, auto) {
+    const songs = Library.songs;
+    if (!songs.length) return null;
+
+    if (this.shuffle) {
+      this.ensureOrder();
+      let pos = this.orderPos + direction;
+      if (pos >= this.order.length) {
+        if (auto && this.repeat !== "all") return null;
+        this.order = this.makeShuffled(null, this.currentId); // nueva ronda mezclada
+        this.orderPos = 0;
+        return this.order[0];
+      }
+      if (pos < 0) pos = this.order.length - 1;
+      this.orderPos = pos;
+      return this.order[pos];
+    }
+
+    const index = Library.indexOf(this.currentId);
+    if (index < 0) return songs[direction > 0 ? 0 : songs.length - 1].id;
+    let target = index + direction;
+    if (target >= songs.length) {
+      if (auto && this.repeat !== "all") return null;
+      target = 0;
+    } else if (target < 0) {
+      target = songs.length - 1;
+    }
+    return songs[target].id;
+  },
+
   next() {
-    if (!Library.songs.length) return;
-    let index = Library.indexOf(this.currentId) + 1;
-    if (index >= Library.songs.length) index = 0;
-    this.play(Library.songs[index].id);
+    const id = this.step(1, false);
+    if (id !== null) this.play(id, { keepOrder: true });
   },
 
   previous() {
@@ -1430,19 +1988,60 @@ const Player = {
       this.audio.currentTime = 0;
       return;
     }
-    let index = Library.indexOf(this.currentId) - 1;
-    if (index < 0) index = Library.songs.length - 1;
-    this.play(Library.songs[index].id);
+    const id = this.step(-1, false);
+    if (id !== null) this.play(id, { keepOrder: true });
   },
 
   handleEnded() {
-    if (Library.songs.length <= 1) {
+    // Con "repetir una" el propio audio vuelve a empezar (audio.loop), así que aquí no se llega.
+    const id = this.step(1, true);
+    if (id === null) {
+      // Fin de la lista sin repetir: se queda al inicio de la última canción, en pausa.
       this.audio.currentTime = 0;
       UI.updatePlayState();
       UI.updateProgress();
-    } else {
-      this.next();
+      Lyrics.refresh(true);
+      return;
     }
+    if (id === this.currentId) {
+      this.audio.currentTime = 0;
+      this.audio.play().catch(() => {});
+    } else {
+      this.play(id, { keepOrder: true });
+    }
+  },
+
+  /* ---------- Aleatorio y repetir ---------- */
+
+  loadPrefs() {
+    const saved = Settings.values.playback || {};
+    this.shuffle = Boolean(saved.shuffle);
+    this.repeat = ["off", "all", "one"].includes(saved.repeat) ? saved.repeat : "off";
+    this.audio.loop = this.repeat === "one";
+    if (this.shuffle) this.rebuildOrder();
+    UI.updateModes();
+  },
+
+  savePrefs() {
+    Settings.set("playback", { shuffle: this.shuffle, repeat: this.repeat });
+  },
+
+  toggleShuffle() {
+    this.shuffle = !this.shuffle;
+    if (this.shuffle) this.rebuildOrder();
+    this.savePrefs();
+    UI.updateModes();
+    Queue.refresh();
+    UI.toast(this.shuffle ? "Aleatorio activado" : "Aleatorio desactivado");
+  },
+
+  cycleRepeat() {
+    this.repeat = this.repeat === "off" ? "all" : this.repeat === "all" ? "one" : "off";
+    this.audio.loop = this.repeat === "one";
+    this.savePrefs();
+    UI.updateModes();
+    Queue.refresh();
+    UI.toast({ off: "Repetir desactivado", all: "Repetir toda la biblioteca", one: "Repetir esta canción" }[this.repeat]);
   },
 
   seekTo(fraction) {
@@ -1457,6 +2056,8 @@ const Player = {
     const url = this.objectUrl;
     this.objectUrl = null;
     this.currentId = null;
+    this.order = [];
+    this.orderPos = -1;
     this.audio.pause();
     this.audio.removeAttribute("src");
     this.audio.load();
@@ -1486,7 +2087,7 @@ const Player = {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: song.name,
         artist: song.artist,
-        album: "Pulsar RM",
+        album: song.album || "Pulsar RM",
         artwork: art ? [{ src: art, sizes: "512x512", type: "image/jpeg" }] : []
       });
     } catch (error) { /* no crítico */ }
@@ -1494,11 +2095,126 @@ const Player = {
 };
 
 /* =========================================================
+   IMMERSIVE — modo inmersivo del reproductor
+   Portada grande con fondo difuminado y letra sincronizada a pantalla completa.
+   La letra es la misma del reproductor: el panel se mueve aquí mientras el modo está abierto.
+   ========================================================= */
+const Immersive = {
+  wake: null,
+  waking: false,
+
+  init() {
+    document.addEventListener("visibilitychange", () => this.updateWake());
+    let timer = 0;
+    window.addEventListener("resize", () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { if (Router.current === "immersive") Lyrics.refresh(true); }, 150);
+    });
+  },
+
+  open() {
+    if (Player.currentId === null) {
+      UI.toast("Reproduce una canción para usar el modo inmersivo.");
+      return;
+    }
+    Router.go("immersive");
+  },
+
+  close() {
+    // Si veníamos del reproductor, "atrás" no deja entradas repetidas en el historial.
+    if (Router.previous === "player") history.back();
+    else Router.go("player");
+  },
+
+  toggleMode() {
+    const view = $("view-immersive");
+    const next = view.dataset.mode === "cover" ? "lyrics" : "cover";
+    view.dataset.mode = next;
+    $("im-mode").textContent = next === "cover" ? "♪ Letra" : "◉ Portada";
+    Lyrics.refresh(true);
+    setTimeout(() => { if (Router.current === "immersive") Lyrics.refresh(true); }, 400); // cuando termina la animación
+  },
+
+  // Se llama cada vez que cambia la pantalla: mueve el panel de letra y ajusta el fondo.
+  sync(name) {
+    const lyrics = $("lyrics");
+    const host = $("im-lyrics");
+    const panel = $("lyrics-panel");
+    if (lyrics && host && panel) {
+      if (name === "immersive") { if (lyrics.parentNode !== host) host.appendChild(lyrics); }
+      else if (lyrics.parentNode !== panel) panel.appendChild(lyrics);
+    }
+    document.body.dataset.route = name;
+    this.updateWake();
+  },
+
+  // Sin letra sincronizada, el modo "portada" no deja hueco para ella.
+  onLyricsChange(data) {
+    const view = $("view-immersive");
+    if (view) view.classList.toggle("no-lyrics", !(data && data.synced));
+  },
+
+  setArt(url) {
+    const bg = $("im-bg");
+    if (!bg) return;
+    bg.style.backgroundImage = url ? `url("${url}")` : "";
+    bg.classList.toggle("has-art", Boolean(url));
+  },
+
+  /* ---------- Pantalla encendida mientras suena ---------- */
+
+  wantsWake() {
+    return Router.current === "immersive" && Player.currentId !== null && !Player.audio.paused && !document.hidden;
+  },
+
+  updateWake() {
+    if (!this.wantsWake()) {
+      if (this.wake) { this.wake.release().catch(() => {}); this.wake = null; }
+      return;
+    }
+    if (this.wake || this.waking || !navigator.wakeLock) return;
+    this.waking = true;
+    navigator.wakeLock.request("screen").then((lock) => {
+      this.waking = false;
+      this.wake = lock;
+      lock.addEventListener("release", () => { if (this.wake === lock) this.wake = null; });
+      if (!this.wantsWake()) this.updateWake();
+    }).catch(() => { this.waking = false; });
+  }
+};
+
+/* =========================================================
+   PERSISTENCE — pide al navegador que no borre la biblioteca cuando falte espacio
+   ========================================================= */
+const Persistence = {
+  state: "unknown", // "yes" | "no" | "unsupported"
+
+  async check(request) {
+    if (!(navigator.storage && navigator.storage.persisted)) { this.state = "unsupported"; return this.state; }
+    try {
+      let granted = await navigator.storage.persisted();
+      if (!granted && request && navigator.storage.persist) granted = await navigator.storage.persist();
+      this.state = granted ? "yes" : "no";
+    } catch (error) {
+      this.state = "no";
+    }
+    return this.state;
+  },
+
+  message() {
+    if (this.state === "yes") return "✓ Biblioteca protegida: Android no debería borrarla aunque falte espacio.";
+    if (this.state === "unsupported") return "Este navegador no informa si protege tus datos. Evita borrar los datos del sitio en Ajustes de Android.";
+    return "⚠ El navegador aún no protege tu biblioteca: si el teléfono se queda sin espacio podría borrarla. Instala Pulsar RM en la pantalla de inicio (menú ⋮ de Chrome → Instalar app) para que quede protegida.";
+  }
+};
+
+/* =========================================================
    ROUTER — navegación entre pantallas (usa #hash: el botón Atrás de Android funciona)
    ========================================================= */
 const Router = {
-  views: ["home", "library", "player", "eq", "settings"],
+  views: ["home", "library", "player", "eq", "immersive", "settings"],
   current: "home",
+  previous: "home",
   lastBase: "home", // última pantalla de la barra inferior (Inicio o Biblioteca): a ella se vuelve al cerrar Reproductor o Ajustes
 
   init() {
@@ -1521,7 +2237,13 @@ const Router = {
   },
 
   show(name) {
+    if (name === "immersive" && Player.currentId === null) { // al recargar en #immersive no hay nada sonando
+      history.replaceState(null, "", "#player");
+      name = "player";
+    }
+    if (name !== this.current) this.previous = this.current;
     this.current = name;
+    Immersive.sync(name);
     if (name === "home" || name === "library") this.lastBase = name;
     Editor.discard();
     LyricsEditor.discard();
@@ -1575,6 +2297,7 @@ const UI = {
       editCover: $("edit-cover"),
       editName: $("edit-name"),
       editArtist: $("edit-artist"),
+      editAlbum: $("edit-album"),
       editFile: $("edit-file"),
       coverFile: $("cover-file"),
       playerTitle: $("player-title"),
@@ -1583,6 +2306,14 @@ const UI = {
       currentTime: $("current-time"),
       duration: $("duration"),
       storageInfo: $("storage-info"),
+      persistInfo: $("persist-info"),
+      imProgress: $("im-progress"),
+      imCurrent: $("im-current"),
+      imDuration: $("im-duration"),
+      imTitle: $("im-title"),
+      imArtist: $("im-artist"),
+      imCover: $("im-cover"),
+      imView: $("view-immersive"),
       appVersion: $("app-version"),
       toast: $("toast")
     };
@@ -1661,7 +2392,7 @@ const UI = {
       if (file) Editor.setCover(file);
     });
 
-    [this.el.editName, this.el.editArtist].forEach((input) => {
+    [this.el.editName, this.el.editArtist, this.el.editAlbum].forEach((input) => {
       input.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
           event.preventDefault();
@@ -1675,17 +2406,20 @@ const UI = {
       this.renderLibrary();
     });
 
-    const progress = this.el.progress;
-    progress.addEventListener("input", () => {
-      Player.seeking = true;
-      const duration = Player.audio.duration;
-      if (Number.isFinite(duration)) {
-        this.el.currentTime.textContent = this.formatTime((progress.value / 1000) * duration);
-      }
-    });
-    progress.addEventListener("change", () => {
-      Player.seekTo(progress.value / 1000);
-      Player.seeking = false;
+    [this.el.progress, this.el.imProgress].forEach((progress) => {
+      progress.addEventListener("input", () => {
+        Player.seeking = true;
+        const duration = Player.audio.duration;
+        if (Number.isFinite(duration)) {
+          const text = this.formatTime((progress.value / 1000) * duration);
+          this.el.currentTime.textContent = text;
+          this.el.imCurrent.textContent = text;
+        }
+      });
+      progress.addEventListener("change", () => {
+        Player.seekTo(progress.value / 1000);
+        Player.seeking = false;
+      });
     });
   },
 
@@ -1694,6 +2428,8 @@ const UI = {
       case "import": this.el.fileInput.click(); break;
       case "toggle": Player.toggle(); break;
       case "next": Player.next(); break;
+      case "shuffle": Player.toggleShuffle(); break;
+      case "repeat": Player.cycleRepeat(); break;
       case "prev": Player.previous(); break;
       case "clear": Library.clear(); break;
       case "close": Router.go(Router.lastBase); break;
@@ -1704,6 +2440,11 @@ const UI = {
       case "edit-pick-image": this.el.coverFile.click(); break;
       case "edit-remove-image": Editor.removeCover(); break;
       case "edit-reset": Editor.resetFromFile(); break;
+      case "edit-read-tags": Editor.readFromAudio(); break;
+      case "rescan": Library.rescanTags(); break;
+      case "immersive-open": Immersive.open(); break;
+      case "immersive-close": Immersive.close(); break;
+      case "immersive-mode": Immersive.toggleMode(); break;
       case "stage-lyrics": Stage.set("lyrics"); break;
       case "stage-queue": Stage.set("queue"); break;
       case "eq-open": Router.go("eq"); break;
@@ -1810,6 +2551,9 @@ const UI = {
       }
     } catch (error) { /* no crítico */ }
     this.el.storageInfo.textContent = `${Library.songs.length} canciones. ${text}`;
+    await Persistence.check(true);
+    this.el.persistInfo.textContent = Persistence.message();
+    this.el.persistInfo.classList.toggle("warn", Persistence.state === "no");
   },
 
   /* ---------- Reproductor ---------- */
@@ -1817,8 +2561,11 @@ const UI = {
   showNowPlaying(song) {
     this.refreshNowPlayingInfo(song);
     this.el.progress.value = 0;
+    this.el.imProgress.value = 0;
     this.el.currentTime.textContent = "0:00";
+    this.el.imCurrent.textContent = "0:00";
     this.el.duration.textContent = this.formatTime(song.duration);
+    this.el.imDuration.textContent = this.formatTime(song.duration);
     this.markPlaying();
     this.updatePlayState();
     this.updateMiniPlayer();
@@ -1831,9 +2578,16 @@ const UI = {
     this.el.playerArtist.textContent = "Pulsar RM";
     this.el.miniTitle.textContent = "Sin reproducción";
     this.el.miniArtist.textContent = "Pulsar RM";
+    this.setCover(this.el.imCover, null);
+    Immersive.setArt(null);
+    this.el.imTitle.textContent = "Sin reproducción";
+    this.el.imArtist.textContent = "Pulsar RM";
     this.el.progress.value = 0;
+    this.el.imProgress.value = 0;
     this.el.currentTime.textContent = "0:00";
+    this.el.imCurrent.textContent = "0:00";
     this.el.duration.textContent = "0:00";
+    this.el.imDuration.textContent = "0:00";
     this.markPlaying();
     this.updatePlayState();
     this.updateMiniPlayer();
@@ -1850,27 +2604,49 @@ const UI = {
       const isCurrent = Number(button.dataset.songPlay) === Player.currentId;
       button.textContent = isCurrent && playing ? "⏸" : "▶";
     });
+    if (this.el.imView) this.el.imView.classList.toggle("is-playing", playing);
+    Immersive.updateWake();
     if ("mediaSession" in navigator) {
       navigator.mediaSession.playbackState = playing ? "playing" : "paused";
     }
+  },
+
+  updateModes() {
+    const labels = { off: "Repetir: desactivado", all: "Repetir: toda la biblioteca", one: "Repetir: esta canción" };
+    document.querySelectorAll('[data-action="shuffle"]').forEach((button) => {
+      button.classList.toggle("on", Player.shuffle);
+      button.setAttribute("aria-pressed", String(Player.shuffle));
+      button.setAttribute("aria-label", Player.shuffle ? "Aleatorio: activado" : "Aleatorio: desactivado");
+    });
+    document.querySelectorAll('[data-action="repeat"]').forEach((button) => {
+      button.classList.toggle("on", Player.repeat !== "off");
+      button.classList.toggle("one", Player.repeat === "one");
+      button.setAttribute("aria-pressed", String(Player.repeat !== "off"));
+      button.setAttribute("aria-label", labels[Player.repeat]);
+    });
   },
 
   updateProgress() {
     if (Player.seeking) return;
     const duration = Player.audio.duration;
     const hasDuration = Number.isFinite(duration) && duration > 0;
-    this.el.progress.value = hasDuration ? (Player.audio.currentTime / duration) * 1000 : 0;
-    this.el.currentTime.textContent = this.formatTime(Player.audio.currentTime);
+    const value = hasDuration ? (Player.audio.currentTime / duration) * 1000 : 0;
+    const text = this.formatTime(Player.audio.currentTime);
+    this.el.progress.value = value;
+    this.el.imProgress.value = value;
+    this.el.currentTime.textContent = text;
+    this.el.imCurrent.textContent = text;
   },
 
   setDuration(seconds) {
     if (Number.isFinite(seconds) && seconds > 0) {
       this.el.duration.textContent = this.formatTime(seconds);
+      this.el.imDuration.textContent = this.formatTime(seconds);
     }
   },
 
   updateMiniPlayer() {
-    const visible = Player.currentId !== null && Router.current !== "player" && Router.current !== "eq";
+    const visible = Player.currentId !== null && !["player", "eq", "immersive"].includes(Router.current);
     this.el.miniPlayer.classList.toggle("hidden", !visible);
   },
 
@@ -1898,12 +2674,17 @@ const UI = {
   refreshNowPlayingInfo(song) {
     const title = song.name || "Sin título";
     this.el.playerTitle.textContent = title;
-    this.el.playerArtist.textContent = song.artist;
+    const byline = song.album ? `${song.artist} · ${song.album}` : song.artist;
+    this.el.playerArtist.textContent = byline;
+    this.el.imTitle.textContent = title;
+    this.el.imArtist.textContent = byline;
     this.el.miniTitle.textContent = title;
     this.el.miniArtist.textContent = song.artist;
     const url = Covers.get(song);
     this.setCover(this.el.bigCover, url);
     this.setCover(this.el.miniCover, url);
+    this.setCover(this.el.imCover, url);
+    Immersive.setArt(url);
   },
 
   toggleMenu() {
@@ -1992,6 +2773,7 @@ const Editor = {
     this.coverChanged = false;
     UI.el.editName.value = song.name || "";
     UI.el.editArtist.value = song.artist || "";
+    UI.el.editAlbum.value = song.album || "";
     UI.el.editFile.textContent = "Archivo: " + song.fileName;
     this.renderPreview();
     UI.el.editSheet.classList.remove("hidden");
@@ -2035,6 +2817,31 @@ const Editor = {
     const parsed = Library.parseFileName(song.fileName);
     UI.el.editName.value = parsed.title;
     UI.el.editArtist.value = parsed.artist;
+    UI.el.editAlbum.value = "";
+  },
+
+  // Rellena el formulario con las etiquetas y la portada incrustadas en el archivo de audio.
+  async readFromAudio() {
+    const song = Library.byId(this.songId);
+    if (!song) return;
+    const blob = await Store.getBlob(song.id);
+    if (!blob) { UI.toast("No se encontró el archivo de esta canción."); return; }
+    const tags = await Metadata.read(blob);
+    if (!tags.title && !tags.artist && !tags.album && !tags.picture) {
+      UI.toast("Este archivo no trae etiquetas ni portada.");
+      return;
+    }
+    if (tags.title) UI.el.editName.value = tags.title;
+    if (tags.artist) UI.el.editArtist.value = tags.artist;
+    if (tags.album) UI.el.editAlbum.value = tags.album;
+    if (tags.picture) {
+      try {
+        this.pendingCover = await this.makeCoverBlob(new Blob([tags.picture.data], { type: tags.picture.mime }));
+        this.coverChanged = true;
+        this.renderPreview();
+      } catch (error) { console.warn("Portada incrustada no válida:", error); }
+    }
+    UI.toast("Etiquetas leídas. Toca Guardar para aplicarlas.");
   },
 
   // Recorta al centro en cuadrado, reduce a 512 px máx. y guarda como JPG ligero.
@@ -2074,9 +2881,11 @@ const Editor = {
     this.saving = true;
 
     const parsed = Library.parseFileName(song.fileName);
-    const previous = { name: song.name, artist: song.artist, cover: song.cover };
+    const previous = { name: song.name, artist: song.artist, album: song.album, cover: song.cover, userEdited: song.userEdited };
     song.name = UI.el.editName.value.trim() || parsed.title;
     song.artist = UI.el.editArtist.value.trim() || parsed.artist;
+    song.album = UI.el.editAlbum.value.trim();
+    song.userEdited = true; // la relectura de etiquetas ya no cambiará título ni artista
     if (this.coverChanged) song.cover = this.pendingCover;
 
     try {
@@ -2093,6 +2902,8 @@ const Editor = {
       console.error("No se pudo guardar:", error);
       song.name = previous.name;
       song.artist = previous.artist;
+      song.album = previous.album;
+      song.userEdited = previous.userEdited;
       song.cover = previous.cover;
       UI.toast(error && error.name === "QuotaExceededError"
         ? "No hay espacio suficiente para guardar."
@@ -2131,13 +2942,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   LyricsEditor.init();
   Stage.init();
   Equalizer.init();
+  Immersive.init();
   Router.init();
   UI.renderAll();
 
   await Store.open();
+  Persistence.check(true); // pide protección para la biblioteca (no hace falta esperarla)
   await Settings.load();
   Equalizer.loadSaved();
   await Library.load();
+  Player.loadPrefs();
   UI.renderAll();
 
   if (!Store.available) {

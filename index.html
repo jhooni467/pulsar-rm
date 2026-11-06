@@ -87,14 +87,17 @@
       <div class="now-playing">
         <div class="player-header">
           <button type="button" class="close-player" data-action="close" aria-label="Cerrar reproductor">⌄</button>
-          <button type="button" id="player-menu-button" class="close-player more-btn" data-action="menu" aria-label="Más opciones" aria-haspopup="true" aria-expanded="false">⋮</button>
+          <div class="header-right">
+            <button type="button" class="close-player expand-btn" data-action="immersive-open" aria-label="Modo inmersivo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
+            <button type="button" id="player-menu-button" class="close-player more-btn" data-action="menu" aria-label="Más opciones" aria-haspopup="true" aria-expanded="false">⋮</button>
+          </div>
           <div id="player-menu" class="popover hidden" role="menu">
             <button type="button" role="menuitem" data-action="edit">✎&nbsp; Editar información</button>
           </div>
         </div>
         <!-- Zona central: portada, letra o cola ("Siguiente") -->
         <div id="stage" class="stage" data-mode="cover">
-          <div id="big-cover" class="big-cover">♫</div>
+          <div id="big-cover" class="big-cover" data-action="immersive-open">♫</div>
 
           <section id="lyrics-panel" class="stage-panel hidden" aria-label="Letra">
             <div id="lyrics-bar" class="lyrics-bar no-data no-sync">
@@ -126,9 +129,11 @@
         </div>
 
         <div class="controls">
+          <button type="button" class="ctl-toggle" data-action="shuffle" aria-pressed="false" aria-label="Aleatorio: desactivado"><svg class="ctl-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></button>
           <button type="button" data-action="prev" aria-label="Anterior">⏮</button>
           <button type="button" class="round-btn big" data-action="toggle" aria-label="Reproducir o pausar">▶</button>
           <button type="button" data-action="next" aria-label="Siguiente">⏭</button>
+          <button type="button" class="ctl-toggle" data-action="repeat" aria-pressed="false" aria-label="Repetir: desactivado"><svg class="ctl-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><span class="rep-one" aria-hidden="true">1</span></button>
         </div>
 
         <div class="player-tabs">
@@ -168,6 +173,45 @@
       </div>
     </section>
 
+    <!-- ============ MODO INMERSIVO ============ -->
+    <section id="view-immersive" class="view no-lyrics" data-view-name="immersive" data-mode="cover">
+      <div id="im-bg" class="im-bg" aria-hidden="true"></div>
+      <div class="im-shade" aria-hidden="true"></div>
+      <div class="im-content">
+        <div class="im-top">
+          <button type="button" class="im-icon" data-action="immersive-close" aria-label="Cerrar modo inmersivo">⌄</button>
+          <button type="button" id="im-mode" class="im-pill" data-action="immersive-mode">♪ Letra</button>
+        </div>
+
+        <div class="im-stage">
+          <button type="button" class="im-cover-btn" data-action="immersive-mode" aria-label="Mostrar u ocultar la letra">
+            <span id="im-cover" class="im-cover">♫</span>
+          </button>
+          <div class="im-meta">
+            <h2 id="im-title">Sin reproducción</h2>
+            <p id="im-artist">Pulsar RM</p>
+          </div>
+        </div>
+
+        <div id="im-lyrics" class="im-lyrics"></div>
+
+        <div class="im-bottom">
+          <div class="progress-container">
+            <span id="im-current">0:00</span>
+            <input id="im-progress" type="range" min="0" max="1000" value="0" aria-label="Progreso">
+            <span id="im-duration">0:00</span>
+          </div>
+          <div class="controls">
+            <button type="button" class="ctl-toggle" data-action="shuffle" aria-pressed="false" aria-label="Aleatorio: desactivado"><svg class="ctl-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></button>
+            <button type="button" data-action="prev" aria-label="Anterior">⏮</button>
+            <button type="button" class="round-btn big" data-action="toggle" aria-label="Reproducir o pausar">▶</button>
+            <button type="button" data-action="next" aria-label="Siguiente">⏭</button>
+            <button type="button" class="ctl-toggle" data-action="repeat" aria-pressed="false" aria-label="Repetir: desactivado"><svg class="ctl-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><span class="rep-one" aria-hidden="true">1</span></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ AJUSTES ============ -->
     <section id="view-settings" class="view" data-view-name="settings">
       <div class="section-title">
@@ -183,7 +227,12 @@
       <div class="card">
         <h3>Biblioteca</h3>
         <p id="storage-info">Calculando espacio…</p>
-        <button type="button" class="danger-btn" data-action="clear">Borrar biblioteca</button>
+        <p id="persist-info" class="persist-info"></p>
+        <div class="card-actions">
+          <button type="button" class="chip-btn muted" data-action="rescan">Leer etiquetas y portadas</button>
+          <button type="button" class="danger-btn" data-action="clear">Borrar biblioteca</button>
+        </div>
+        <p class="hint">«Leer etiquetas y portadas» vuelve a revisar los archivos ya importados (título, artista, álbum y carátula). No cambia lo que editaste a mano.</p>
       </div>
 
       <div class="card">
@@ -237,7 +286,14 @@
       <input id="edit-artist" type="text" maxlength="200" autocomplete="off" enterkeyhint="done">
     </label>
 
-    <button type="button" class="link-btn reset-link" data-action="edit-reset">Usar el nombre del archivo</button>
+    <label class="field"><span>Álbum</span>
+      <input id="edit-album" type="text" maxlength="200" autocomplete="off" enterkeyhint="done">
+    </label>
+
+    <div class="link-row">
+      <button type="button" class="link-btn reset-link" data-action="edit-read-tags">Leer del archivo de audio</button>
+      <button type="button" class="link-btn reset-link" data-action="edit-reset">Usar el nombre del archivo</button>
+    </div>
     <p id="edit-file" class="file-name"></p>
 
     <div class="sheet-actions">
@@ -284,7 +340,7 @@
 
 <input id="music-files" class="sr-only" type="file" multiple
        accept="audio/*,.mp3,.m4a,.aac,.flac,.ogg,.oga,.opus,.wav,.weba" tabindex="-1">
-  
+
 <script src="script.js"></script>
 
 <!-- Service worker (necesario para instalar como app y usar sin conexión) -->
