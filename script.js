@@ -2246,6 +2246,14 @@ const Editor = {
 document.addEventListener("DOMContentLoaded", async () => {
   UI.cache();
   UI.bindEvents();
+
+  // Sin menú ni selección al mantener presionado (se siente como app, no como navegador).
+  // Solo se permite en campos de texto: editor de información, editor de letras y buscador.
+  document.addEventListener("contextmenu", (event) => {
+    if (event.target.closest && event.target.closest("input, textarea, [contenteditable='true']")) return;
+    event.preventDefault();
+  });
+
   Player.init();
   Themes.init();
   Lyrics.init();

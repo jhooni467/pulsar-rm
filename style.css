@@ -2192,3 +2192,32 @@ img {
   stroke-width: 2.3;
   opacity: 0.85;
 }
+
+
+/* =========================================================
+   SIN SELECCIÓN DE TEXTO (se siente como app, no como navegador)
+   Solo se puede seleccionar y escribir en campos de texto y en
+   los editores: información de la canción y letras.
+   ========================================================= */
+html,
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+input,
+textarea,
+[contenteditable="true"],
+#edit-sheet,
+#lyrics-sheet {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Los botones dentro de los editores siguen sin seleccionarse */
+#edit-sheet button,
+#lyrics-sheet button {
+  -webkit-user-select: none;
+  user-select: none;
+}
