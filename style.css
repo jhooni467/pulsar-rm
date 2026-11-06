@@ -244,17 +244,17 @@
   --accent: var(--accent-light);
   --on-accent: #FFFFFF;
   --danger: #D6334A;
-  --bg: #F6F6FA;
-  --surface: #FFFFFF;
-  --surface2: #ECEDF4;
+  --bg: #FFFFFF;
+  --surface: #F5F6FA;
+  --surface2: #ECEEF4;
   --text: #15161D;
   --muted: #5E6270;
   --border: #DADCE6;
   --border2: #D1D4DF;
   --border-soft: #E4E6EE;
   --border3: #C8CBD8;
-  --card-a: #FFFFFF;
-  --card-b: #F0F1F6;
+  --card-a: #F8F9FC;
+  --card-b: #F0F2F7;
   --elevated: #FFFFFF;
   --rail: #CDD0DB;
   --toast-bg: #FFFFFF;
@@ -264,7 +264,7 @@
   --lyric-dim2: #8B8F9E;
   --lyric-dim: #9B9FAE;
   --tick: #A9ADBB;
-  --field-bg: #FFFFFF;
+  --field-bg: #F3F4F8;
   --nav-bg: #FFFFFF;
   --backdrop: rgba(20, 22, 32, 0.45);
   --item-border: #E4E6EE;
@@ -303,7 +303,8 @@
 /* ---------- Tinte de cada tema (si el navegador soporta color-mix) ---------- */
 @supports (color: color-mix(in srgb, red 50%, blue)) {
   :root[data-mode="light"] {
-    --bg: color-mix(in srgb, var(--accent-light) 5%, #F7F7FA);
+    --surface: color-mix(in srgb, var(--accent-light) 3%, #F6F6F9);
+    --card-a: color-mix(in srgb, var(--accent-light) 2%, #F9F9FC);
     --surface2: color-mix(in srgb, var(--accent-light) 9%, #F0F0F5);
     --text: color-mix(in srgb, var(--accent-light) 10%, #15161D);
     --muted: color-mix(in srgb, var(--accent-light) 15%, #5E6270);

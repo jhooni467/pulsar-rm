@@ -1,0 +1,8 @@
+{
+  "appId": "com.pulsarrm.app",
+  "appName": "Pulsar RM",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

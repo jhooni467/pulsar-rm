@@ -4,7 +4,7 @@
 
 "use strict";
 
-const APP_VERSION = "0.6";
+const APP_VERSION = "1.00";
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "aac", "flac", "ogg", "oga", "opus", "wav", "weba"];
 
 const $ = (id) => document.getElementById(id);
@@ -406,7 +406,7 @@ const Themes = {
   // Colores de la vista previa y de la barra de estado de un tema en cada modo
   colors(theme, mode) {
     if (mode === "light") {
-      return { bg: mixHex(theme.accentLight, "#F7F7FA", 0.05), surface: "#FFFFFF", accent: theme.accentLight };
+      return { bg: "#FFFFFF", surface: mixHex(theme.accentLight, "#F6F6F9", 0.03), accent: theme.accentLight };
     }
     if (mode === "amoled") {
       return { bg: "#000000", surface: mixHex(theme.accent, "#080808", 0.06), accent: theme.accent };
