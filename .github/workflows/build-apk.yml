@@ -38,7 +38,7 @@ jobs:
           npm install
           npx cap add android
 
-      - name: Personalizar (iconos, puente de icono, version 1.00)
+      - name: Personalizar (iconos, puente de icono, version 1.01)
         run: |
           python3 -m pip install pillow
           python3 - <<'PY'
@@ -164,7 +164,7 @@ jobs:
                   os.makedirs(d, exist_ok=True)
                   im.resize((size, size), Image.LANCZOS).save(f"{d}/ic_launcher_{name}.png")
               open(f"{RES}/mipmap-anydpi-v26/ic_launcher_{name}.xml", "w").write(
-                  '<?xml version="1.0" encoding="utf-8"?>\n'
+                  '<?xml version="1.1" encoding="utf-8"?>\n'
                   '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'
                   f'    <background android:drawable="@android:color/{bg}"/>\n'
                   '    <foreground>\n'
@@ -172,14 +172,14 @@ jobs:
                   '    </foreground>\n'
                   '</adaptive-icon>\n')
 
-          # ---------- 4) Version 1.00 ----------
+          # ---------- 4) Version 1.01 ----------
           gradle = MAIN.replace("src/main", "build.gradle")
           g = open(gradle, encoding="utf-8").read()
           g, a = re.subn(r"versionCode\s+\d+", "versionCode 100", g, count=1)
-          g, b = re.subn(r'versionName\s+"[^"]*"', 'versionName "1.00"', g, count=1)
+          g, b = re.subn(r'versionName\s+"[^"]*"', 'versionName "1.01"', g, count=1)
           assert a == 1 and b == 1, "No encontre versionCode/versionName"
           open(gradle, "w", encoding="utf-8").write(g)
-          print("Proyecto Android personalizado: Pulsar RM V1.00")
+          print("Proyecto Android personalizado: Pulsar RM V1.01")
           PY
 
       - name: Sincronizar la web con Android
@@ -195,18 +195,18 @@ jobs:
           ./gradlew assembleDebug --no-daemon
 
       - name: Renombrar APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk PulsarRM-V1.00.apk
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk PulsarRM-V1.01.apk
 
       - name: Guardar APK (artefacto)
         uses: actions/upload-artifact@v4
         with:
-          name: PulsarRM-V1.00
-          path: PulsarRM-V1.00.apk
+          name: PulsarRM-V1.01
+          path: PulsarRM-V1.01.apk
 
       - name: Publicar en Releases (descarga directa)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v1.00-build${{ github.run_number }}" PulsarRM-V1.00.apk \
-            --title "Pulsar RM V1.00" \
-            --notes "APK de prueba (firmado con llave debug). Descarga PulsarRM-V1.00.apk e instalalo."
+          gh release create "v1.01-build${{ github.run_number }}" PulsarRM-V1.01.apk \
+            --title "Pulsar RM V1.01" \
+            --notes "APK de prueba (firmado con llave debug). Descarga PulsarRM-V1.01.apk e instalalo."
