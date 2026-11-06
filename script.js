@@ -1,10 +1,10 @@
-/* PULSAR RM 0.4a — Base estable + animaciones
+/* PULSAR RM 1.01 — Corrección de navegación hacia atrás (sobre la base 1.00)
    Módulos: Store (IndexedDB) · Settings · Library · Player · Router · UI · Lyrics (reservado)
    Todos los botones usan delegación de eventos: siguen funcionando aunque el HTML se vuelva a dibujar. */
 
 "use strict";
 
-const APP_VERSION = "1.00";
+const APP_VERSION = "1.01";
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "aac", "flac", "ogg", "oga", "opus", "wav", "weba"];
 
 const $ = (id) => document.getElementById(id);
@@ -1608,21 +1608,52 @@ const Player = {
 };
 
 /* =========================================================
-   ROUTER — navegación entre pantallas (usa #hash: el botón Atrás de Android funciona)
+   ROUTER — navegación entre pantallas (#hash + historial controlado)
+   v1.01: el historial del navegador refleja EXACTAMENTE la ruta lógica
+   (Inicio → pantalla → subpantalla). Nunca se duplican pantallas, no hay ciclos
+   y el botón/gesto Atrás de Android sigue la ruta; en Inicio, Atrás sale de la app.
    ========================================================= */
 const Router = {
   views: ["home", "library", "player", "eq", "settings"],
+  // Pantalla "padre": a dónde vuelve Atrás. Inicio es la raíz (Atrás en Inicio = salir).
+  parents: { library: "home", settings: "home", player: "home", eq: "player" },
   current: "home",
   lastBase: "home", // última pantalla de la barra inferior (Inicio o Biblioteca): a ella se vuelve al cerrar Reproductor o Ajustes
+  stack: ["home"],  // ruta actual, igual que las entradas del historial: ["home"], ["home","player","eq"]…
+  afterPop: null,   // paso pendiente cuando hay que retroceder varias entradas antes de continuar
+  expectPop: false, // true cuando el retroceso lo pide la propia app (no el usuario)
 
   init() {
-    window.addEventListener("hashchange", () => this.show(this.fromHash()));
-    this.show(this.fromHash());
+    window.addEventListener("popstate", (event) => this.onPopState(event));
+    const saved = history.state;
+    const valid = saved && saved.pulsar && Array.isArray(saved.stack) && saved.stack.length &&
+      saved.stack.every((view) => this.views.includes(view));
+    if (valid) {
+      // Recarga con historial propio ya construido: se respeta tal cual (sin duplicar entradas).
+      this.stack = saved.stack.slice();
+    } else {
+      // Arranque limpio: la app siempre empieza en Inicio, que es la raíz.
+      this.stack = ["home"];
+      history.replaceState({ pulsar: true, stack: ["home"] }, "", "#home");
+    }
+    this.show(this.stack[this.stack.length - 1]);
   },
 
   fromHash() {
     const name = location.hash.replace("#", "");
     return this.views.includes(name) ? name : "home";
+  },
+
+  // Ruta lógica hasta una pantalla: player → ["home","player"], eq → ["home","player","eq"]
+  pathTo(name) {
+    const path = [];
+    let view = name;
+    while (view && !path.includes(view)) {
+      path.unshift(view);
+      view = this.parents[view];
+    }
+    if (path[0] !== "home") path.unshift("home");
+    return path;
   },
 
   go(name) {
@@ -1631,7 +1662,70 @@ const Router = {
       window.scrollTo(0, 0);
       return;
     }
-    location.hash = name;
+    const target = this.pathTo(name);
+    let common = 0;
+    while (common < this.stack.length && common < target.length && this.stack[common] === target[common]) common++;
+    const pops = this.stack.length - common;   // entradas que sobran en el historial
+    const pushes = target.slice(common);       // entradas nuevas que faltan
+
+    const finish = (replaceFirst) => {
+      pushes.forEach((view, i) => {
+        const state = { pulsar: true, stack: target.slice(0, common + i + 1) };
+        if (i === 0 && replaceFirst) history.replaceState(state, "", "#" + view);
+        else history.pushState(state, "", "#" + view);
+      });
+      this.stack = target.slice();
+      this.show(name);
+    };
+
+    if (pops === 0) {
+      finish(false);                       // solo avanzar: se agrega una entrada
+    } else if (pushes.length === 0) {
+      this.back(pops);                     // solo volver a una pantalla ya en la ruta: se descartan entradas
+    } else if (pops === 1) {
+      finish(true);                        // cambiar de rama: se reemplaza la entrada, no se acumula
+    } else {
+      this.afterPop = () => finish(true);  // retrocede lo que sobra y luego reemplaza
+      this.back(pops - 1);
+    }
+  },
+
+  back(steps) {
+    this.expectPop = true;
+    history.go(-steps);
+  },
+
+  // Cierra lo que esté abierto encima de la pantalla (menú ⋮, editores). Devuelve true si cerró algo.
+  closeOverlay() {
+    if (LyricsEditor.isOpen()) { LyricsEditor.close(); return true; }
+    if (Editor.isOpen()) { Editor.close(); return true; }
+    if (UI.el.playerMenu && !UI.el.playerMenu.classList.contains("hidden")) { UI.closeMenu(); return true; }
+    return false;
+  },
+
+  // Se ejecuta con el botón Atrás de Android, el gesto lateral o cualquier retroceso del historial.
+  onPopState(event) {
+    const programmatic = this.expectPop;
+    this.expectPop = false;
+
+    if (this.afterPop) {
+      const next = this.afterPop;
+      this.afterPop = null;
+      next();
+      return;
+    }
+
+    // Atrás con un menú o editor abierto: solo se cierra eso y se permanece en la misma pantalla.
+    if (!programmatic && this.closeOverlay()) {
+      history.pushState({ pulsar: true, stack: this.stack.slice() }, "", "#" + this.current);
+      return;
+    }
+
+    const state = event.state;
+    let stack = state && state.pulsar && Array.isArray(state.stack) ? state.stack : null;
+    if (!stack || !stack.every((view) => this.views.includes(view))) stack = this.pathTo(this.fromHash());
+    this.stack = stack.slice();
+    this.show(this.stack[this.stack.length - 1]);
   },
 
   show(name) {

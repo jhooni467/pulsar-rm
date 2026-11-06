@@ -6,7 +6,8 @@
 */
 
 // v2 incorpora equalizer.js al conjunto de archivos guardados para uso sin conexión.
-const CACHE_NAME = "pulsar-rm-shell-v2";
+// v3 (app v1.01): corrección de navegación hacia atrás; renueva la copia guardada.
+const CACHE_NAME = "pulsar-rm-shell-v3";
 
 const APP_SHELL = [
   "./",
