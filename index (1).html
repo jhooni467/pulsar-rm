@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#080B16">
+<script>
+  /* Aplica tema y modo guardados antes de dibujar la página (evita el parpadeo al abrir) */
+  try {
+    var t = localStorage.getItem("pulsar-theme"), m = localStorage.getItem("pulsar-mode");
+    /* Los antiguos temas "Claro" y "Medianoche" ahora son los modos Light y Amoled */
+    if (t === "light") { m = m || "light"; t = "pulsar"; }
+    else if (t === "midnight") { m = m || "amoled"; t = "pulsar"; }
+    if (t) document.documentElement.setAttribute("data-theme", t);
+    document.documentElement.setAttribute("data-mode", m || "dark");
+  } catch (e) { document.documentElement.setAttribute("data-mode", "dark"); }
+</script>
+<meta name="description" content="Pulsar RM — reproductor de música local.">
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" id="app-icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" id="app-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pulsar RM">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<title>Pulsar RM</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">✦</div>
+      <span>PULSAR <b>RM</b></span>
+    </div>
+    <button type="button" class="settings" data-view="settings" aria-label="Ajustes">⚙</button>
+  </header>
+
+  <main>
+
+    <!-- ============ INICIO ============ -->
+    <section id="view-home" class="view" data-view-name="home">
+      <section class="welcome">
+        <p class="subtitle">YOUR PERSONAL MUSIC UNIVERSE</p>
+        <h1>Tu música.<br>Tu universo.</h1>
+        <p class="description">Todo lo que escuchas, en un solo lugar.</p>
+      </section>
+
+      <div class="empty home-card">
+        <div class="empty-icon">♫</div>
+        <h3 id="home-title">Tu música te espera</h3>
+        <p id="home-text">Importa tus archivos de audio<br>y comienza tu universo.</p>
+        <button type="button" class="add-music" data-action="import">+ Importar música</button>
+      </div>
+
+      <section id="recent-section" class="recent hidden">
+        <div class="section-title">
+          <h2>Añadidas recientemente</h2>
+          <button type="button" class="link-btn" data-view="library">Ver todo</button>
+        </div>
+        <div id="recent-list" class="song-list"></div>
+      </section>
+    </section>
+
+    <!-- ============ BIBLIOTECA ============ -->
+    <section id="view-library" class="view" data-view-name="library">
+      <label class="search">
+        <span>⌕</span>
+        <input id="search" type="search" placeholder="Buscar canciones o artistas..." autocomplete="off">
+      </label>
+
+      <section class="library">
+        <div class="section-title">
+          <h2>Tu biblioteca</h2>
+          <span id="song-count">0 canciones</span>
+        </div>
+
+        <div class="tabs">
+          <button type="button" class="active">Canciones</button>
+          <button type="button" class="add-music small" data-action="import">+ Importar</button>
+        </div>
+
+        <div id="song-list" class="song-list"></div>
+      </section>
+    </section>
+
+    <!-- ============ REPRODUCTOR ============ -->
+    <section id="view-player" class="view" data-view-name="player">
+      <div class="now-playing">
+        <div class="player-header">
+          <button type="button" class="close-player" data-action="close" aria-label="Cerrar reproductor">⌄</button>
+          <button type="button" id="player-menu-button" class="close-player more-btn" data-action="menu" aria-label="Más opciones" aria-haspopup="true" aria-expanded="false">⋮</button>
+          <div id="player-menu" class="popover hidden" role="menu">
+            <button type="button" role="menuitem" data-action="edit">✎&nbsp; Editar información</button>
+          </div>
+        </div>
+        <!-- Zona central: portada, letra o cola ("Siguiente") -->
+        <div id="stage" class="stage" data-mode="cover">
+          <div id="big-cover" class="big-cover">♫</div>
+
+          <section id="lyrics-panel" class="stage-panel hidden" aria-label="Letra">
+            <div id="lyrics-bar" class="lyrics-bar no-data no-sync">
+              <span id="lyrics-badge" class="lyrics-badge">Sin letra</span>
+              <div class="lyrics-actions">
+                <span class="delay-group">
+                  <button type="button" class="mini-btn" data-action="lyrics-earlier" aria-label="Adelantar la letra">−</button>
+                  <span id="lyrics-delay" class="delay-value">0.00 s</span>
+                  <button type="button" class="mini-btn" data-action="lyrics-later" aria-label="Retrasar la letra">+</button>
+                </span>
+                <button type="button" class="mini-btn text" data-action="lyrics-edit">✎ Editar</button>
+              </div>
+            </div>
+            <div id="lyrics" class="lyrics is-empty" aria-live="off"></div>
+          </section>
+
+          <section id="queue-panel" class="stage-panel hidden" aria-label="Siguiente">
+            <div id="queue-list" class="queue-list"></div>
+          </section>
+        </div>
+
+        <h2 id="player-title">Sin reproducción</h2>
+        <p id="player-artist">Pulsar RM</p>
+
+        <div class="progress-container">
+          <span id="current-time">0:00</span>
+          <input id="progress" type="range" min="0" max="1000" value="0" aria-label="Progreso">
+          <span id="duration">0:00</span>
+        </div>
+
+        <div class="controls">
+          <button type="button" data-action="prev" aria-label="Anterior">⏮</button>
+          <button type="button" class="round-btn big" data-action="toggle" aria-label="Reproducir o pausar">▶</button>
+          <button type="button" data-action="next" aria-label="Siguiente">⏭</button>
+        </div>
+
+        <div class="player-tabs">
+          <button type="button" id="tab-lyrics" class="tab-btn" data-action="stage-lyrics" aria-pressed="false"><span aria-hidden="true">♪</span> Letra</button>
+          <button type="button" id="tab-queue" class="tab-btn" data-action="stage-queue" aria-pressed="false"><span aria-hidden="true">☰</span> Siguiente</button>
+          <button type="button" id="tab-eq" class="tab-btn" data-action="eq-open" aria-label="Abrir ecualizador">
+            <svg class="eq-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="3" x2="6" y2="21"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="18" y1="3" x2="18" y2="21"/><circle cx="6" cy="9" r="2.6" fill="currentColor"/><circle cx="12" cy="15" r="2.6" fill="currentColor"/><circle cx="18" cy="7" r="2.6" fill="currentColor"/></svg>
+            <span>Ecualizador</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ECUALIZADOR ============ -->
+    <section id="view-eq" class="view off" data-view-name="eq">
+      <div class="eq-top">
+        <button type="button" class="close-player" data-action="eq-back" aria-label="Volver al reproductor">‹</button>
+        <h2>Ecualizador</h2>
+        <label class="eq-switch">
+          <input id="eq-enabled" type="checkbox">
+          <span class="eq-switch-ui" aria-hidden="true"></span>
+          <span>Activado</span>
+        </label>
+      </div>
+
+      <div id="eq-presets" class="eq-presets" aria-label="Modos predefinidos"></div>
+      <p id="eq-custom" class="eq-custom hidden">Ajuste personalizado</p>
+
+      <div class="eq-stage">
+        <div class="eq-scale" aria-hidden="true"><span>+12</span><span>0</span><span>−12</span></div>
+        <div id="eq-bands" class="eq-bands"></div>
+      </div>
+
+      <p class="hint">Arrastra cada barra de −12 a +12 dB (frecuencias en Hz). Al tocar un modo o mover una barra, el ecualizador se activa solo.</p>
+      <div class="eq-actions">
+        <button type="button" class="ghost-btn" data-action="eq-reset">Restablecer</button>
+      </div>
+    </section>
+
+    <!-- ============ AJUSTES ============ -->
+    <section id="view-settings" class="view" data-view-name="settings">
+      <div class="section-title">
+        <h2>Ajustes</h2>
+      </div>
+
+      <div class="card">
+        <h3>Modo de la app</h3>
+        <p>Elige cómo se ve la app. Los temas de abajo se adaptan al modo. El icono cambia al cerrar la app.</p>
+        <div id="mode-grid" class="mode-grid" role="radiogroup" aria-label="Modo de la app">
+          <button type="button" class="mode-option" role="radio" aria-checked="false" data-mode-id="light">
+            <span class="mode-preview" style="--mp-bg:#F3F4FA"><img src="icon-light-192.png" alt=""></span>
+            <span>Light</span><small>Icono blanco</small>
+          </button>
+          <button type="button" class="mode-option" role="radio" aria-checked="false" data-mode-id="dark">
+            <span class="mode-preview" style="--mp-bg:#111827"><img src="icon-dark-192.png" alt=""></span>
+            <span>Dark</span><small>Icono negro</small>
+          </button>
+          <button type="button" class="mode-option" role="radio" aria-checked="false" data-mode-id="amoled">
+            <span class="mode-preview" style="--mp-bg:#000000"><img src="icon-dark-192.png" alt=""></span>
+            <span>Amoled</span><small>Icono negro</small>
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Tema</h3>
+        <p>Elige el color de la app. Se adapta al modo elegido.</p>
+        <div id="theme-grid" class="theme-grid" role="radiogroup" aria-label="Tema de color"></div>
+      </div>
+
+      <div class="card">
+        <h3>Biblioteca</h3>
+        <p id="storage-info">Calculando espacio…</p>
+        <button type="button" class="danger-btn" data-action="clear">Borrar biblioteca</button>
+      </div>
+
+      <div class="card">
+        <h3>Acerca de</h3>
+        <p>Pulsar RM · versión <span id="app-version"></span></p>
+        <p>Tus canciones se guardan solo en este dispositivo.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Mini reproductor (visible en todas las pantallas menos Reproductor) -->
+  <div id="mini-player" class="mini-player hidden">
+    <button type="button" class="mini-open" data-view="player" aria-label="Abrir reproductor">
+      <span id="mini-cover" class="cover">♫</span>
+      <span class="track-info">
+        <strong id="mini-title">Sin reproducción</strong>
+        <small id="mini-artist">Pulsar RM</small>
+      </span>
+    </button>
+    <button type="button" class="round-btn" data-action="toggle" aria-label="Reproducir o pausar">▶</button>
+  </div>
+
+  <nav class="bottom-nav" aria-label="Navegación principal">
+    <button type="button" class="nav-item" data-view="home"><span class="nav-icon">⌂</span><small>Inicio</small></button>
+    <button type="button" class="nav-item" data-view="library"><span class="nav-icon">♫</span><small>Biblioteca</small></button>
+  </nav>
+
+</div>
+
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+<!-- Editar información de la canción -->
+<div id="edit-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="edit-heading">
+  <div class="sheet-backdrop" data-action="edit-cancel"></div>
+  <div class="sheet-panel">
+    <h3 id="edit-heading">Editar información</h3>
+
+    <div class="edit-cover-row">
+      <div id="edit-cover" class="edit-cover">♫</div>
+      <div class="edit-cover-actions">
+        <button type="button" class="chip-btn" data-action="edit-pick-image">Elegir imagen</button>
+        <button type="button" class="chip-btn muted" data-action="edit-remove-image">Quitar imagen</button>
+      </div>
+    </div>
+
+    <label class="field"><span>Título</span>
+      <input id="edit-name" type="text" maxlength="200" autocomplete="off" enterkeyhint="done">
+    </label>
+    <label class="field"><span>Artista</span>
+      <input id="edit-artist" type="text" maxlength="200" autocomplete="off" enterkeyhint="done">
+    </label>
+
+    <button type="button" class="link-btn reset-link" data-action="edit-reset">Usar el nombre del archivo</button>
+    <p id="edit-file" class="file-name"></p>
+
+    <div class="sheet-actions">
+      <button type="button" class="ghost-btn" data-action="edit-cancel">Cancelar</button>
+      <button type="button" class="add-music" data-action="edit-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<input id="cover-file" class="sr-only" type="file" accept="image/*" tabindex="-1">
+
+<!-- Editor de letras -->
+<div id="lyrics-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="lyrics-heading">
+  <div class="sheet-backdrop"></div>
+  <div class="sheet-panel">
+    <h3 id="lyrics-heading">Editar letra</h3>
+
+    <div class="lyrics-tools">
+      <button type="button" class="tool-btn" data-action="toggle" aria-label="Reproducir o pausar">▶</button>
+      <button type="button" class="tool-btn" data-action="lyrics-back">⟲ 3 s</button>
+      <span id="lyrics-clock" class="clock">00:00.00</span>
+      <button type="button" class="tool-btn accent" data-action="lyrics-stamp-line">⏱ Línea</button>
+      <button type="button" class="tool-btn accent" data-action="lyrics-stamp-word">⏱ Palabra</button>
+    </div>
+
+    <textarea id="lyrics-text" class="lyrics-text" wrap="off" spellcheck="false" autocapitalize="off"
+              autocomplete="off" autocorrect="off" aria-label="Texto de la letra"
+              placeholder="[00:12.50]Primera línea&#10;[00:15.00]&lt;00:15.00&gt;Pa&lt;00:15.30&gt;la&lt;00:15.60&gt;bra"></textarea>
+
+    <p class="hint">Escribe o pega la letra. «⏱ Línea» pone el tiempo actual al inicio de la línea del cursor y pasa a la siguiente; «⏱ Palabra» inserta una marca en el cursor. Admite LRC, LRC por palabras, SRT, VTT y texto simple.</p>
+
+    <div class="sheet-actions between">
+      <button type="button" class="chip-btn muted" data-action="lyrics-import">Importar archivo</button>
+      <button type="button" class="chip-btn muted danger" data-action="lyrics-clear">Borrar letra</button>
+    </div>
+    <div class="sheet-actions">
+      <button type="button" class="ghost-btn" data-action="lyrics-cancel">Cancelar</button>
+      <button type="button" class="add-music" data-action="lyrics-save">Guardar</button>
+    </div>
+  </div>
+</div>
+<input id="lyrics-file" class="sr-only" type="file" tabindex="-1">
+
+
+<input id="music-files" class="sr-only" type="file" multiple
+       accept="audio/*,.mp3,.m4a,.aac,.flac,.ogg,.oga,.opus,.wav,.weba" tabindex="-1">
+
+<script src="script.js"></script>
+
+<!-- Service worker (necesario para instalar como app y usar sin conexión) -->
+<script>
+  if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function (error) {
+        console.warn("Service worker no registrado:", error);
+      });
+    });
+  }
+</script>
+</body>
+</html>
