@@ -35,10 +35,10 @@
 
   <header class="topbar">
     <div class="brand">
-      <div class="logo">✦</div>
+      <div class="logo"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2.5c.9 5.6 3.9 8.6 9.5 9.5-5.6.9-8.6 3.9-9.5 9.5-.9-5.6-3.9-8.6-9.5-9.5 5.6-.9 8.6-3.9 9.5-9.5z" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/></svg></div>
       <span>PULSAR <b>RM</b></span>
     </div>
-    <button type="button" class="settings" data-view="settings" aria-label="Ajustes">⚙</button>
+    <button type="button" class="settings" data-view="settings" aria-label="Ajustes"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="6.8"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.35 5.35l1.55 1.55M17.1 17.1l1.55 1.55M18.65 5.35L17.1 6.9M6.9 17.1l-1.55 1.55"/></g></svg></button>
   </header>
 
   <main>
@@ -52,7 +52,7 @@
       </section>
 
       <div class="empty home-card">
-        <div class="empty-icon">♫</div>
+        <div class="empty-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></g></svg></div>
         <h3 id="home-title">Tu música te espera</h3>
         <p id="home-text">Importa tus archivos de audio<br>y comienza tu universo.</p>
         <button type="button" class="add-music" data-action="import">+ Importar música</button>
@@ -70,7 +70,7 @@
     <!-- ============ BIBLIOTECA ============ -->
     <section id="view-library" class="view" data-view-name="library">
       <label class="search">
-        <span>⌕</span>
+        <span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></g></svg></span>
         <input id="search" type="search" placeholder="Buscar canciones o artistas..." autocomplete="off">
       </label>
 
@@ -93,26 +93,26 @@
     <section id="view-player" class="view" data-view-name="player">
       <div class="now-playing">
         <div class="player-header">
-          <button type="button" class="close-player" data-action="close" aria-label="Cerrar reproductor">⌄</button>
-          <button type="button" id="player-menu-button" class="close-player more-btn" data-action="menu" aria-label="Más opciones" aria-haspopup="true" aria-expanded="false">⋮</button>
+          <button type="button" class="close-player" data-action="close" aria-label="Cerrar reproductor"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9.5l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button type="button" id="player-menu-button" class="close-player more-btn" data-action="menu" aria-label="Más opciones" aria-haspopup="true" aria-expanded="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="5.5" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="18.5" r="1.7" fill="currentColor"/></svg></button>
           <div id="player-menu" class="popover hidden" role="menu">
-            <button type="button" role="menuitem" data-action="edit">✎&nbsp; Editar información</button>
+            <button type="button" role="menuitem" data-action="edit"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l.9-4L16 4.9a2 2 0 0 1 2.8 0l.3.3a2 2 0 0 1 0 2.8L8.5 18.6z"/><path d="M14.3 6.6l3.1 3.1"/></g></svg><span>Editar información</span></button>
           </div>
         </div>
         <!-- Zona central: portada, letra o cola ("Siguiente") -->
         <div id="stage" class="stage" data-mode="cover">
-          <div id="big-cover" class="big-cover">♫</div>
+          <div id="big-cover" class="big-cover"><svg class="art-default" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false"><circle class="art-glow" cx="80" cy="20" r="48"/><circle class="art-ring" cx="50" cy="50" r="42"/><circle class="art-ring art-ring-2" cx="50" cy="50" r="29"/><g transform="translate(34 34) scale(1.36)" fill="none" stroke-linecap="round" stroke-linejoin="round"><path class="art-note" d="M9 18V6l10-2v12"/><circle class="art-note" cx="6.5" cy="18" r="2.5"/><circle class="art-note" cx="16.5" cy="16" r="2.5"/></g></svg></div>
 
           <section id="lyrics-panel" class="stage-panel hidden" aria-label="Letra">
             <div id="lyrics-bar" class="lyrics-bar no-data no-sync">
               <span id="lyrics-badge" class="lyrics-badge">Sin letra</span>
               <div class="lyrics-actions">
                 <span class="delay-group">
-                  <button type="button" class="mini-btn" data-action="lyrics-earlier" aria-label="Adelantar la letra">−</button>
+                  <button type="button" class="mini-btn" data-action="lyrics-earlier" aria-label="Adelantar la letra"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 12h12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
                   <span id="lyrics-delay" class="delay-value">0.00 s</span>
-                  <button type="button" class="mini-btn" data-action="lyrics-later" aria-label="Retrasar la letra">+</button>
+                  <button type="button" class="mini-btn" data-action="lyrics-later" aria-label="Retrasar la letra"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 12h12M12 6v12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
                 </span>
-                <button type="button" class="mini-btn text" data-action="lyrics-edit">✎ Editar</button>
+                <button type="button" class="mini-btn text" data-action="lyrics-edit"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l.9-4L16 4.9a2 2 0 0 1 2.8 0l.3.3a2 2 0 0 1 0 2.8L8.5 18.6z"/><path d="M14.3 6.6l3.1 3.1"/></g></svg><span>Editar</span></button>
               </div>
             </div>
             <div id="lyrics" class="lyrics is-empty" aria-live="off"></div>
@@ -133,16 +133,16 @@
         </div>
 
         <div class="controls">
-          <button type="button" data-action="prev" aria-label="Anterior">⏮</button>
-          <button type="button" class="round-btn big" data-action="toggle" aria-label="Reproducir o pausar">▶</button>
-          <button type="button" data-action="next" aria-label="Siguiente">⏭</button>
+          <button type="button" data-action="prev" aria-label="Anterior"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2" y="6" width="2" height="12" rx="1" fill="currentColor"/><path d="M12.6 7v10L6 12z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M21 7v10L14.6 12z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
+          <button type="button" class="round-btn big" data-action="toggle" aria-label="Reproducir o pausar"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 5v14l12-7z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
+          <button type="button" data-action="next" aria-label="Siguiente"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="20" y="6" width="2" height="12" rx="1" fill="currentColor"/><path d="M11.4 7v10L18 12z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 7v10l6.4-5z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
         </div>
 
         <div class="player-tabs">
-          <button type="button" id="tab-lyrics" class="tab-btn" data-action="stage-lyrics" aria-pressed="false"><span aria-hidden="true">♪</span> Letra</button>
-          <button type="button" id="tab-queue" class="tab-btn" data-action="stage-queue" aria-pressed="false"><span aria-hidden="true">☰</span> Siguiente</button>
+          <button type="button" id="tab-lyrics" class="tab-btn" data-action="stage-lyrics" aria-pressed="false"><svg class="icon tab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></g></svg><span>Letra</span></button>
+          <button type="button" id="tab-queue" class="tab-btn" data-action="stage-queue" aria-pressed="false"><svg class="icon tab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></g></svg><span>Siguiente</span></button>
           <button type="button" id="tab-eq" class="tab-btn" data-action="eq-open" aria-label="Abrir ecualizador">
-            <svg class="eq-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="3" x2="6" y2="21"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="18" y1="3" x2="18" y2="21"/><circle cx="6" cy="9" r="2.6" fill="currentColor"/><circle cx="12" cy="15" r="2.6" fill="currentColor"/><circle cx="18" cy="7" r="2.6" fill="currentColor"/></svg>
+            <svg class="eq-icon tab-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="3" x2="6" y2="21"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="18" y1="3" x2="18" y2="21"/><circle cx="6" cy="9" r="2.6" fill="currentColor"/><circle cx="12" cy="15" r="2.6" fill="currentColor"/><circle cx="18" cy="7" r="2.6" fill="currentColor"/></svg>
             <span>Ecualizador</span>
           </button>
         </div>
@@ -152,7 +152,7 @@
     <!-- ============ ECUALIZADOR ============ -->
     <section id="view-eq" class="view off" data-view-name="eq">
       <div class="eq-top">
-        <button type="button" class="close-player" data-action="eq-back" aria-label="Volver al reproductor">‹</button>
+        <button type="button" class="close-player" data-action="eq-back" aria-label="Volver al reproductor"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14.5 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <h2>Ecualizador</h2>
         <label class="eq-switch">
           <input id="eq-enabled" type="checkbox">
@@ -224,18 +224,18 @@
   <!-- Mini reproductor (visible en todas las pantallas menos Reproductor) -->
   <div id="mini-player" class="mini-player hidden">
     <button type="button" class="mini-open" data-view="player" aria-label="Abrir reproductor">
-      <span id="mini-cover" class="cover">♫</span>
+      <span id="mini-cover" class="cover"><svg class="art-default" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false"><circle class="art-glow" cx="80" cy="20" r="48"/><circle class="art-ring" cx="50" cy="50" r="42"/><circle class="art-ring art-ring-2" cx="50" cy="50" r="29"/><g transform="translate(34 34) scale(1.36)" fill="none" stroke-linecap="round" stroke-linejoin="round"><path class="art-note" d="M9 18V6l10-2v12"/><circle class="art-note" cx="6.5" cy="18" r="2.5"/><circle class="art-note" cx="16.5" cy="16" r="2.5"/></g></svg></span>
       <span class="track-info">
         <strong id="mini-title">Sin reproducción</strong>
         <small id="mini-artist">Pulsar RM</small>
       </span>
     </button>
-    <button type="button" class="round-btn" data-action="toggle" aria-label="Reproducir o pausar">▶</button>
+    <button type="button" class="round-btn" data-action="toggle" aria-label="Reproducir o pausar"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 5v14l12-7z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
   </div>
 
   <nav class="bottom-nav" aria-label="Navegación principal">
-    <button type="button" class="nav-item" data-view="home"><span class="nav-icon">⌂</span><small>Inicio</small></button>
-    <button type="button" class="nav-item" data-view="library"><span class="nav-icon">♫</span><small>Biblioteca</small></button>
+    <button type="button" class="nav-item" data-view="home"><span class="nav-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 11.2L12 4l8 7.2V19a1 1 0 0 1-1 1h-4.5v-5.5h-5V20H5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></span><small>Inicio</small></button>
+    <button type="button" class="nav-item" data-view="library"><span class="nav-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></g></svg></span><small>Biblioteca</small></button>
   </nav>
 
 </div>
@@ -249,7 +249,7 @@
     <h3 id="edit-heading">Editar información</h3>
 
     <div class="edit-cover-row">
-      <div id="edit-cover" class="edit-cover">♫</div>
+      <div id="edit-cover" class="edit-cover"><svg class="art-default" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false"><circle class="art-glow" cx="80" cy="20" r="48"/><circle class="art-ring" cx="50" cy="50" r="42"/><circle class="art-ring art-ring-2" cx="50" cy="50" r="29"/><g transform="translate(34 34) scale(1.36)" fill="none" stroke-linecap="round" stroke-linejoin="round"><path class="art-note" d="M9 18V6l10-2v12"/><circle class="art-note" cx="6.5" cy="18" r="2.5"/><circle class="art-note" cx="16.5" cy="16" r="2.5"/></g></svg></div>
       <div class="edit-cover-actions">
         <button type="button" class="chip-btn" data-action="edit-pick-image">Elegir imagen</button>
         <button type="button" class="chip-btn muted" data-action="edit-remove-image">Quitar imagen</button>
@@ -282,18 +282,18 @@
     <h3 id="lyrics-heading">Editar letra</h3>
 
     <div class="lyrics-tools">
-      <button type="button" class="tool-btn" data-action="toggle" aria-label="Reproducir o pausar">▶</button>
-      <button type="button" class="tool-btn" data-action="lyrics-back">⟲ 3 s</button>
+      <button type="button" class="tool-btn" data-action="toggle" aria-label="Reproducir o pausar"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 5v14l12-7z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="tool-btn" data-action="lyrics-back"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4.2 4.6v4.2h4.2"/></g></svg><span>3 s</span></button>
       <span id="lyrics-clock" class="clock">00:00.00</span>
-      <button type="button" class="tool-btn accent" data-action="lyrics-stamp-line">⏱ Línea</button>
-      <button type="button" class="tool-btn accent" data-action="lyrics-stamp-word">⏱ Palabra</button>
+      <button type="button" class="tool-btn accent" data-action="lyrics-stamp-line"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7"/><path d="M12 13.5V9.8M9.6 3h4.8"/></g></svg><span>Línea</span></button>
+      <button type="button" class="tool-btn accent" data-action="lyrics-stamp-word"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7"/><path d="M12 13.5V9.8M9.6 3h4.8"/></g></svg><span>Palabra</span></button>
     </div>
 
     <textarea id="lyrics-text" class="lyrics-text" wrap="off" spellcheck="false" autocapitalize="off"
               autocomplete="off" autocorrect="off" aria-label="Texto de la letra"
               placeholder="[00:12.50]Primera línea&#10;[00:15.00]&lt;00:15.00&gt;Pa&lt;00:15.30&gt;la&lt;00:15.60&gt;bra"></textarea>
 
-    <p class="hint">Escribe o pega la letra. «⏱ Línea» pone el tiempo actual al inicio de la línea del cursor y pasa a la siguiente; «⏱ Palabra» inserta una marca en el cursor. Admite LRC, LRC por palabras, SRT, VTT y texto simple.</p>
+    <p class="hint">Escribe o pega la letra. «Línea» pone el tiempo actual al inicio de la línea del cursor y pasa a la siguiente; «Palabra» inserta una marca en el cursor. Admite LRC, LRC por palabras, SRT, VTT y texto simple.</p>
 
     <div class="sheet-actions between">
       <button type="button" class="chip-btn muted" data-action="lyrics-import">Importar archivo</button>

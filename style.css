@@ -1947,3 +1947,248 @@ body.no-scroll .toast {
   border-radius: 10px;
   display: block;
 }
+
+
+/* =========================================================
+   ICONOS PROPIOS (SVG) · SIN SELECCIÓN · PORTADA PREDETERMINADA
+   ========================================================= */
+
+/* Icono base: toma el tamaño (em) y el color del botón que lo contiene */
+.icon {
+  display: block;
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+/* Iconos, botones y portadas no se seleccionan ni se arrastran */
+button,
+.topbar,
+.bottom-nav,
+.nav-item,
+.nav-icon,
+.mini-player,
+.controls,
+.player-tabs,
+.search span,
+.cover,
+.song-cover,
+.big-cover,
+.edit-cover,
+.empty-icon,
+.logo,
+.icon,
+.art-default {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+img {
+  -webkit-user-drag: none;
+}
+
+/* Cabecera: logo, ajustes y buscador */
+.logo {
+  display: grid;
+  place-items: center;
+}
+
+.settings {
+  display: grid;
+  place-items: center;
+}
+
+.settings .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.search span {
+  display: grid;
+  place-items: center;
+}
+
+.search .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.empty-icon {
+  display: grid;
+  place-items: center;
+}
+
+/* Reproductor: cerrar, más opciones, volver */
+.close-player {
+  display: grid;
+  place-items: center;
+}
+
+.close-player .icon {
+  width: 26px;
+  height: 26px;
+}
+
+.popover button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.popover button .icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Play / pausa (botón grande, mini reproductor y editor de letras) */
+.round-btn {
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.round-btn .icon {
+  width: 1.2em;
+  height: 1.2em;
+}
+
+.tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.tool-btn .icon {
+  width: 1.3em;
+  height: 1.3em;
+}
+
+.mini-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.mini-btn .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.mini-btn.text .icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* Anterior / siguiente */
+.controls button {
+  display: grid;
+  place-items: center;
+}
+
+.controls button:not(.round-btn) .icon {
+  width: 34px;
+  height: 34px;
+}
+
+/* Botones de cada canción (reproducir y eliminar) */
+.song-item button {
+  display: grid;
+  place-items: center;
+}
+
+.song-item button .icon {
+  width: 1.2em;
+  height: 1.2em;
+}
+
+.queue-num .icon {
+  width: 11px;
+  height: 11px;
+  margin: 0 auto;
+}
+
+/* Marca de pausa de la letra (♪ entre líneas) */
+.lyric-line.gap .icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.12em;
+}
+
+/* Barra de navegación de abajo */
+.nav-icon {
+  display: grid;
+  place-items: center;
+  height: 24px;
+}
+
+.nav-icon .icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* Pestañas Letra / Siguiente / Ecualizador: icono y texto alineados igual */
+.tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.tab-btn .tab-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.eq-icon {
+  vertical-align: baseline;
+  margin-right: 0;
+}
+
+/* Marca de tema elegido (OK) centrada */
+.swatch-check {
+  display: grid;
+  place-items: center;
+  line-height: 0;
+}
+
+.swatch-check .icon {
+  width: 13px;
+  height: 13px;
+}
+
+/* Portada predeterminada: minimalista, translúcida y con los colores del tema y modo activos */
+.art-default {
+  display: block;
+  width: 100%;
+  height: 100%;
+  align-self: stretch;
+  justify-self: stretch;
+}
+
+.art-default .art-glow {
+  fill: var(--accent);
+  opacity: 0.12;
+}
+
+.art-default .art-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 0.8;
+  opacity: 0.16;
+}
+
+.art-default .art-ring-2 {
+  opacity: 0.1;
+}
+
+.art-default .art-note {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.3;
+  opacity: 0.85;
+}

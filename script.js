@@ -10,6 +10,20 @@ const AUDIO_EXTENSIONS = ["mp3", "m4a", "aac", "flac", "ogg", "oga", "opus", "wa
 const $ = (id) => document.getElementById(id);
 
 /* =========================================================
+   ICONOS — SVG propios (se ven igual en todos los teléfonos)
+   Reemplazan a los emojis y símbolos de texto, que Android dibuja distinto.
+   ========================================================= */
+const Icons = {
+  play: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 5v14l12-7z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+  pause: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="6.5" y="5" width="4" height="14" rx="1.3" fill="currentColor"/><rect x="13.5" y="5" width="4" height="14" rx="1.3" fill="currentColor"/></svg>',
+  check: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 12.5l3.8 3.8 7.2-8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  note: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></g></svg>',
+  x: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  // Portada predeterminada (canciones sin portada): usa los colores del tema y modo activos
+  art: '<svg class="art-default" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false"><circle class="art-glow" cx="80" cy="20" r="48"/><circle class="art-ring" cx="50" cy="50" r="42"/><circle class="art-ring art-ring-2" cx="50" cy="50" r="29"/><g transform="translate(34 34) scale(1.36)" fill="none" stroke-linecap="round" stroke-linejoin="round"><path class="art-note" d="M9 18V6l10-2v12"/><circle class="art-note" cx="6.5" cy="18" r="2.5"/><circle class="art-note" cx="16.5" cy="16" r="2.5"/></g></svg>'
+};
+
+/* =========================================================
    STORE — guarda canciones en IndexedDB (persisten al recargar)
    Si IndexedDB no está disponible, usa memoria (se pierde al cerrar).
    ========================================================= */
@@ -421,7 +435,7 @@ const Themes = {
       <button type="button" class="theme-swatch" role="radio" aria-checked="false" data-theme-id="${theme.id}"
               aria-label="Tema ${theme.name}">
         <span class="swatch">
-          <span class="swatch-check" aria-hidden="true">✓</span>
+          <span class="swatch-check" aria-hidden="true">${Icons.check}</span>
         </span>
         <span>${theme.name}</span>
       </button>`).join("");
@@ -617,7 +631,7 @@ const Lyrics = {
       const seek = data.synced ? ` data-i="${i}"` : "";
       if (!line.text && !line.words) {
         return data.synced
-          ? `<p class="lyric-line gap"${seek}>♪</p>`
+          ? `<p class="lyric-line gap"${seek}>${Icons.note}</p>`
           : `<p class="lyric-line plain gap">&nbsp;</p>`;
       }
       const inner = line.words
@@ -807,7 +821,7 @@ const Queue = {
     const duration = song.duration ? UI.formatTime(song.duration) : "";
     return `
       <div class="song-item queue-item${current ? " playing" : ""}" data-song="${song.id}">
-        <span class="queue-num">${current ? "▶" : position}</span>
+        <span class="queue-num">${current ? Icons.play : position}</span>
         <div class="song-cover">${UI.coverHTML(song)}</div>
         <div class="song-details">
           <strong>${UI.escapeHTML(song.name || "Sin título")}</strong>
@@ -1853,15 +1867,15 @@ const UI = {
           <strong>${this.escapeHTML(song.name || "Sin título")}</strong>
           <small>${this.escapeHTML(song.artist)}${duration}</small>
         </div>
-        <button type="button" data-song-play="${song.id}" aria-label="Reproducir">▶</button>
-        <button type="button" class="remove" data-remove="${song.id}" aria-label="Eliminar">✕</button>
+        <button type="button" data-song-play="${song.id}" aria-label="Reproducir">${Icons.play}</button>
+        <button type="button" class="remove" data-remove="${song.id}" aria-label="Eliminar">${Icons.x}</button>
       </div>`;
   },
 
   emptyState(searching) {
     return `
       <div class="empty">
-        <div class="empty-icon">♫</div>
+        <div class="empty-icon">${Icons.note}</div>
         <h3>${searching ? "No encontramos canciones" : "Tu música te espera"}</h3>
         <p>${searching ? "Prueba con otro nombre." : "Importa tus archivos de audio<br>para comenzar."}</p>
         ${searching ? "" : '<button type="button" class="add-music" data-action="import">+ Importar música</button>'}
@@ -1948,14 +1962,14 @@ const UI = {
 
   updatePlayState() {
     const playing = Player.currentId !== null && !Player.audio.paused;
-    const symbol = playing ? "⏸" : "▶";
+    const symbol = playing ? Icons.pause : Icons.play;
     document.querySelectorAll('[data-action="toggle"]').forEach((button) => {
-      button.textContent = symbol;
+      button.innerHTML = symbol;
       button.setAttribute("aria-label", playing ? "Pausar" : "Reproducir");
     });
     document.querySelectorAll("[data-song-play]").forEach((button) => {
       const isCurrent = Number(button.dataset.songPlay) === Player.currentId;
-      button.textContent = isCurrent && playing ? "⏸" : "▶";
+      button.innerHTML = isCurrent && playing ? Icons.pause : Icons.play;
     });
     if ("mediaSession" in navigator) {
       navigator.mediaSession.playbackState = playing ? "playing" : "paused";
@@ -1985,7 +1999,7 @@ const UI = {
 
   coverHTML(song) {
     const url = Covers.get(song);
-    return url ? `<img src="${url}" alt="" loading="lazy">` : "♫";
+    return url ? `<img src="${url}" alt="" loading="lazy" draggable="false">` : Icons.art;
   },
 
   setCover(element, url) {
@@ -1997,7 +2011,7 @@ const UI = {
       image.src = url;
       element.appendChild(image);
     } else {
-      element.textContent = "♫";
+      element.innerHTML = Icons.art;
     }
   },
 
