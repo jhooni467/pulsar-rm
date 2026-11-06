@@ -5,15 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#080B16">
 <script>
-  /* Aplica el tema guardado antes de dibujar la página (evita el parpadeo al abrir) */
-  try { var t = localStorage.getItem("pulsar-theme"); if (t) document.documentElement.setAttribute("data-theme", t); } catch (e) {}
+  /* Aplica tema y modo guardados antes de dibujar la página (evita el parpadeo al abrir) */
+  try {
+    var t = localStorage.getItem("pulsar-theme"), m = localStorage.getItem("pulsar-mode");
+    /* Los antiguos temas "Claro" y "Medianoche" ahora son los modos Light y Amoled */
+    if (t === "light") { m = m || "light"; t = "pulsar"; }
+    else if (t === "midnight") { m = m || "amoled"; t = "pulsar"; }
+    if (t) document.documentElement.setAttribute("data-theme", t);
+    document.documentElement.setAttribute("data-mode", m || "dark");
+  } catch (e) { document.documentElement.setAttribute("data-mode", "dark"); }
 </script>
 <meta name="description" content="Pulsar RM — reproductor de música local.">
 
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" id="app-icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" id="app-touch-icon" href="apple-touch-icon.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Pulsar RM">
@@ -87,17 +94,14 @@
       <div class="now-playing">
         <div class="player-header">
           <button type="button" class="close-player" data-action="close" aria-label="Cerrar reproductor">⌄</button>
-          <div class="header-right">
-            <button type="button" class="close-player expand-btn" data-action="immersive-open" aria-label="Modo inmersivo"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
-            <button type="button" id="player-menu-button" class="close-player more-btn" data-action="menu" aria-label="Más opciones" aria-haspopup="true" aria-expanded="false">⋮</button>
-          </div>
+          <button type="button" id="player-menu-button" class="close-player more-btn" data-action="menu" aria-label="Más opciones" aria-haspopup="true" aria-expanded="false">⋮</button>
           <div id="player-menu" class="popover hidden" role="menu">
             <button type="button" role="menuitem" data-action="edit">✎&nbsp; Editar información</button>
           </div>
         </div>
         <!-- Zona central: portada, letra o cola ("Siguiente") -->
         <div id="stage" class="stage" data-mode="cover">
-          <div id="big-cover" class="big-cover" data-action="immersive-open">♫</div>
+          <div id="big-cover" class="big-cover">♫</div>
 
           <section id="lyrics-panel" class="stage-panel hidden" aria-label="Letra">
             <div id="lyrics-bar" class="lyrics-bar no-data no-sync">
@@ -129,11 +133,9 @@
         </div>
 
         <div class="controls">
-          <button type="button" class="ctl-toggle" data-action="shuffle" aria-pressed="false" aria-label="Aleatorio: desactivado"><svg class="ctl-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></button>
           <button type="button" data-action="prev" aria-label="Anterior">⏮</button>
           <button type="button" class="round-btn big" data-action="toggle" aria-label="Reproducir o pausar">▶</button>
           <button type="button" data-action="next" aria-label="Siguiente">⏭</button>
-          <button type="button" class="ctl-toggle" data-action="repeat" aria-pressed="false" aria-label="Repetir: desactivado"><svg class="ctl-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><span class="rep-one" aria-hidden="true">1</span></button>
         </div>
 
         <div class="player-tabs">
@@ -173,45 +175,6 @@
       </div>
     </section>
 
-    <!-- ============ MODO INMERSIVO ============ -->
-    <section id="view-immersive" class="view no-lyrics" data-view-name="immersive" data-mode="cover">
-      <div id="im-bg" class="im-bg" aria-hidden="true"></div>
-      <div class="im-shade" aria-hidden="true"></div>
-      <div class="im-content">
-        <div class="im-top">
-          <button type="button" class="im-icon" data-action="immersive-close" aria-label="Cerrar modo inmersivo">⌄</button>
-          <button type="button" id="im-mode" class="im-pill" data-action="immersive-mode">♪ Letra</button>
-        </div>
-
-        <div class="im-stage">
-          <button type="button" class="im-cover-btn" data-action="immersive-mode" aria-label="Mostrar u ocultar la letra">
-            <span id="im-cover" class="im-cover">♫</span>
-          </button>
-          <div class="im-meta">
-            <h2 id="im-title">Sin reproducción</h2>
-            <p id="im-artist">Pulsar RM</p>
-          </div>
-        </div>
-
-        <div id="im-lyrics" class="im-lyrics"></div>
-
-        <div class="im-bottom">
-          <div class="progress-container">
-            <span id="im-current">0:00</span>
-            <input id="im-progress" type="range" min="0" max="1000" value="0" aria-label="Progreso">
-            <span id="im-duration">0:00</span>
-          </div>
-          <div class="controls">
-            <button type="button" class="ctl-toggle" data-action="shuffle" aria-pressed="false" aria-label="Aleatorio: desactivado"><svg class="ctl-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg></button>
-            <button type="button" data-action="prev" aria-label="Anterior">⏮</button>
-            <button type="button" class="round-btn big" data-action="toggle" aria-label="Reproducir o pausar">▶</button>
-            <button type="button" data-action="next" aria-label="Siguiente">⏭</button>
-            <button type="button" class="ctl-toggle" data-action="repeat" aria-pressed="false" aria-label="Repetir: desactivado"><svg class="ctl-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><span class="rep-one" aria-hidden="true">1</span></button>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- ============ AJUSTES ============ -->
     <section id="view-settings" class="view" data-view-name="settings">
       <div class="section-title">
@@ -219,20 +182,34 @@
       </div>
 
       <div class="card">
+        <h3>Modo de la app</h3>
+        <p>Elige cómo se ve la app. Los temas de abajo se adaptan al modo. El icono cambia al cerrar la app.</p>
+        <div id="mode-grid" class="mode-grid" role="radiogroup" aria-label="Modo de la app">
+          <button type="button" class="mode-option" role="radio" aria-checked="false" data-mode-id="light">
+            <span class="mode-preview" style="--mp-bg:#F3F4FA"><img src="icon-light-192.png" alt=""></span>
+            <span>Light</span><small>Icono blanco</small>
+          </button>
+          <button type="button" class="mode-option" role="radio" aria-checked="false" data-mode-id="dark">
+            <span class="mode-preview" style="--mp-bg:#111827"><img src="icon-dark-192.png" alt=""></span>
+            <span>Dark</span><small>Icono negro</small>
+          </button>
+          <button type="button" class="mode-option" role="radio" aria-checked="false" data-mode-id="amoled">
+            <span class="mode-preview" style="--mp-bg:#000000"><img src="icon-dark-192.png" alt=""></span>
+            <span>Amoled</span><small>Icono negro</small>
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
         <h3>Tema</h3>
-        <p>Elige los colores de la app.</p>
+        <p>Elige el color de la app. Se adapta al modo elegido.</p>
         <div id="theme-grid" class="theme-grid" role="radiogroup" aria-label="Tema de color"></div>
       </div>
 
       <div class="card">
         <h3>Biblioteca</h3>
         <p id="storage-info">Calculando espacio…</p>
-        <p id="persist-info" class="persist-info"></p>
-        <div class="card-actions">
-          <button type="button" class="chip-btn muted" data-action="rescan">Leer etiquetas y portadas</button>
-          <button type="button" class="danger-btn" data-action="clear">Borrar biblioteca</button>
-        </div>
-        <p class="hint">«Leer etiquetas y portadas» vuelve a revisar los archivos ya importados (título, artista, álbum y carátula). No cambia lo que editaste a mano.</p>
+        <button type="button" class="danger-btn" data-action="clear">Borrar biblioteca</button>
       </div>
 
       <div class="card">
@@ -286,14 +263,7 @@
       <input id="edit-artist" type="text" maxlength="200" autocomplete="off" enterkeyhint="done">
     </label>
 
-    <label class="field"><span>Álbum</span>
-      <input id="edit-album" type="text" maxlength="200" autocomplete="off" enterkeyhint="done">
-    </label>
-
-    <div class="link-row">
-      <button type="button" class="link-btn reset-link" data-action="edit-read-tags">Leer del archivo de audio</button>
-      <button type="button" class="link-btn reset-link" data-action="edit-reset">Usar el nombre del archivo</button>
-    </div>
+    <button type="button" class="link-btn reset-link" data-action="edit-reset">Usar el nombre del archivo</button>
     <p id="edit-file" class="file-name"></p>
 
     <div class="sheet-actions">
