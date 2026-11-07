@@ -74,16 +74,6 @@ v1.03 — Cover color & lyrics update
 
 This version adds cover-based colors, a hideable status bar, smoother animations and a much richer lyrics experience inspired by Apple Music.
 
-Upcoming — v2.00
-
-The next major update is planned to include:
-
-- Animated startup screen featuring the Pulsar RM logo.
-- Automatic audio scanning from a user-selected folder.
-- Minimum audio duration filter, configurable from 30 to 45 seconds.
-
-«These features are planned and are not presented as currently available.»
-
 ---
 
 📚 Version History
