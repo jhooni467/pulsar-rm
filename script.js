@@ -225,7 +225,9 @@ const Settings = {
 
   async set(key, value) {
     this.values[key] = value;
-    this.apply();
+    // Solo el tema y el modo repintan la app y avisan a Android (barras, icono).
+    // Mover una barra del ecualizador no debe disparar todo eso en cada ajuste.
+    if (key === "theme" || key === "mode") this.apply();
     try { await Store.setSetting(key, value); } catch (error) { console.warn(error); }
   },
 
@@ -410,10 +412,11 @@ const LyricsParser = {
   },
 
   stamp(seconds) {
-    const t = Math.max(0, seconds);
-    const m = Math.floor(t / 60);
-    const s = Math.floor(t % 60);
-    const cs = Math.floor((t * 100) % 100);
+    // Se trabaja en centésimas enteras: con decimales, 1.15 s salía como 00:01.14.
+    const total = Math.floor(Math.max(0, seconds) * 100 + 1e-6);
+    const m = Math.floor(total / 6000);
+    const s = Math.floor(total / 100) % 60;
+    const cs = total % 100;
     const pad = (n) => String(n).padStart(2, "0");
     return `${pad(m)}:${pad(s)}.${pad(cs)}`;
   }
@@ -772,8 +775,10 @@ const Lyrics = {
     }, 500);
   },
 
-  async saveRaw(raw) {
-    const song = this.song;
+  // `target` = canción a la que pertenece la letra. El editor lo manda para que, si la
+  // reproducción pasa a otra canción con el editor abierto, la letra no se guarde en la equivocada.
+  async saveRaw(raw, target) {
+    const song = target || this.song;
     if (!song) return false;
     const text = String(raw || "").replace(/\r\n?/g, "\n").trim();
     const previous = song.lyrics;
@@ -788,7 +793,7 @@ const Lyrics = {
         : "No se pudo guardar la letra.");
       return false;
     }
-    this.load(song);
+    if (this.song && this.song.id === song.id) this.load(song); // solo se redibuja si es la que está sonando
     return true;
   },
 
@@ -818,6 +823,25 @@ const Stage = {
 
   init() {
     this.apply();
+    this.watchSize();
+  },
+
+  // Portada cuadrada en modo inmersivo: la más grande que quepa en la zona central,
+  // sin pegarse a los bordes (88 % del ancho) y sin pasar de 520 px.
+  fitCover() {
+    const stage = $("stage");
+    if (!stage) return;
+    const width = stage.clientWidth, height = stage.clientHeight;
+    if (!width || !height) return; // pantalla oculta: se mide cuando vuelva a verse
+    stage.style.setProperty("--cover-size", Math.floor(Math.min(width * 0.88, height, 520)) + "px");
+  },
+
+  watchSize() {
+    const stage = $("stage");
+    if (!stage) return;
+    if (typeof ResizeObserver === "function") new ResizeObserver(() => this.fitCover()).observe(stage);
+    window.addEventListener("resize", () => this.fitCover());
+    this.fitCover();
   },
 
   set(mode) {
@@ -881,7 +905,7 @@ const Queue = {
     const shown = upcoming.slice(0, this.LIMIT);
     let html = `<p class="queue-label">Reproduciendo ahora</p>` + this.row(songs[current], 1, true);
     if (!upcoming.length) {
-      html += `<p class="queue-empty">No hay más canciones: al terminar, esta se repite.</p>`;
+      html += `<p class="queue-empty">No hay más canciones en la biblioteca.</p>`;
     } else {
       html += `<p class="queue-label">A continuación · ${upcoming.length}</p>` +
         shown.map((song, i) => this.row(song, i + 1, false)).join("");
@@ -1147,6 +1171,8 @@ const Equalizer = {
    Se escribe en formato LRC: [mm:ss.xx]línea  ·  por palabras: [mm:ss.xx]<mm:ss.xx>pa<mm:ss.xx>la<mm:ss.xx>bra
    ========================================================= */
 const LyricsEditor = {
+  songId: null, // canción cuya letra se está editando (puede dejar de ser la que suena)
+
   isOpen() {
     const sheet = $("lyrics-sheet");
     return Boolean(sheet) && !sheet.classList.contains("hidden");
@@ -1170,6 +1196,7 @@ const LyricsEditor = {
       UI.toast("Reproduce una canción para editar su letra.");
       return;
     }
+    this.songId = song.id;
     const area = $("lyrics-text");
     area.value = song.lyrics && song.lyrics.raw ? song.lyrics.raw : "";
     $("lyrics-sheet").classList.remove("hidden");
@@ -1184,6 +1211,7 @@ const LyricsEditor = {
     if (!sheet || sheet.classList.contains("hidden")) return;
     sheet.classList.add("hidden");
     document.body.classList.remove("no-scroll");
+    this.songId = null;
   },
 
   discard() {
@@ -1196,15 +1224,20 @@ const LyricsEditor = {
 
   async save() {
     const raw = $("lyrics-text").value;
-    if (await Lyrics.saveRaw(raw)) {
+    const song = Library.byId(this.songId);
+    if (!song) { this.close(); return; }
+    if (await Lyrics.saveRaw(raw, song)) {
+      const current = Lyrics.song && Lyrics.song.id === song.id;
       this.close();
-      UI.toast(raw.trim() ? "Letra guardada · " + Lyrics.badge.textContent + "." : "Letra eliminada.");
+      UI.toast(raw.trim() ? "Letra guardada" + (current ? " · " + Lyrics.badge.textContent : "") + "." : "Letra eliminada.");
     }
   },
 
   async clearLyrics() {
+    const song = Library.byId(this.songId);
+    if (!song) return;
     if (!(await UI.confirm("¿Borrar la letra de esta canción?", "Borrar", true))) return;
-    if (await Lyrics.saveRaw("")) {
+    if (await Lyrics.saveRaw("", song)) {
       this.close();
       UI.toast("Letra eliminada.");
     }
@@ -1787,6 +1820,14 @@ const Router = {
     Editor.discard();
     LyricsEditor.discard();
     UI.closeMenu();
+    // Modo inmersivo: en el reproductor (y su ecualizador) se ocultan la barra de arriba y la de abajo.
+    const immersive = name === "player" || name === "eq";
+    const root = document.documentElement;
+    if (root.classList.contains("immersive") !== immersive) {
+      root.classList.toggle("immersive", immersive);
+      // la barra de navegación de Android toma el color del fondo mientras no hay barra inferior
+      NativeBars.sync(MODES.find((item) => item.id === root.getAttribute("data-mode")) || MODES[1]);
+    }
     document.querySelectorAll(".settings").forEach((button) => {
       button.classList.toggle("selected", name === "settings");
     });

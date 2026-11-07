@@ -1,7 +1,7 @@
 <!-- ================================= --><!--          PULSAR RM               --><!--         README.md                --><!-- ================================= --><div align="center"><h1>🪐 PULSAR RM</h1><p><strong>Your music. Your universe.</strong></p><p>
   Local Music Player for Android
 </p><p>
-  <img src="https://img.shields.io/badge/VERSION-v1.01-8275E8?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/VERSION-v1.02-8275E8?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/PLATFORM-ANDROID-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android">
   <img src="https://img.shields.io/badge/STATUS-IN_DEVELOPMENT-4788C7?style=for-the-badge" alt="Development">
 </p><p>
@@ -44,14 +44,14 @@ Category| Technology
 Platform| Android
 Application| APK
 Frontend| HTML, CSS, JavaScript
-Android integration| Capacitor (planned)
+Android integration| Capacitor
 Repository| GitHub
 
 ---
 
 📦 Download
 
-<div align="center">Pulsar RM v1.01
+<div align="center">Pulsar RM v1.02
 
 Latest published version
 
@@ -70,9 +70,9 @@ Development focuses on improving stability, refining the interface and expanding
 
 Current version
 
-v1.01 — Mini Update
+v1.02 — App feel update
 
-This version includes interface corrections and improvements to Android navigation.
+This version makes the app feel more native on Android: system bars that follow the app colors, in-app dialogs and an adaptive layout.
 
 Upcoming — v2.00
 
@@ -89,6 +89,13 @@ The next major update is planned to include:
 📚 Version History
 
 <details>
+<summary><strong>v1.02 — App feel update</strong></summary>Improvements and corrections
+
+- System bars: the status and navigation bars take the color of the app and adapt to Light, Dark and Amoled modes.
+- In-app dialogs: confirmations use the app's own dialogs instead of the browser ones.
+- Layout: fixed bottom bar without bounce, new icons and an adaptive design.
+
+</details><details>
 <summary><strong>v1.01 — Mini Update</strong></summary>Improvements and corrections
 
 - Iconography: Improved consistency and proportions of interface icons.
@@ -107,7 +114,7 @@ This release marked the beginning of the project and its development as an Andro
 Detail| Information
 Project| Pulsar RM
 Full name| Pulsar Reproductor de Música
-Current version| v1.01
+Current version| v1.02
 Project type| Independent
 Main platform| Android
 Development| Active

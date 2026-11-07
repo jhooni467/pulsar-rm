@@ -379,7 +379,9 @@ button {
 }
 
 .sr-only {
-  position: absolute;
+  position: fixed; /* fixed: si fuera absolute, los inputs de archivo agregaban 1 px de scroll al final de la página */
+  top: 0;
+  left: 0;
   width: 1px;
   height: 1px;
   overflow: hidden;
@@ -2377,3 +2379,123 @@ body {
   font-weight: bold;
 }
 .confirm-ok.danger { background: var(--danger); }
+
+
+/* =========================================================
+   REPRODUCTOR INMERSIVO
+   Al abrir el reproductor grande (o su ecualizador) desaparecen la barra de
+   arriba (logo + engranaje) y la barra inferior (Inicio / Biblioteca).
+   La pantalla se organiza en columna: la portada ocupa todo el espacio libre
+   (cuadrada, sin pegarse a los bordes) y los controles quedan abajo.
+   La clase "immersive" la pone Router.show() en <html>.
+   ========================================================= */
+
+html.immersive .topbar,
+html.immersive .bottom-nav {
+  display: none;
+}
+
+/* Sin barra inferior, la barra de navegación de Android toma el color del fondo */
+:root.immersive[data-theme] {
+  --nav-bg: var(--bg);
+}
+
+html.immersive #app {
+  --pad-t: calc(env(safe-area-inset-top, 0px) + 6px);
+  --pad-b: calc(env(safe-area-inset-bottom, 0px) + clamp(14px, 3dvh, 28px));
+  padding-top: var(--pad-t);
+  padding-bottom: var(--pad-b);
+}
+
+/* El reproductor llena la pantalla en columna */
+html.immersive .now-playing {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - var(--pad-t) - var(--pad-b));
+  min-height: calc(100dvh - var(--pad-t) - var(--pad-b));
+  padding-top: 0;
+}
+
+html.immersive .player-header {
+  flex: none;
+  margin-top: 0;
+}
+
+/* La zona central toma todo el espacio libre (portada, letra o cola).
+   "contain: size" evita que la portada empuje la altura de la zona: así puede encogerse. */
+html.immersive .stage {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 200px;
+  contain: size;
+  margin: 4px auto clamp(12px, 2.4dvh, 22px);
+}
+
+/* Portada cuadrada: Stage.fitCover() (script.js) mide la zona y pone --cover-size
+   = lo que quepa entre el 88 % del ancho (aire a los lados) y el alto libre.
+   Si por algo no se mide, se usa un tamaño según la pantalla. */
+html.immersive .stage .big-cover {
+  width: var(--cover-size, min(84vw, 46dvh, 480px));
+  height: var(--cover-size, min(84vw, 46dvh, 480px));
+  border-radius: clamp(22px, 7vw, 32px);
+  box-shadow: 0 18px 46px -14px rgba(0, 0, 0, 0.45);
+}
+
+/* Textos y controles un poco más grandes */
+html.immersive .now-playing h2 {
+  font-size: clamp(22px, 6.6vw, 30px);
+}
+html.immersive .now-playing > p {
+  font-size: clamp(14px, 4vw, 17px);
+  margin-top: 6px;
+}
+html.immersive .progress-container {
+  margin-top: clamp(14px, 3.2dvh, 28px);
+}
+html.immersive .controls {
+  --play: clamp(64px, 19vw, 80px);
+  margin-top: clamp(8px, 2dvh, 20px);
+  gap: clamp(26px, 9vw, 44px);
+}
+html.immersive .controls .round-btn.big {
+  width: var(--play);
+  height: var(--play);
+  font-size: calc(var(--play) * 0.4);
+}
+html.immersive .player-tabs {
+  margin-top: clamp(12px, 2.8dvh, 24px);
+}
+
+/* Fondo con un leve resplandor del color del tema (no en Amoled: ahí el negro es puro) */
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  html.immersive body {
+    background:
+      radial-gradient(120% 55% at 50% 32%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 72%),
+      var(--bg);
+  }
+  html.immersive[data-mode="amoled"] body {
+    background: var(--bg);
+  }
+}
+
+/* Teléfono acostado: portada a la izquierda, información y controles a la derecha */
+@media (orientation: landscape) and (max-height: 560px) {
+  html.immersive #app {
+    max-width: none;
+  }
+  html.immersive .now-playing {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    column-gap: clamp(20px, 5vw, 48px);
+    align-content: center;
+  }
+  html.immersive .now-playing > * {
+    grid-column: 2;
+  }
+  html.immersive .now-playing > .stage {
+    grid-column: 1;
+    grid-row: 1 / span 6;
+    min-height: 0;
+    margin: 0;
+  }
+}
