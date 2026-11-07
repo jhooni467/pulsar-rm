@@ -1,10 +1,24 @@
-/* PULSAR RM 1.01 — Corrección de navegación hacia atrás (sobre la base 1.00)
+/* PULSAR RM 1.02 — Se siente como app (barras del sistema, diálogos propios, diseño adaptable)
    Módulos: Store (IndexedDB) · Settings · Library · Player · Router · UI · Lyrics (reservado)
    Todos los botones usan delegación de eventos: siguen funcionando aunque el HTML se vuelva a dibujar. */
 
 "use strict";
 
+// ÚNICO lugar donde se escribe la versión. El workflow de GitHub la lee de aquí para
+// el versionName y el versionCode del APK. Formato: "X.YY" (ej. 1.02 → versionCode 102).
 const APP_VERSION = "1.02";
+
+// Si el APK expone PulsarNative.getVersion(), se muestra la versión REAL instalada;
+// si no, se usa la constante de arriba.
+function resolveAppVersion() {
+  try {
+    if (window.PulsarNative && typeof window.PulsarNative.getVersion === "function") {
+      const native = String(window.PulsarNative.getVersion() || "").trim();
+      if (native) return native;
+    }
+  } catch (error) { /* se usa la constante */ }
+  return APP_VERSION;
+}
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "aac", "flac", "ogg", "oga", "opus", "wav", "weba"];
 
 const $ = (id) => document.getElementById(id);
@@ -229,6 +243,7 @@ const Settings = {
     Themes.refresh();
     AppMode.refresh();
     AppIcon.sync(mode);
+    NativeBars.sync(mode);
   }
 };
 
@@ -505,6 +520,24 @@ const AppIcon = {
         window.PulsarNative.setPendingIcon(variant);
       }
     } catch (error) { console.warn("No se pudo avisar al icono nativo", error); }
+  }
+};
+
+/* =========================================================
+   BARRAS DEL SISTEMA (solo APK) — la barra de estado y la de navegación de Android
+   toman el color de la app (adiós a la franja negra) y sus iconos se ven claros u oscuros
+   según el modo. Si no hay puente nativo (navegador), no hace nada.
+   ========================================================= */
+const NativeBars = {
+  sync(mode) {
+    try {
+      if (!window.PulsarNative || typeof window.PulsarNative.setBars !== "function") return;
+      const css = getComputedStyle(document.documentElement);
+      const status = css.getPropertyValue("--bg").trim();
+      const nav = css.getPropertyValue("--nav-bg").trim() || status;
+      if (!/^#[0-9a-fA-F]{6}$/.test(status) || !/^#[0-9a-fA-F]{6}$/.test(nav)) return;
+      window.PulsarNative.setBars(status, nav, mode.id === "light"); // true = iconos oscuros (fondo claro)
+    } catch (error) { console.warn("No se pudieron ajustar las barras del sistema", error); }
   }
 };
 
@@ -1170,7 +1203,7 @@ const LyricsEditor = {
   },
 
   async clearLyrics() {
-    if (!confirm("¿Borrar la letra de esta canción?")) return;
+    if (!(await UI.confirm("¿Borrar la letra de esta canción?", "Borrar", true))) return;
     if (await Lyrics.saveRaw("")) {
       this.close();
       UI.toast("Letra eliminada.");
@@ -1406,7 +1439,7 @@ const Library = {
   async remove(id) {
     const song = this.byId(id);
     if (!song) return;
-    if (!confirm(`¿Eliminar "${song.name}" de la biblioteca?`)) return;
+    if (!(await UI.confirm(`¿Eliminar "${song.name}" de la biblioteca?`, "Eliminar", true))) return;
     if (Player.currentId === id) Player.stop();
     try {
       await UI.animateOut(id);
@@ -1425,7 +1458,7 @@ const Library = {
       UI.toast("La biblioteca ya está vacía.");
       return;
     }
-    if (!confirm("¿Borrar toda la biblioteca? Esto no elimina tus archivos originales.")) return;
+    if (!(await UI.confirm("¿Borrar toda la biblioteca? Esto no elimina tus archivos originales.", "Borrar", true))) return;
     Player.stop();
     try {
       await Store.clearAll();
@@ -1449,6 +1482,7 @@ const Player = {
   objectUrl: null,
   seeking: false,
   loadToken: 0,
+  positionAt: 0,
 
   init() {
     const audio = this.audio;
@@ -1458,6 +1492,7 @@ const Player = {
     audio.addEventListener("pause", () => UI.updatePlayState());
     audio.addEventListener("timeupdate", () => {
       UI.updateProgress();
+      this.updatePositionState();
       Lyrics.onTime(audio.currentTime);
     });
     audio.addEventListener("loadedmetadata", () => UI.setDuration(audio.duration));
@@ -1593,6 +1628,23 @@ const Player = {
     });
   },
 
+  // Mantiene la barra de la notificación / pantalla de bloqueo en la posición correcta (1 vez por segundo).
+  updatePositionState() {
+    if (!("mediaSession" in navigator) || typeof navigator.mediaSession.setPositionState !== "function") return;
+    const duration = this.audio.duration;
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    const now = Date.now();
+    if (now - this.positionAt < 1000) return;
+    this.positionAt = now;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration,
+        playbackRate: this.audio.playbackRate || 1,
+        position: Math.min(Math.max(0, this.audio.currentTime), duration)
+      });
+    } catch (error) { /* no crítico */ }
+  },
+
   updateMediaMetadata(song) {
     if (!("mediaSession" in navigator) || typeof MediaMetadata === "undefined") return;
     try {
@@ -1697,6 +1749,7 @@ const Router = {
 
   // Cierra lo que esté abierto encima de la pantalla (menú ⋮, editores). Devuelve true si cerró algo.
   closeOverlay() {
+    if (UI.dismissConfirm) { UI.dismissConfirm(); return true; }
     if (LyricsEditor.isOpen()) { LyricsEditor.close(); return true; }
     if (Editor.isOpen()) { Editor.close(); return true; }
     if (UI.el.playerMenu && !UI.el.playerMenu.classList.contains("hidden")) { UI.closeMenu(); return true; }
@@ -1794,7 +1847,7 @@ const UI = {
       appVersion: $("app-version"),
       toast: $("toast")
     };
-    this.el.appVersion.textContent = APP_VERSION;
+    if (this.el.appVersion) this.el.appVersion.textContent = resolveAppVersion();
   },
 
   bindEvents() {
@@ -2024,7 +2077,8 @@ const UI = {
         if (typeof usage === "number") text += ` Espacio usado: ${this.formatBytes(usage)}.`;
       }
     } catch (error) { /* no crítico */ }
-    this.el.storageInfo.textContent = `${Library.songs.length} canciones. ${text}`;
+    const total = Library.songs.length;
+    this.el.storageInfo.textContent = `${total} ${total === 1 ? "canción" : "canciones"}. ${text}`;
   },
 
   /* ---------- Reproductor ---------- */
@@ -2145,6 +2199,46 @@ const UI = {
     if (!rows.length || this.prefersReducedMotion()) return Promise.resolve();
     rows.forEach((row) => row.classList.add("leaving"));
     return new Promise((resolve) => setTimeout(resolve, 220));
+  },
+
+  // Diálogo de confirmación propio (confirm() del navegador se ve como web y puede fallar en el APK).
+  dismissConfirm: null,
+
+  confirm(message, okLabel = "Aceptar", danger = false) {
+    if (this.dismissConfirm) this.dismissConfirm(); // nunca dos diálogos a la vez
+    return new Promise((resolve) => {
+      const box = document.createElement("div");
+      box.className = "confirm";
+      box.setAttribute("role", "alertdialog");
+      box.setAttribute("aria-modal", "true");
+      box.innerHTML = `
+        <div class="confirm-backdrop"></div>
+        <div class="confirm-panel">
+          <p></p>
+          <div class="confirm-actions">
+            <button type="button" class="confirm-cancel">Cancelar</button>
+            <button type="button" class="confirm-ok${danger ? " danger" : ""}"></button>
+          </div>
+        </div>`;
+      box.querySelector("p").textContent = message;
+      box.querySelector(".confirm-ok").textContent = okLabel;
+      const finish = (value) => {
+        document.removeEventListener("keydown", onKey, true);
+        this.dismissConfirm = null;
+        box.remove();
+        resolve(value);
+      };
+      const onKey = (event) => {
+        if (event.key === "Escape") { event.preventDefault(); finish(false); }
+      };
+      this.dismissConfirm = () => finish(false);
+      box.querySelector(".confirm-ok").addEventListener("click", () => finish(true));
+      box.querySelector(".confirm-cancel").addEventListener("click", () => finish(false));
+      box.querySelector(".confirm-backdrop").addEventListener("click", () => finish(false));
+      document.addEventListener("keydown", onKey, true);
+      document.body.appendChild(box);
+      box.querySelector(".confirm-cancel").focus();
+    });
   },
 
   toast(message, sticky = false) {
@@ -2366,5 +2460,5 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!Store.available) {
     UI.toast("Este navegador no permite guardar la biblioteca; se perderá al cerrar.");
   }
-  console.log("Pulsar RM " + APP_VERSION + " iniciado correctamente 💜");
+  console.log("Pulsar RM " + resolveAppVersion() + " iniciado correctamente 💜");
 });

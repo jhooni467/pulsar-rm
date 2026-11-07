@@ -2239,3 +2239,141 @@ body {
   box-shadow: 0 0 0 100vmax var(--bg);
   clip-path: inset(-14px -100vmax -24px -100vmax);
 }
+
+
+/* =========================================================
+   v1.02 — DISEÑO ADAPTABLE TIPO APP (celulares en vertical)
+   Se carga al final para reemplazar los valores fijos anteriores.
+   Idea: bordes laterales proporcionales a la pantalla, zonas seguras
+   (barra de estado / gestos), y tamaños que se ajustan a la altura.
+   ========================================================= */
+
+:root {
+  --gutter: clamp(14px, 4.5vw, 22px);
+  --nav-h: 72px;    /* alto de la barra inferior (igual que usa el mini reproductor) */
+  --mini-h: 68px;   /* alto del mini reproductor */
+  --content-w: 640px;
+}
+
+html {
+  height: 100%;
+  overscroll-behavior: none;            /* sin rebote ni "tirar para recargar" */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Roboto", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+  touch-action: manipulation;           /* sin zoom por doble toque */
+}
+
+/* Contenedor principal: llena el ancho con bordes, y en tablet no se estira de más */
+#app {
+  width: 100%;
+  max-width: var(--content-w);
+  margin: 0 auto;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + clamp(14px, 3dvh, 24px))
+    calc(var(--gutter) + env(safe-area-inset-right, 0px))
+    calc(var(--nav-h) + var(--mini-h) + env(safe-area-inset-bottom, 0px) + 24px)
+    calc(var(--gutter) + env(safe-area-inset-left, 0px));
+}
+
+/* Textos y espacios que escalan con la pantalla */
+.welcome { margin-top: clamp(22px, 6dvh, 55px); }
+.welcome h1 { font-size: clamp(29px, 9vw, 40px); }
+.home-card, .recent { margin-top: clamp(22px, 4dvh, 35px); }
+.search { margin: clamp(18px, 3.5dvh, 30px) 0 clamp(22px, 4.5dvh, 40px); }
+.song-details strong { font-size: 14px; }
+.song-details small { font-size: 12px; }
+.song-item { padding: 11px 12px; }
+
+/* Barra inferior: ocupa todo el ancho, pero sus botones quedan alineados con el contenido */
+.bottom-nav {
+  padding-left: max(5px, calc((100% - var(--content-w)) / 2));
+  padding-right: max(5px, calc((100% - var(--content-w)) / 2));
+}
+
+/* Mini reproductor con los mismos bordes que el resto */
+.mini-player {
+  width: min(calc(100% - (var(--gutter) * 2)), calc(var(--content-w) - (var(--gutter) * 2)));
+  max-width: none;
+}
+
+/* Reproductor: la portada y la zona central se adaptan a la ALTURA del teléfono */
+.stage { --stage-h: clamp(210px, 38dvh, 360px); }
+.stage .big-cover {
+  width: min(72vw, var(--stage-h), 320px);
+  height: min(72vw, var(--stage-h), 320px);
+}
+.now-playing { padding-top: clamp(10px, 2.5dvh, 30px); }
+#view-eq { --eq-h: clamp(190px, 36dvh, 310px); }
+
+/* Pantallas muy pequeñas (≤ 360 px de ancho o poca altura) */
+@media (max-width: 360px) {
+  :root { --gutter: 14px; }
+  .controls { gap: 22px; }
+}
+@media (max-height: 640px) {
+  .stage { --stage-h: clamp(180px, 34dvh, 250px); }
+  .welcome { margin-top: 16px; }
+}
+
+/* Hojas y avisos respetan las zonas seguras */
+.sheet {
+  padding-left: calc(12px + env(safe-area-inset-left, 0px));
+  padding-right: calc(12px + env(safe-area-inset-right, 0px));
+}
+.toast { top: calc(12px + env(safe-area-inset-top, 0px)); }
+
+/* Diálogo de confirmación propio (reemplaza al confirm() del navegador) */
+.confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: calc(20px + env(safe-area-inset-top, 0px)) calc(var(--gutter) + env(safe-area-inset-right, 0px))
+           calc(20px + env(safe-area-inset-bottom, 0px)) calc(var(--gutter) + env(safe-area-inset-left, 0px));
+}
+.confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--backdrop);
+  animation: fadeIn 0.2s ease-out;
+}
+.confirm-panel {
+  position: relative;
+  width: min(100%, 340px);
+  background: var(--elevated);
+  border: 1px solid var(--border2);
+  border-radius: 22px;
+  padding: 22px 20px 18px;
+  animation: sheetIn 0.22s ease-out;
+}
+.confirm-panel p {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+.confirm-actions button {
+  padding: 11px 18px;
+  min-height: 44px;
+  border-radius: 30px;
+  font-size: 13px;
+}
+.confirm-cancel { color: var(--muted); }
+.confirm-ok {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: bold;
+}
+.confirm-ok.danger { background: var(--danger); }

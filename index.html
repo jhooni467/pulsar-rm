@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#080B16">
 <script>
   /* Aplica tema y modo guardados antes de dibujar la página (evita el parpadeo al abrir) */
@@ -46,7 +46,7 @@
     <!-- ============ INICIO ============ -->
     <section id="view-home" class="view" data-view-name="home">
       <section class="welcome">
-        <p class="subtitle">YOUR PERSONAL MUSIC UNIVERSE</p>
+        <p class="subtitle">TU UNIVERSO MUSICAL PERSONAL</p>
         <h1>Tu música.<br>Tu universo.</h1>
         <p class="description">Todo lo que escuchas, en un solo lugar.</p>
       </section>
@@ -325,7 +325,9 @@
 
 <!-- Service worker (necesario para instalar como app y usar sin conexión) -->
 <script>
-  if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
+  /* En el APK no se usa service worker: el APK ya trae los archivos y así nunca queda una copia vieja guardada. */
+  var enApk = !!(window.PulsarNative || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()));
+  if (!enApk && "serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
     window.addEventListener("load", function () {
       navigator.serviceWorker.register("sw.js").catch(function (error) {
         console.warn("Service worker no registrado:", error);
