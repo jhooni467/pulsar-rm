@@ -10,7 +10,10 @@
   "display": "standalone",
   "background_color": "#080B16",
   "theme_color": "#080B16",
-  "categories": ["music", "entertainment"],
+  "categories": [
+    "music",
+    "entertainment"
+  ],
   "prefer_related_applications": false,
   "icons": [
     {

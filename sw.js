@@ -7,7 +7,8 @@
 
 // v2 incorpora equalizer.js al conjunto de archivos guardados para uso sin conexión.
 // v3 (app v1.01): corrección de navegación hacia atrás; renueva la copia guardada.
-const CACHE_NAME = "pulsar-rm-shell-v3";
+// v4 (app v1.02): iconos nuevos, barra inferior fija y sin rebote; renueva la copia guardada.
+const CACHE_NAME = "pulsar-rm-shell-v4";
 
 const APP_SHELL = [
   "./",
@@ -19,6 +20,8 @@ const APP_SHELL = [
   "icon-192.png",
   "icon-512.png",
   "icon-maskable-512.png",
+  "icon-light-192.png",
+  "icon-dark-192.png",
   "apple-touch-icon.png"
 ];
 
