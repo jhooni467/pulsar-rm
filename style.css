@@ -2221,3 +2221,21 @@ textarea,
   -webkit-user-select: none;
   user-select: none;
 }
+
+
+/* =========================================================
+   v1.02 — SE SIENTE COMO APP, NO COMO PÁGINA WEB
+   1) Sin rebote ni "tirar para recargar" al llegar al tope del scroll.
+   2) La zona de abajo (mini reproductor + barra) es un bloque sólido:
+      la lista ya no se asoma ni se ve recortada por detrás.
+   ========================================================= */
+html,
+body {
+  overscroll-behavior: none;
+}
+
+.mini-player {
+  /* franja sólida del color de fondo que tapa la lista alrededor del mini reproductor */
+  box-shadow: 0 0 0 100vmax var(--bg);
+  clip-path: inset(-14px -100vmax -24px -100vmax);
+}

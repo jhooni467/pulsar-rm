@@ -311,6 +311,16 @@
 <input id="music-files" class="sr-only" type="file" multiple
        accept="audio/*,.mp3,.m4a,.aac,.flac,.ogg,.oga,.opus,.wav,.weba" tabindex="-1">
 
+<script>
+  /* v1.02: al abrir, el color de la barra de estado ya coincide con el modo y tema guardados */
+  (function () {
+    try {
+      var meta = document.querySelector('meta[name="theme-color"]');
+      var bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+      if (meta && bg) meta.setAttribute("content", bg);
+    } catch (e) {}
+  })();
+</script>
 <script src="script.js"></script>
 
 <!-- Service worker (necesario para instalar como app y usar sin conexión) -->

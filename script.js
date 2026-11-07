@@ -4,7 +4,7 @@
 
 "use strict";
 
-const APP_VERSION = "1.01";
+const APP_VERSION = "1.02";
 const AUDIO_EXTENSIONS = ["mp3", "m4a", "aac", "flac", "ogg", "oga", "opus", "wav", "weba"];
 
 const $ = (id) => document.getElementById(id);
