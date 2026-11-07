@@ -1,1 +1,317 @@
+name: Build APK
 
+# Se ejecuta a mano: pestaña Actions -> "Build APK" -> Run workflow
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # La versión se escribe UNA sola vez: const APP_VERSION = "1.02" en script.js.
+      # De ahí salen el versionName, el versionCode (1.02 -> 102), el nombre del APK y el release.
+      - name: Leer la versión desde script.js
+        run: |
+          VER=$(grep -oP 'const APP_VERSION = "\K[0-9]+\.[0-9]+' script.js | head -1)
+          if [ -z "$VER" ]; then
+            echo "No encontre const APP_VERSION = \"X.YY\" en script.js"
+            exit 1
+          fi
+          MAJOR=${VER%%.*}
+          MINOR=${VER#*.}
+          CODE=$((10#$MAJOR * 100 + 10#$MINOR))
+          echo "VERSION=$VER" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$CODE" >> "$GITHUB_ENV"
+          echo "Version detectada: $VER (versionCode $CODE)"
+
+      # Llave de firma FIJA (la misma de la 1.01): por eso la 1.02 se instala encima sin desinstalar.
+      # Si algun dia falta pulsar-debug.keystore en el repo, se crea una vez y se guarda.
+      - name: Llave de firma estable
+        run: |
+          if [ ! -f pulsar-debug.keystore ]; then
+            keytool -genkeypair -keystore pulsar-debug.keystore \
+              -storepass android -keypass android -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+            git config user.name "github-actions"
+            git config user.email "github-actions@users.noreply.github.com"
+            git add pulsar-debug.keystore
+            git commit -m "Agregar llave de firma estable para actualizar el APK"
+            git push
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Preparar la web (carpeta www)
+        run: |
+          mkdir www
+          cp index.html script.js style.css manifest.json www/
+          cp icon-*.png www/
+          cp apple-touch-icon.png www/ 2>/dev/null || true
+
+      - name: Instalar Capacitor y crear el proyecto Android
+        run: |
+          npm install
+          npx cap add android
+
+      - name: Personalizar (iconos, barras del sistema, version)
+        run: |
+          python3 -m pip install pillow
+          python3 - <<'PY'
+          import glob, os, re
+          from PIL import Image
+
+          APP_ID = "com.pulsarrm.app"
+          VERSION = os.environ["VERSION"]
+          VERSION_CODE = os.environ["VERSION_CODE"]
+          MAIN = "android/app/src/main"
+          RES = MAIN + "/res"
+
+          # ---------- 1) Manifest: dos alias de icono (Dark = por defecto, Light) ----------
+          path = MAIN + "/AndroidManifest.xml"
+          xml = open(path, encoding="utf-8").read()
+
+          launcher = re.compile(
+              r'\s*<intent-filter>\s*<action android:name="android.intent.action.MAIN"\s*/>\s*'
+              r'<category android:name="android.intent.category.LAUNCHER"\s*/>\s*</intent-filter>')
+          xml, n = launcher.subn("", xml, count=1)
+          assert n == 1, "No encontre el intent-filter LAUNCHER"
+
+          xml = xml.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@mipmap/ic_launcher_dark"')
+          xml = re.sub(r'\s*android:roundIcon="[^"]*"', "", xml)
+
+          alias = """
+                  <activity-alias
+                      android:name=".IconDark"
+                      android:targetActivity=".MainActivity"
+                      android:enabled="true"
+                      android:exported="true"
+                      android:label="@string/app_name"
+                      android:icon="@mipmap/ic_launcher_dark">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity-alias>
+
+                  <activity-alias
+                      android:name=".IconLight"
+                      android:targetActivity=".MainActivity"
+                      android:enabled="false"
+                      android:exported="true"
+                      android:label="@string/app_name"
+                      android:icon="@mipmap/ic_launcher_light">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity-alias>
+
+              </application>"""
+          assert xml.count("</application>") == 1
+          xml = xml.replace("</application>", alias)
+          open(path, "w", encoding="utf-8").write(xml)
+
+          # ---------- 2) MainActivity con el puente "PulsarNative" ----------
+          #   setPendingIcon(variant)        -> icono Light/Dark (se aplica al cerrar la app)
+          #   setBars(estado, nav, oscuros)  -> color de la barra de estado y de navegacion
+          #   getVersion()                   -> versionName real del APK instalado
+          java = '''package %s;
+
+          import android.content.ComponentName;
+          import android.content.SharedPreferences;
+          import android.content.pm.PackageManager;
+          import android.graphics.Color;
+          import android.os.Bundle;
+          import android.view.Window;
+          import android.view.WindowManager;
+          import android.webkit.JavascriptInterface;
+          import androidx.core.view.WindowCompat;
+          import androidx.core.view.WindowInsetsControllerCompat;
+          import com.getcapacitor.BridgeActivity;
+
+          public class MainActivity extends BridgeActivity {
+
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  getBridge().getWebView().addJavascriptInterface(new IconBridge(), "PulsarNative");
+                  // Al abrir, ya se usan los colores guardados (sin franja negra ni destello)
+                  SharedPreferences p = prefs();
+                  applyBars(p.getString("barStatus", "#080B16"),
+                            p.getString("barNav", "#0D1321"),
+                            p.getBoolean("barDarkIcons", false));
+              }
+
+              private SharedPreferences prefs() {
+                  return getSharedPreferences("pulsar", MODE_PRIVATE);
+              }
+
+              private void applyBars(String statusHex, String navHex, boolean darkIcons) {
+                  try {
+                      int status = Color.parseColor(statusHex);
+                      int nav = Color.parseColor(navHex);
+                      Window w = getWindow();
+                      w.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+                      w.setStatusBarColor(status);
+                      w.setNavigationBarColor(nav);
+                      WindowInsetsControllerCompat c = WindowCompat.getInsetsController(w, w.getDecorView());
+                      c.setAppearanceLightStatusBars(darkIcons);
+                      c.setAppearanceLightNavigationBars(darkIcons);
+                      getBridge().getWebView().setBackgroundColor(status);
+                  } catch (Exception ignored) {
+                      // un color invalido no debe cerrar la app
+                  }
+              }
+
+              private class IconBridge {
+                  /** La web llama a PulsarNative.setPendingIcon("light" | "dark"). Solo guarda la eleccion. */
+                  @JavascriptInterface
+                  public void setPendingIcon(String variant) {
+                      prefs().edit().putString("icon", "light".equals(variant) ? "light" : "dark").apply();
+                  }
+
+                  /** La web llama a PulsarNative.setBars("#RRGGBB", "#RRGGBB", iconosOscuros). */
+                  @JavascriptInterface
+                  public void setBars(final String statusHex, final String navHex, final boolean darkIcons) {
+                      prefs().edit()
+                          .putString("barStatus", statusHex)
+                          .putString("barNav", navHex)
+                          .putBoolean("barDarkIcons", darkIcons)
+                          .apply();
+                      runOnUiThread(new Runnable() {
+                          @Override
+                          public void run() {
+                              applyBars(statusHex, navHex, darkIcons);
+                          }
+                      });
+                  }
+
+                  /** Version real instalada (versionName del APK). */
+                  @JavascriptInterface
+                  public String getVersion() {
+                      try {
+                          return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+                      } catch (Exception e) {
+                          return "";
+                      }
+                  }
+              }
+
+              /** El icono se cambia al salir/cerrar la app. */
+              @Override
+              public void onStop() {
+                  super.onStop();
+                  boolean light = "light".equals(prefs().getString("icon", "dark"));
+                  if (light) {
+                      setAlias("IconLight", true);
+                      setAlias("IconDark", false);
+                  } else {
+                      setAlias("IconDark", true);
+                      setAlias("IconLight", false);
+                  }
+              }
+
+              private void setAlias(String name, boolean enabled) {
+                  getPackageManager().setComponentEnabledSetting(
+                      new ComponentName(getPackageName(), "%s." + name),
+                      enabled ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                              : PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                      PackageManager.DONT_KILL_APP);
+              }
+          }
+          ''' % (APP_ID, APP_ID)
+          files = glob.glob(MAIN + "/java/**/MainActivity.java", recursive=True)
+          assert len(files) == 1, files
+          open(files[0], "w", encoding="utf-8").write(java)
+
+          # ---------- 3) Iconos del launcher (adaptativos + clasicos) ----------
+          variants = {"light": ("icon-light-512.png", "white"), "dark": ("icon-dark-512.png", "black")}
+          legacy = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
+          os.makedirs(RES + "/drawable-nodpi", exist_ok=True)
+          os.makedirs(RES + "/mipmap-anydpi-v26", exist_ok=True)
+          for name, (src, bg) in variants.items():
+              im = Image.open(src).convert("RGB")
+              im.resize((432, 432), Image.LANCZOS).save(f"{RES}/drawable-nodpi/ic_fg_{name}.png")
+              for dens, size in legacy.items():
+                  d = f"{RES}/mipmap-{dens}"
+                  os.makedirs(d, exist_ok=True)
+                  im.resize((size, size), Image.LANCZOS).save(f"{d}/ic_launcher_{name}.png")
+              open(f"{RES}/mipmap-anydpi-v26/ic_launcher_{name}.xml", "w").write(
+                  '<?xml version="1.0" encoding="utf-8"?>\n'
+                  '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'
+                  f'    <background android:drawable="@android:color/{bg}"/>\n'
+                  '    <foreground>\n'
+                  f'        <inset android:drawable="@drawable/ic_fg_{name}" android:inset="20%"/>\n'
+                  '    </foreground>\n'
+                  '</adaptive-icon>\n')
+
+          # ---------- 4) Version (sale de script.js) + sin bloqueo por lint en release ----------
+          gradle = MAIN.replace("src/main", "build.gradle")
+          g = open(gradle, encoding="utf-8").read()
+          g, a = re.subn(r"versionCode\s+\d+", "versionCode " + VERSION_CODE, g, count=1)
+          g, b = re.subn(r'versionName\s+"[^"]*"', 'versionName "' + VERSION + '"', g, count=1)
+          assert a == 1 and b == 1, "No encontre versionCode/versionName"
+          g, c = re.subn(r"(\n\s*android\s*\{)",
+                         r"\1\n    lint {\n        checkReleaseBuilds false\n        abortOnError false\n    }",
+                         g, count=1)
+          assert c == 1, "No encontre el bloque android { } en build.gradle"
+          open(gradle, "w", encoding="utf-8").write(g)
+          print("Proyecto Android personalizado: Pulsar RM V" + VERSION + " (versionCode " + VERSION_CODE + ")")
+          PY
+
+      - name: Sincronizar la web con Android
+        run: npx cap sync android
+
+      - name: Aceptar licencias del SDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Compilar el APK (release, sin firmar)
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      # Se firma con pulsar-debug.keystore (la misma llave de la 1.01) para poder actualizar encima.
+      - name: Alinear y firmar el APK
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          UNSIGNED=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          "$BT/zipalign" -f -p 4 "$UNSIGNED" aligned.apk
+          "$BT/apksigner" sign \
+            --ks pulsar-debug.keystore --ks-key-alias androiddebugkey \
+            --ks-pass pass:android --key-pass pass:android \
+            --out "PulsarRM-V${VERSION}.apk" aligned.apk
+          "$BT/apksigner" verify --print-certs "PulsarRM-V${VERSION}.apk"
+          echo "---- Datos reales del APK ----"
+          "$BT/aapt2" dump badging "PulsarRM-V${VERSION}.apk" | head -1 || true
+
+      - name: Guardar APK (artefacto)
+        uses: actions/upload-artifact@v4
+        with:
+          name: PulsarRM-V${{ env.VERSION }}
+          path: PulsarRM-V${{ env.VERSION }}.apk
+
+      - name: Publicar en Releases (descarga directa)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${VERSION}-build${{ github.run_number }}" "PulsarRM-V${VERSION}.apk" \
+            --title "Pulsar RM V${VERSION}" \
+            --notes "APK firmado con la llave fija (se actualiza sin desinstalar). Descarga PulsarRM-V${VERSION}.apk e instalalo."
