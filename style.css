@@ -8,224 +8,224 @@
 
 :root,
 [data-theme="pulsar"] {
-  --bg: #080B16;
-  --surface: #111827;
-  --surface2: #192236;
+  --bg0: #080B16;
+  --surface0: #111827;
+  --surface20: #192236;
   --text: #F5F5FA;
   --muted: #8993A8;
-  --accent: #A18AFF;
-  --accent-light: #6A45F5;
+  --accent0: #A18AFF;
+  --accent-light0: #6A45F5;
   --on-accent: #080B16;
   --danger: #FF7A8A;
-  --border: #252D43;
-  --border2: #29334A;
-  --border-soft: #222B40;
-  --border3: #34405C;
-  --card-a: #151D32;
-  --card-b: #101522;
-  --elevated: #151D30;
-  --rail: #2A3550;
-  --toast-bg: #1D2740;
+  --border0: #252D43;
+  --border20: #29334A;
+  --border-soft0: #222B40;
+  --border30: #34405C;
+  --card-a0: #151D32;
+  --card-b0: #101522;
+  --elevated0: #151D30;
+  --rail0: #2A3550;
+  --toast-bg0: #1D2740;
   --knob: #CFD6E8;
   --lyric-plain: #AEB7CC;
   --lyric-past: #7886A4;
   --lyric-dim2: #6F7B99;
   --lyric-dim: #55617C;
   --tick: #4A5778;
-  --field-bg: #0F1626;
-  --nav-bg: #0D1321;
+  --field-bg0: #0F1626;
+  --nav-bg0: #0D1321;
   --backdrop: rgba(3, 5, 12, 0.72);
   --item-border: transparent;
 }
 
 /* Océano */
 [data-theme="ocean"] {
-  --bg: #091218;
-  --surface: #111F27;
-  --surface2: #1B2C37;
+  --bg0: #091218;
+  --surface0: #111F27;
+  --surface20: #1B2C37;
   --text: #F5F8FA;
   --muted: #91A1AC;
-  --accent: #3DC8FF;
-  --accent-light: #0B7FB0;
+  --accent0: #3DC8FF;
+  --accent-light0: #0B7FB0;
   --on-accent: #091218;
   --danger: #FF7A8A;
-  --border: #273944;
-  --border2: #2D414D;
-  --border-soft: #21313B;
-  --border3: #374E5D;
-  --card-a: #1A2933;
-  --card-b: #111C22;
-  --elevated: #18262F;
-  --rail: #324652;
-  --toast-bg: #203440;
+  --border0: #273944;
+  --border20: #2D414D;
+  --border-soft0: #21313B;
+  --border30: #374E5D;
+  --card-a0: #1A2933;
+  --card-b0: #111C22;
+  --elevated0: #18262F;
+  --rail0: #324652;
+  --toast-bg0: #203440;
   --knob: #CDD8DF;
   --lyric-plain: #B1C3CD;
   --lyric-past: #7E96A5;
   --lyric-dim2: #6B8494;
   --lyric-dim: #4F6572;
   --tick: #506571;
-  --field-bg: #0E1920;
-  --nav-bg: #0C161D;
+  --field-bg0: #0E1920;
+  --nav-bg0: #0C161D;
   --backdrop: rgba(0, 0, 0, 0.72);
   --item-border: transparent;
 }
 
 /* Atardecer */
 [data-theme="sunset"] {
-  --bg: #180C09;
-  --surface: #271611;
-  --surface2: #37211B;
+  --bg0: #180C09;
+  --surface0: #271611;
+  --surface20: #37211B;
   --text: #FAF6F5;
   --muted: #AC9791;
-  --accent: #FF8A4C;
-  --accent-light: #D4521A;
+  --accent0: #FF8A4C;
+  --accent-light0: #D4521A;
   --on-accent: #180C09;
   --danger: #FF7A8A;
-  --border: #442E27;
-  --border2: #4D352D;
-  --border-soft: #3B2721;
-  --border3: #5D4037;
-  --card-a: #33201A;
-  --card-b: #221511;
-  --elevated: #2F1D18;
-  --rail: #523A32;
-  --toast-bg: #402820;
+  --border0: #442E27;
+  --border20: #4D352D;
+  --border-soft0: #3B2721;
+  --border30: #5D4037;
+  --card-a0: #33201A;
+  --card-b0: #221511;
+  --elevated0: #2F1D18;
+  --rail0: #523A32;
+  --toast-bg0: #402820;
   --knob: #DFD1CD;
   --lyric-plain: #CDB8B1;
   --lyric-past: #A5877E;
   --lyric-dim2: #94756B;
   --lyric-dim: #72584F;
   --tick: #715850;
-  --field-bg: #20120E;
-  --nav-bg: #1D100C;
+  --field-bg0: #20120E;
+  --nav-bg0: #1D100C;
   --backdrop: rgba(0, 0, 0, 0.72);
   --item-border: transparent;
 }
 
 /* Bosque */
 [data-theme="forest"] {
-  --bg: #091811;
-  --surface: #11271C;
-  --surface2: #1B3729;
+  --bg0: #091811;
+  --surface0: #11271C;
+  --surface20: #1B3729;
   --text: #F5FAF7;
   --muted: #91AC9E;
-  --accent: #4ADE80;
-  --accent-light: #168040;
+  --accent0: #4ADE80;
+  --accent-light0: #168040;
   --on-accent: #091811;
   --danger: #FF7A8A;
-  --border: #274436;
-  --border2: #2D4D3D;
-  --border-soft: #213B2E;
-  --border3: #375D4A;
-  --card-a: #1A3326;
-  --card-b: #11221A;
-  --elevated: #182F24;
-  --rail: #325242;
-  --toast-bg: #204030;
+  --border0: #274436;
+  --border20: #2D4D3D;
+  --border-soft0: #213B2E;
+  --border30: #375D4A;
+  --card-a0: #1A3326;
+  --card-b0: #11221A;
+  --elevated0: #182F24;
+  --rail0: #325242;
+  --toast-bg0: #204030;
   --knob: #CDDFD6;
   --lyric-plain: #B1CDBF;
   --lyric-past: #7EA591;
   --lyric-dim2: #6B9480;
   --lyric-dim: #4F7261;
   --tick: #507161;
-  --field-bg: #0E2017;
-  --nav-bg: #0C1D14;
+  --field-bg0: #0E2017;
+  --nav-bg0: #0C1D14;
   --backdrop: rgba(0, 0, 0, 0.72);
   --item-border: transparent;
 }
 
 /* Rosa */
 [data-theme="rose"] {
-  --bg: #180911;
-  --surface: #27111C;
-  --surface2: #371B29;
+  --bg0: #180911;
+  --surface0: #27111C;
+  --surface20: #371B29;
   --text: #FAF5F7;
   --muted: #AC919E;
-  --accent: #FF6FB5;
-  --accent-light: #D12C7C;
+  --accent0: #FF6FB5;
+  --accent-light0: #D12C7C;
   --on-accent: #180911;
   --danger: #FF7A8A;
-  --border: #442736;
-  --border2: #4D2D3D;
-  --border-soft: #3B212E;
-  --border3: #5D374A;
-  --card-a: #331A26;
-  --card-b: #22111A;
-  --elevated: #2F1824;
-  --rail: #523242;
-  --toast-bg: #402030;
+  --border0: #442736;
+  --border20: #4D2D3D;
+  --border-soft0: #3B212E;
+  --border30: #5D374A;
+  --card-a0: #331A26;
+  --card-b0: #22111A;
+  --elevated0: #2F1824;
+  --rail0: #523242;
+  --toast-bg0: #402030;
   --knob: #DFCDD6;
   --lyric-plain: #CDB1BF;
   --lyric-past: #A57E91;
   --lyric-dim2: #946B80;
   --lyric-dim: #724F61;
   --tick: #715061;
-  --field-bg: #200E17;
-  --nav-bg: #1D0C14;
+  --field-bg0: #200E17;
+  --nav-bg0: #1D0C14;
   --backdrop: rgba(0, 0, 0, 0.72);
   --item-border: transparent;
 }
 
 /* Carmesí */
 [data-theme="crimson"] {
-  --bg: #18090A;
-  --surface: #271113;
-  --surface2: #371B1D;
+  --bg0: #18090A;
+  --surface0: #271113;
+  --surface20: #371B1D;
   --text: #FAF5F5;
   --muted: #AC9193;
-  --accent: #FF4D5E;
-  --accent-light: #CC2638;
+  --accent0: #FF4D5E;
+  --accent-light0: #CC2638;
   --on-accent: #18090A;
   --danger: #FFB86B;
-  --border: #44272A;
-  --border2: #4D2D30;
-  --border-soft: #3B2123;
-  --border3: #5D373A;
-  --card-a: #331A1C;
-  --card-b: #221112;
-  --elevated: #2F181A;
-  --rail: #523235;
-  --toast-bg: #402023;
+  --border0: #44272A;
+  --border20: #4D2D30;
+  --border-soft0: #3B2123;
+  --border30: #5D373A;
+  --card-a0: #331A1C;
+  --card-b0: #221112;
+  --elevated0: #2F181A;
+  --rail0: #523235;
+  --toast-bg0: #402023;
   --knob: #DFCDCF;
   --lyric-plain: #CDB1B4;
   --lyric-past: #A57E81;
   --lyric-dim2: #946B6E;
   --lyric-dim: #724F52;
   --tick: #715053;
-  --field-bg: #200E0F;
-  --nav-bg: #1D0C0D;
+  --field-bg0: #200E0F;
+  --nav-bg0: #1D0C0D;
   --backdrop: rgba(0, 0, 0, 0.72);
   --item-border: transparent;
 }
 
 /* Dorado */
 [data-theme="gold"] {
-  --bg: #181409;
-  --surface: #272111;
-  --surface2: #372F1B;
+  --bg0: #181409;
+  --surface0: #272111;
+  --surface20: #372F1B;
   --text: #FAF8F5;
   --muted: #ACA491;
-  --accent: #F5C542;
-  --accent-light: #9A7000;
+  --accent0: #F5C542;
+  --accent-light0: #9A7000;
   --on-accent: #181409;
   --danger: #FF7A8A;
-  --border: #443B27;
-  --border2: #4D442D;
-  --border-soft: #3B3321;
-  --border3: #5D5237;
-  --card-a: #332B1A;
-  --card-b: #221D11;
-  --elevated: #2F2818;
-  --rail: #524932;
-  --toast-bg: #403720;
+  --border0: #443B27;
+  --border20: #4D442D;
+  --border-soft0: #3B3321;
+  --border30: #5D5237;
+  --card-a0: #332B1A;
+  --card-b0: #221D11;
+  --elevated0: #2F2818;
+  --rail0: #524932;
+  --toast-bg0: #403720;
   --knob: #DFDACD;
   --lyric-plain: #CDC5B1;
   --lyric-past: #A5997E;
   --lyric-dim2: #94886B;
   --lyric-dim: #72684F;
   --tick: #716750;
-  --field-bg: #201B0E;
-  --nav-bg: #1D180C;
+  --field-bg0: #201B0E;
+  --nav-bg0: #1D180C;
   --backdrop: rgba(0, 0, 0, 0.72);
   --item-border: transparent;
 }
@@ -241,31 +241,31 @@
 /* ---------- Light (base sin color-mix; el tinte de cada tema va en @supports) ---------- */
 :root[data-mode="light"] {
   color-scheme: light;
-  --accent: var(--accent-light);
+  --accent0: var(--accent-light0);
   --on-accent: #FFFFFF;
   --danger: #D6334A;
-  --bg: #FFFFFF;
-  --surface: #F5F6FA;
-  --surface2: #ECEEF4;
+  --bg0: #FFFFFF;
+  --surface0: #F5F6FA;
+  --surface20: #ECEEF4;
   --text: #15161D;
   --muted: #5E6270;
-  --border: #DADCE6;
-  --border2: #D1D4DF;
-  --border-soft: #E4E6EE;
-  --border3: #C8CBD8;
-  --card-a: #F8F9FC;
-  --card-b: #F0F2F7;
-  --elevated: #FFFFFF;
-  --rail: #CDD0DB;
-  --toast-bg: #FFFFFF;
+  --border0: #DADCE6;
+  --border20: #D1D4DF;
+  --border-soft0: #E4E6EE;
+  --border30: #C8CBD8;
+  --card-a0: #F8F9FC;
+  --card-b0: #F0F2F7;
+  --elevated0: #FFFFFF;
+  --rail0: #CDD0DB;
+  --toast-bg0: #FFFFFF;
   --knob: #FFFFFF;
   --lyric-plain: #4B4F5E;
   --lyric-past: #7D8191;
   --lyric-dim2: #8B8F9E;
   --lyric-dim: #9B9FAE;
   --tick: #A9ADBB;
-  --field-bg: #F3F4F8;
-  --nav-bg: #FFFFFF;
+  --field-bg0: #F3F4F8;
+  --nav-bg0: #FFFFFF;
   --backdrop: rgba(20, 22, 32, 0.45);
   --item-border: #E4E6EE;
 }
@@ -274,28 +274,28 @@
 :root[data-mode="amoled"] {
   color-scheme: dark;
   --on-accent: #000000;
-  --bg: #000000;
-  --surface: #0A0A0A;
-  --surface2: #121212;
+  --bg0: #000000;
+  --surface0: #0A0A0A;
+  --surface20: #121212;
   --text: #F5F5F7;
   --muted: #90909A;
-  --border: #181818;
-  --border2: #1D1D1D;
-  --border-soft: #121212;
-  --border3: #262626;
-  --card-a: #0D0D0D;
-  --card-b: #050505;
-  --elevated: #0B0B0B;
-  --rail: #2E2E2E;
-  --toast-bg: #151515;
+  --border0: #181818;
+  --border20: #1D1D1D;
+  --border-soft0: #121212;
+  --border30: #262626;
+  --card-a0: #0D0D0D;
+  --card-b0: #050505;
+  --elevated0: #0B0B0B;
+  --rail0: #2E2E2E;
+  --toast-bg0: #151515;
   --knob: #D8D8DE;
   --lyric-plain: #B4B4BC;
   --lyric-past: #7C7C86;
   --lyric-dim2: #6A6A74;
   --lyric-dim: #55555F;
   --tick: #4A4A52;
-  --field-bg: #050505;
-  --nav-bg: #000000;
+  --field-bg0: #050505;
+  --nav-bg0: #000000;
   --backdrop: rgba(0, 0, 0, 0.8);
   --item-border: transparent;
 }
@@ -303,17 +303,17 @@
 /* ---------- Tinte de cada tema (si el navegador soporta color-mix) ---------- */
 @supports (color: color-mix(in srgb, red 50%, blue)) {
   :root[data-mode="light"] {
-    --surface: color-mix(in srgb, var(--accent-light) 3%, #F6F6F9);
-    --card-a: color-mix(in srgb, var(--accent-light) 2%, #F9F9FC);
-    --surface2: color-mix(in srgb, var(--accent-light) 9%, #F0F0F5);
+    --surface0: color-mix(in srgb, var(--accent-light) 3%, #F6F6F9);
+    --card-a0: color-mix(in srgb, var(--accent-light) 2%, #F9F9FC);
+    --surface20: color-mix(in srgb, var(--accent-light) 9%, #F0F0F5);
     --text: color-mix(in srgb, var(--accent-light) 10%, #15161D);
     --muted: color-mix(in srgb, var(--accent-light) 15%, #5E6270);
-    --border: color-mix(in srgb, var(--accent-light) 12%, #DDDFE8);
-    --border2: color-mix(in srgb, var(--accent-light) 14%, #D4D6E0);
-    --border-soft: color-mix(in srgb, var(--accent-light) 9%, #E6E8EF);
-    --border3: color-mix(in srgb, var(--accent-light) 16%, #CACDD9);
-    --card-b: color-mix(in srgb, var(--accent-light) 6%, #F1F2F7);
-    --rail: color-mix(in srgb, var(--accent-light) 18%, #CED1DC);
+    --border0: color-mix(in srgb, var(--accent-light) 12%, #DDDFE8);
+    --border20: color-mix(in srgb, var(--accent-light) 14%, #D4D6E0);
+    --border-soft0: color-mix(in srgb, var(--accent-light) 9%, #E6E8EF);
+    --border30: color-mix(in srgb, var(--accent-light) 16%, #CACDD9);
+    --card-b0: color-mix(in srgb, var(--accent-light) 6%, #F1F2F7);
+    --rail0: color-mix(in srgb, var(--accent-light) 18%, #CED1DC);
     --lyric-plain: color-mix(in srgb, var(--accent-light) 12%, #4B4F5E);
     --lyric-past: color-mix(in srgb, var(--accent-light) 14%, #7D8191);
     --lyric-dim2: color-mix(in srgb, var(--accent-light) 14%, #8B8F9E);
@@ -323,17 +323,17 @@
   }
 
   :root[data-mode="amoled"] {
-    --surface: color-mix(in srgb, var(--accent) 6%, #080808);
-    --surface2: color-mix(in srgb, var(--accent) 9%, #0E0E0E);
+    --surface0: color-mix(in srgb, var(--accent) 6%, #080808);
+    --surface20: color-mix(in srgb, var(--accent) 9%, #0E0E0E);
     --muted: color-mix(in srgb, var(--accent) 18%, #8E8E96);
-    --border: color-mix(in srgb, var(--accent) 10%, #141414);
-    --border2: color-mix(in srgb, var(--accent) 12%, #181818);
-    --border-soft: color-mix(in srgb, var(--accent) 8%, #101010);
-    --border3: color-mix(in srgb, var(--accent) 14%, #202020);
-    --card-a: color-mix(in srgb, var(--accent) 6%, #0B0B0B);
-    --elevated: color-mix(in srgb, var(--accent) 6%, #0A0A0A);
-    --rail: color-mix(in srgb, var(--accent) 22%, #2A2A2A);
-    --toast-bg: color-mix(in srgb, var(--accent) 8%, #121212);
+    --border0: color-mix(in srgb, var(--accent) 10%, #141414);
+    --border20: color-mix(in srgb, var(--accent) 12%, #181818);
+    --border-soft0: color-mix(in srgb, var(--accent) 8%, #101010);
+    --border30: color-mix(in srgb, var(--accent) 14%, #202020);
+    --card-a0: color-mix(in srgb, var(--accent) 6%, #0B0B0B);
+    --elevated0: color-mix(in srgb, var(--accent) 6%, #0A0A0A);
+    --rail0: color-mix(in srgb, var(--accent) 22%, #2A2A2A);
+    --toast-bg0: color-mix(in srgb, var(--accent) 8%, #121212);
     --lyric-plain: color-mix(in srgb, var(--accent) 20%, #B4B4BC);
     --lyric-past: color-mix(in srgb, var(--accent) 20%, #7C7C86);
     --lyric-dim2: color-mix(in srgb, var(--accent) 20%, #6A6A74);
@@ -342,6 +342,129 @@
   }
 }
 
+
+
+/* =========================================================
+   v1.03 — COLORES ANIMADOS + COLOR DE PORTADA
+   Cada color de la app se registra con @property: así, al cambiar de tema, de modo
+   o de color de portada, TODOS los colores se desvanecen suavemente en vez de saltar.
+   (En un WebView antiguo sin @property todo funciona igual, solo que sin el desvanecido.)
+   Los temas definen valores base con sufijo 0 (--bg0, --accent0…). Los colores finales
+   (--bg, --accent…) son esa base mezclada con el color de la portada (--cv), en la
+   cantidad que dicen --t-acc, --t-bg, --t-s y --t-l (las pone el JS según la intensidad).
+   ========================================================= */
+
+@property --bg { syntax: '<color>'; inherits: true; initial-value: #080B16; }
+@property --surface { syntax: '<color>'; inherits: true; initial-value: #111827; }
+@property --surface2 { syntax: '<color>'; inherits: true; initial-value: #192236; }
+@property --card-a { syntax: '<color>'; inherits: true; initial-value: #151D32; }
+@property --card-b { syntax: '<color>'; inherits: true; initial-value: #101522; }
+@property --elevated { syntax: '<color>'; inherits: true; initial-value: #151D30; }
+@property --field-bg { syntax: '<color>'; inherits: true; initial-value: #0F1626; }
+@property --toast-bg { syntax: '<color>'; inherits: true; initial-value: #1D2740; }
+@property --nav-bg { syntax: '<color>'; inherits: true; initial-value: #0D1321; }
+@property --border { syntax: '<color>'; inherits: true; initial-value: #252D43; }
+@property --border2 { syntax: '<color>'; inherits: true; initial-value: #29334A; }
+@property --border-soft { syntax: '<color>'; inherits: true; initial-value: #222B40; }
+@property --border3 { syntax: '<color>'; inherits: true; initial-value: #34405C; }
+@property --rail { syntax: '<color>'; inherits: true; initial-value: #2A3550; }
+@property --accent { syntax: '<color>'; inherits: true; initial-value: #A18AFF; }
+@property --accent-light { syntax: '<color>'; inherits: true; initial-value: #6A45F5; }
+@property --text { syntax: '<color>'; inherits: true; initial-value: #F5F5FA; }
+@property --muted { syntax: '<color>'; inherits: true; initial-value: #8993A8; }
+@property --on-accent { syntax: '<color>'; inherits: true; initial-value: #080B16; }
+@property --danger { syntax: '<color>'; inherits: true; initial-value: #FF7A8A; }
+@property --knob { syntax: '<color>'; inherits: true; initial-value: #CFD6E8; }
+@property --tick { syntax: '<color>'; inherits: true; initial-value: #4A5778; }
+@property --lyric-plain { syntax: '<color>'; inherits: true; initial-value: #AEB7CC; }
+@property --lyric-past { syntax: '<color>'; inherits: true; initial-value: #7886A4; }
+@property --lyric-dim2 { syntax: '<color>'; inherits: true; initial-value: #6F7B99; }
+@property --lyric-dim { syntax: '<color>'; inherits: true; initial-value: #55617C; }
+@property --item-border { syntax: '<color>'; inherits: true; initial-value: transparent; }
+@property --backdrop { syntax: '<color>'; inherits: true; initial-value: rgba(3, 5, 12, 0.72); }
+
+:root {
+  --cv: #A18AFF;
+  --cv-d: #6A45F5;
+  --cva: var(--cv);
+  --t-acc: 0;
+  --t-bg: 0;
+  --t-s: 0;
+  --t-l: 0;
+
+  --bg: var(--bg0);
+  --surface: var(--surface0);
+  --surface2: var(--surface20);
+  --card-a: var(--card-a0);
+  --card-b: var(--card-b0);
+  --elevated: var(--elevated0);
+  --field-bg: var(--field-bg0);
+  --toast-bg: var(--toast-bg0);
+  --nav-bg: var(--nav-bg0);
+  --border: var(--border0);
+  --border2: var(--border20);
+  --border-soft: var(--border-soft0);
+  --border3: var(--border30);
+  --rail: var(--rail0);
+  --accent: var(--accent0);
+  --accent-light: var(--accent-light0);
+}
+
+:root[data-mode="light"] { --cva: var(--cv-d); }
+
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  :root {
+    --bg: color-mix(in srgb, var(--cv) calc(var(--t-bg) * 100%), var(--bg0));
+    --surface: color-mix(in srgb, var(--cv) calc(var(--t-s) * 100%), var(--surface0));
+    --surface2: color-mix(in srgb, var(--cv) calc(var(--t-s) * 100%), var(--surface20));
+    --card-a: color-mix(in srgb, var(--cv) calc(var(--t-s) * 100%), var(--card-a0));
+    --card-b: color-mix(in srgb, var(--cv) calc(var(--t-s) * 100%), var(--card-b0));
+    --elevated: color-mix(in srgb, var(--cv) calc(var(--t-s) * 100%), var(--elevated0));
+    --field-bg: color-mix(in srgb, var(--cv) calc(var(--t-s) * 100%), var(--field-bg0));
+    --toast-bg: color-mix(in srgb, var(--cv) calc(var(--t-s) * 100%), var(--toast-bg0));
+    --nav-bg: color-mix(in srgb, var(--cv) calc(var(--t-bg) * 100%), var(--nav-bg0));
+    --border: color-mix(in srgb, var(--cv) calc(var(--t-l) * 100%), var(--border0));
+    --border2: color-mix(in srgb, var(--cv) calc(var(--t-l) * 100%), var(--border20));
+    --border-soft: color-mix(in srgb, var(--cv) calc(var(--t-l) * 100%), var(--border-soft0));
+    --border3: color-mix(in srgb, var(--cv) calc(var(--t-l) * 100%), var(--border30));
+    --rail: color-mix(in srgb, var(--cv) calc(var(--t-l) * 100%), var(--rail0));
+    --accent: color-mix(in srgb, var(--cva) calc(var(--t-acc) * 100%), var(--accent0));
+    --accent-light: color-mix(in srgb, var(--cv-d) calc(var(--t-acc) * 100%), var(--accent-light0));
+  }
+}
+
+/* Los colores se desvanecen al cambiar tema, modo o color de portada */
+:root {
+  transition:
+    --bg 0.7s ease,
+    --surface 0.7s ease,
+    --surface2 0.7s ease,
+    --card-a 0.7s ease,
+    --card-b 0.7s ease,
+    --elevated 0.7s ease,
+    --field-bg 0.7s ease,
+    --toast-bg 0.7s ease,
+    --nav-bg 0.7s ease,
+    --border 0.7s ease,
+    --border2 0.7s ease,
+    --border-soft 0.7s ease,
+    --border3 0.7s ease,
+    --rail 0.7s ease,
+    --accent 0.7s ease,
+    --accent-light 0.7s ease,
+    --text 0.7s ease,
+    --muted 0.7s ease,
+    --on-accent 0.7s ease,
+    --danger 0.7s ease,
+    --knob 0.7s ease,
+    --tick 0.7s ease,
+    --lyric-plain 0.7s ease,
+    --lyric-past 0.7s ease,
+    --lyric-dim2 0.7s ease,
+    --lyric-dim 0.7s ease,
+    --item-border 0.7s ease,
+    --backdrop 0.7s ease;
+}
 
 * {
   margin: 0;
@@ -1367,13 +1490,57 @@ body.no-scroll .toast {
   font-size: 11px;
 }
 
+/* ---- Líneas de la letra (v1.03: estilo Apple Music) ----
+   Todas las líneas miden lo mismo; la activa crece con transform (sin mover el resto del texto).
+   Cantante principal (V1) a la izquierda, secundario (V2) a la derecha, a dúo (V1000 / D) al centro. */
+.lyrics {
+  font-family: var(--lyric-font, inherit);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 86%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 86%, transparent 100%);
+}
+
 .lyric-line {
-  margin: 0 0 14px;
-  font-size: 18px;
-  line-height: 1.45;
+  --d: 0;
+  width: fit-content;
+  max-width: 90%;
+  margin: 0 auto 20px 0;
+  font-family: var(--lyric-font, inherit);
+  font-size: var(--lyric-size, 24px);
+  font-weight: var(--lyric-weight, 700);
+  line-height: 1.28;
+  text-align: left;
   color: var(--lyric-dim);
   cursor: pointer;
-  transition: color 0.25s ease, font-size 0.2s ease;
+  transform: scale(0.88);
+  transform-origin: left center;
+  transition: color 0.4s ease, transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1), filter 0.45s ease, opacity 0.45s ease;
+}
+
+.lyric-line.sr {
+  margin: 0 0 20px auto;
+  text-align: right;
+  transform-origin: right center;
+}
+
+.lyric-line.sc {
+  margin: 0 auto 20px;
+  text-align: center;
+  transform-origin: center center;
+}
+
+/* Sin duetos: todo a la izquierda */
+html[data-lduet="off"] .lyric-line.sr,
+html[data-lduet="off"] .lyric-line.sc {
+  margin: 0 auto 20px 0;
+  text-align: left;
+  transform-origin: left center;
+}
+
+/* Voces de fondo (líneas entre paréntesis) */
+.lyric-line.bg {
+  font-size: calc(var(--lyric-size, 24px) * 0.78);
+  font-style: italic;
+  font-weight: 600;
 }
 
 .lyric-line.past {
@@ -1385,24 +1552,128 @@ body.no-scroll .toast {
 }
 
 .lyric-line.active {
-  color: var(--text);
-  font-size: 20px;
-  font-weight: bold;
+  color: var(--lyric-dim2);
+  transform: scale(1);
+  filter: none;
 }
 
-/* Palabra por palabra: la palabra se va llenando de color mientras suena */
-.lyric-line.active .lw {
-  background: linear-gradient(90deg, var(--accent) var(--p, 0%), var(--lyric-dim2) var(--p, 0%));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+/* Líneas sin palabra por palabra (.nw): la activa se ve completa */
+.lyric-line.active.nw {
+  color: var(--text);
+}
+
+/* Desenfoque suave según la distancia a la línea que suena */
+html[data-lblur="on"] .lyrics .lyric-line:not(.active):not(.plain) {
+  filter: blur(calc(var(--d, 1) * 0.38px));
+  opacity: calc(1 - var(--d, 1) * 0.06);
 }
 
 .lyric-line.plain {
   color: var(--lyric-plain);
   font-size: 15px;
+  font-weight: 400;
   margin-bottom: 8px;
   cursor: default;
+  transform: none;
+}
+
+.lyric-line.plain.sr {
+  text-align: right;
+}
+
+/* ---- Palabra por palabra ----
+   .wd = palabra (no se parte al cambiar de renglón), .lw = sílaba o palabra, .lc = letra.
+   Encima del texto apagado hay una capa de color (::before) que se revela con --n (de 0 a 1),
+   y otra de brillo (::after) que solo se ve en las animaciones con glow. */
+.wd {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.lw,
+.lc {
+  position: relative;
+  display: inline-block;
+  --n: 0;
+}
+
+.lyric-line.active .lw[data-t]::before,
+.lyric-line.active .lc[data-t]::before {
+  content: attr(data-t);
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: pre;
+  color: var(--accent);
+  pointer-events: none;
+}
+
+/* Fluida: el color avanza con el borde difuminado */
+html[data-lanim="flow"] .lyric-line.active .lw[data-t]::before,
+html[data-lanim="glow"] .lyric-line.active .lw[data-t]::before {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(var(--n) * 112% - 12%), transparent calc(var(--n) * 112%));
+  mask-image: linear-gradient(90deg, #000 calc(var(--n) * 112% - 12%), transparent calc(var(--n) * 112%));
+}
+
+/* Brillo: capa aparte (el texto es transparente, solo se ve la sombra) que sigue a la palabra que se canta */
+html[data-lanim="glow"] .lyric-line.active .lw[data-t]::after,
+html[data-lanim="letters"] .lyric-line.active .lc[data-t]::after {
+  content: attr(data-t);
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: pre;
+  color: transparent;
+  text-shadow: 0 0 10px var(--accent), 0 0 24px var(--accent);
+  clip-path: inset(-1em calc((1 - var(--n)) * 100%) -1em -1em);
+  opacity: 0.25;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+/* Fluida con glow: la palabra que se está cantando brilla más */
+html[data-lanim="glow"] .lyric-line.active .lw.cur[data-t]::after {
+  opacity: 0.9;
+}
+
+/* Letra por letra: el brillo de cada letra crece con ella (sin recorte, para que no se vean cortes verticales) */
+html[data-lanim="letters"] .lyric-line.active .lc[data-t]::after {
+  clip-path: none;
+  opacity: calc(var(--n) * 0.85);
+}
+
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  html[data-lanim="glow"] .lyric-line.active .lw[data-t]::after,
+  html[data-lanim="letters"] .lyric-line.active .lc[data-t]::after {
+    text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 85%, transparent), 0 0 26px color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+}
+
+/* Letra por letra: cada letra se enciende y sube un poquito */
+html[data-lanim="letters"] .lyric-line.active .lc {
+  transform: translateY(calc(var(--n) * -0.07em));
+  transition: transform 0.25s ease-out;
+}
+
+html[data-lanim="letters"] .lyric-line.active .lc[data-t]::before {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(var(--n) * 130% - 30%), transparent calc(var(--n) * 130%));
+  mask-image: linear-gradient(90deg, #000 calc(var(--n) * 130% - 30%), transparent calc(var(--n) * 130%));
+}
+
+/* Vista previa en Ajustes */
+.lyric-preview {
+  margin: 14px 0 12px;
+  padding: 16px 14px 2px;
+  border-radius: 14px;
+  background: var(--field-bg);
+  border: 1px solid var(--border-soft);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.lyric-preview .lyric-line {
+  --lyric-size: 22px;
+  margin-bottom: 14px;
 }
 
 /* ---- Cola ---- */
@@ -2397,7 +2668,7 @@ html.immersive .bottom-nav {
 
 /* Sin barra inferior, la barra de navegación de Android toma el color del fondo */
 :root.immersive[data-theme] {
-  --nav-bg: var(--bg);
+  --nav-bg0: var(--bg);
 }
 
 html.immersive #app {
@@ -2498,4 +2769,172 @@ html.immersive .player-tabs {
     min-height: 0;
     margin: 0;
   }
+}
+
+
+/* =========================================================
+   v1.03 — AJUSTES NUEVOS (color de portada, pantalla, letras)
+   ========================================================= */
+
+.settings-group {
+  margin: 34px 4px 0;
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.settings-group + .card {
+  margin-top: 12px;
+}
+
+/* Fila con interruptor */
+.set-row {
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 14px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.set-row > span:first-child {
+  flex: 1;
+}
+
+.set-row small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.card .set-row:first-of-type {
+  margin-top: 6px;
+}
+
+.set-block {
+  margin-top: 16px;
+  transition: opacity 0.3s ease;
+}
+
+.set-block.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.set-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.set-hint {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.set-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Botones de opción (Bajo / Medio / Fuerte, animaciones, fuentes…) */
+.seg {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--field-bg);
+  border: 1px solid var(--border-soft);
+}
+
+.seg.wrap {
+  flex-wrap: wrap;
+}
+
+.seg button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 10px 8px;
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.2;
+  transition: background-color 0.3s ease, color 0.3s ease, transform 0.12s ease;
+}
+
+.seg.wrap button {
+  flex: 1 1 auto;
+}
+
+.seg button[aria-checked="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* =========================================================
+   v1.03 — ANIMACIONES SUAVES
+   Para lo que se sentía seco: cambio de portada, de título, de pestaña, del botón
+   de reproducir, avisos y selectores de Ajustes.
+   ========================================================= */
+
+@keyframes stageIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes textIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes iconPop {
+  from { opacity: 0; transform: scale(0.6); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; transform: translate(-50%, 0); }
+  to   { opacity: 0; transform: translate(-50%, -10px); }
+}
+
+/* Portada, letra y cola aparecen con suavidad al cambiar de pestaña */
+.stage > .big-cover:not(.hidden),
+.stage > .stage-panel:not(.hidden) {
+  animation: stageIn 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+/* La portada nueva se desvanece al cambiar de canción */
+.big-cover img,
+.mini-player .cover img {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Título y artista al cambiar de canción */
+.swap {
+  animation: textIn 0.38s ease-out;
+}
+
+/* Reproducir / pausar */
+.round-btn .icon {
+  animation: iconPop 0.22s ease-out;
+}
+
+.toast.out {
+  animation: toastOut 0.22s ease-in forwards;
+}
+
+/* Selectores y pestañas: el cambio de color ya no es de golpe */
+.theme-swatch,
+.mode-option,
+.tab-btn,
+.settings {
+  transition: border-color 0.3s ease, color 0.3s ease, background-color 0.3s ease, transform 0.12s ease, opacity 0.15s ease;
 }

@@ -9,7 +9,8 @@
 // v3 (app v1.01): corrección de navegación hacia atrás; renueva la copia guardada.
 // v4 (app v1.02): iconos nuevos, barra inferior fija y sin rebote; renueva la copia guardada.
 // v5: se quita equalizer.js (código viejo que ya no se usa; el ecualizador vive en script.js).
-const CACHE_NAME = "pulsar-rm-shell-v5";
+// v6 (app v1.03): colores animados, letras estilo Apple Music y ajustes nuevos; renueva la copia guardada.
+const CACHE_NAME = "pulsar-rm-shell-v6";
 
 const APP_SHELL = [
   "./",

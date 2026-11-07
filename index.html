@@ -207,6 +207,81 @@
       </div>
 
       <div class="card">
+        <h3>Color de portada</h3>
+        <p>La app toma los colores de la portada de la canción que suena y cambia con ella en tiempo real.</p>
+        <label class="eq-switch set-row">
+          <span>Usar el color de la portada</span>
+          <input type="checkbox" data-toggle="coverColor">
+          <span class="eq-switch-ui" aria-hidden="true"></span>
+        </label>
+        <div id="cover-intensity" class="set-block">
+          <span class="set-label">Intensidad</span>
+          <div class="seg" role="radiogroup" aria-label="Intensidad del color de portada" data-seg="coverIntensity">
+            <button type="button" role="radio" aria-checked="false" data-val="low">Bajo</button>
+            <button type="button" role="radio" aria-checked="false" data-val="medium">Medio</button>
+            <button type="button" role="radio" aria-checked="false" data-val="high">Fuerte</button>
+          </div>
+          <small class="set-hint">Bajo: solo cambia el color de acento. Medio: también se tiñe el fondo. Fuerte: toda la app toma el color.</small>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Pantalla</h3>
+        <label class="eq-switch set-row">
+          <span>Ocultar la barra de estado</span>
+          <input type="checkbox" data-toggle="hideStatusBar">
+          <span class="eq-switch-ui" aria-hidden="true"></span>
+        </label>
+        <small id="status-hint" class="set-hint"></small>
+      </div>
+
+      <h2 class="settings-group">Letras</h2>
+
+      <div class="card">
+        <h3>Animación</h3>
+        <p>Cómo se ilumina la letra mientras suena. Funciona mejor con letras palabra por palabra.</p>
+        <div id="lyric-preview" class="lyric-preview" aria-hidden="true"></div>
+        <div class="seg" role="radiogroup" aria-label="Animación de las letras" data-seg="lyricsAnim">
+          <button type="button" role="radio" aria-checked="false" data-val="flow">Fluida</button>
+          <button type="button" role="radio" aria-checked="false" data-val="glow">Fluida con glow</button>
+          <button type="button" role="radio" aria-checked="false" data-val="letters">Letra por letra</button>
+        </div>
+        <small id="lyric-anim-hint" class="set-hint"></small>
+      </div>
+
+      <div class="card">
+        <h3>Fuente y tamaño</h3>
+        <div id="lyric-fonts" class="seg wrap" role="radiogroup" aria-label="Fuente de las letras" data-seg="lyricsFont"></div>
+        <div class="set-actions">
+          <button type="button" class="chip-btn" data-action="lyric-font-import">Importar fuente…</button>
+          <button type="button" id="lyric-font-remove" class="chip-btn muted hidden" data-action="lyric-font-remove">Quitar fuente importada</button>
+        </div>
+        <small class="set-hint">Acepta archivos .ttf, .otf, .woff y .woff2.</small>
+        <div class="set-block">
+          <span class="set-label">Tamaño</span>
+          <div class="seg" role="radiogroup" aria-label="Tamaño de las letras" data-seg="lyricsSize">
+            <button type="button" role="radio" aria-checked="false" data-val="small">Pequeño</button>
+            <button type="button" role="radio" aria-checked="false" data-val="medium">Medio</button>
+            <button type="button" role="radio" aria-checked="false" data-val="large">Grande</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Estilo Apple Music</h3>
+        <label class="eq-switch set-row">
+          <span>Duetos a dos lados<small>V1 (principal) a la izquierda, V2 a la derecha</small></span>
+          <input type="checkbox" data-toggle="lyricsDuet">
+          <span class="eq-switch-ui" aria-hidden="true"></span>
+        </label>
+        <label class="eq-switch set-row">
+          <span>Desenfocar líneas lejanas<small>Resalta la línea que está sonando</small></span>
+          <input type="checkbox" data-toggle="lyricsBlur">
+          <span class="eq-switch-ui" aria-hidden="true"></span>
+        </label>
+      </div>
+
+      <div class="card">
         <h3>Biblioteca</h3>
         <p id="storage-info">Calculando espacio…</p>
         <button type="button" class="danger-btn" data-action="clear">Borrar biblioteca</button>
@@ -306,18 +381,23 @@
   </div>
 </div>
 <input id="lyrics-file" class="sr-only" type="file" tabindex="-1">
+<input id="lyric-font-file" class="sr-only" type="file" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2" tabindex="-1">
 
 
 <input id="music-files" class="sr-only" type="file" multiple
        accept="audio/*,.mp3,.m4a,.aac,.flac,.ogg,.oga,.opus,.wav,.weba" tabindex="-1">
 
 <script>
-  /* v1.02: al abrir, el color de la barra de estado ya coincide con el modo y tema guardados */
+  /* v1.02: al abrir, el color de la barra de estado ya coincide con el modo y tema guardados.
+     v1.03: --bg es un color registrado (@property) y se devuelve como rgb(), así que se convierte a #RRGGBB. */
   (function () {
     try {
       var meta = document.querySelector('meta[name="theme-color"]');
       var bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
-      if (meta && bg) meta.setAttribute("content", bg);
+      var ctx = document.createElement("canvas").getContext("2d");
+      ctx.fillStyle = "#000000";
+      ctx.fillStyle = bg;
+      if (meta && /^#[0-9a-f]{6}$/i.test(ctx.fillStyle)) meta.setAttribute("content", ctx.fillStyle);
     } catch (e) {}
   })();
 </script>

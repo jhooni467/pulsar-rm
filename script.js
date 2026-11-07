@@ -1,12 +1,12 @@
-/* PULSAR RM 1.02 — Se siente como app (barras del sistema, diálogos propios, diseño adaptable)
-   Módulos: Store (IndexedDB) · Settings · Library · Player · Router · UI · Lyrics (reservado)
+/* PULSAR RM 1.03 — Color de portada, barra de estado oculta, letras estilo Apple Music (duetos, animaciones, fuentes)
+   Módulos: Store (IndexedDB) · Settings · CoverColor · Library · Player · Router · UI · Lyrics
    Todos los botones usan delegación de eventos: siguen funcionando aunque el HTML se vuelva a dibujar. */
 
 "use strict";
 
 // ÚNICO lugar donde se escribe la versión. El workflow de GitHub la lee de aquí para
-// el versionName y el versionCode del APK. Formato: "X.YY" (ej. 1.02 → versionCode 102).
-const APP_VERSION = "1.02";
+// el versionName y el versionCode del APK. Formato: "X.YY" (ej. 1.03 → versionCode 103).
+const APP_VERSION = "1.03";
 
 // Si el APK expone PulsarNative.getVersion(), se muestra la versión REAL instalada;
 // si no, se usa la constante de arriba.
@@ -193,7 +193,19 @@ const MODES = [
 ];
 
 const Settings = {
-  defaults: { theme: "pulsar", mode: "dark", eq: { enabled: false, preset: "flat", gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } },
+  defaults: {
+    theme: "pulsar", mode: "dark", eq: { enabled: false, preset: "flat", gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    // v1.03
+    coverColor: false,        // la app toma el color de la portada que suena
+    coverIntensity: "medium", // low | medium | high
+    hideStatusBar: false,     // oculta la barra de estado de Android
+    lyricsAnim: "flow",       // flow | glow | letters
+    lyricsFont: "default",    // ver LYRIC_FONTS ("custom" = fuente importada)
+    lyricsFontFile: null,     // { name, data } de la fuente importada
+    lyricsSize: "medium",     // small | medium | large
+    lyricsDuet: true,         // cantante principal a la izquierda, secundario a la derecha
+    lyricsBlur: true          // desenfoca suavemente las líneas lejanas
+  },
   values: {},
 
   async load() {
@@ -221,6 +233,10 @@ const Settings = {
       } catch (error) { console.warn(error); }
     }
     this.apply();
+    StatusBar.apply(false);
+    LyricsStyle.restoreFont();
+    LyricsStyle.apply();
+    UI.refreshSettingsControls();
   },
 
   async set(key, value) {
@@ -228,7 +244,17 @@ const Settings = {
     // Solo el tema y el modo repintan la app y avisan a Android (barras, icono).
     // Mover una barra del ecualizador no debe disparar todo eso en cada ajuste.
     if (key === "theme" || key === "mode") this.apply();
+    this.changed(key);
     try { await Store.setSetting(key, value); } catch (error) { console.warn(error); }
+  },
+
+  // Cada ajuste nuevo avisa al módulo que lo usa
+  changed(key) {
+    if (key === "coverColor") CoverColor.update(CoverColor.song);
+    else if (key === "coverIntensity") CoverColor.sync();
+    else if (key === "hideStatusBar") StatusBar.apply(true);
+    else if (key.startsWith("lyrics")) LyricsStyle.apply();
+    UI.refreshSettingsControls();
   },
 
   apply() {
@@ -245,7 +271,8 @@ const Settings = {
     Themes.refresh();
     AppMode.refresh();
     AppIcon.sync(mode);
-    NativeBars.sync(mode);
+    CoverColor.sync();      // los porcentajes de color dependen del modo
+    NativeBars.syncSoon();  // las barras de Android esperan a que termine el desvanecido
   }
 };
 
@@ -268,6 +295,76 @@ const LyricsParser = {
     return m ? this.toSeconds(m[1], m[2], m[3], m[4]) : 0;
   },
 
+  /* Cantantes (duetos). Admite los marcadores de Apple Music y del LRC mejorado:
+       V1: V2: V1000:  ·  [V1]  ·  M: F: D:  ·  <v Nombre> (VTT).
+     Devuelve { id, rest } o null. Las marcas de tiempo <mm:ss.xx> que vayan antes se conservan. */
+  SPEAKER: /^((?:<[^>]*>)*\s*)(?:\[\s*)?(?:([Vv]\d{1,4})|([MFD]))\s*\]?\s*[:：]\s*/,
+  SPEAKER_ONLY: /^\s*(?:\[\s*)?(?:([Vv]\d{1,4})|([MFD]))\s*\]?\s*[:：]\s*$/,
+
+  takeSpeaker(row) {
+    const m = row.match(this.SPEAKER);
+    if (!m) return null;
+    return { id: (m[2] || m[3]).toLowerCase(), rest: m[1] + row.slice(m[0].length) };
+  },
+
+  // Lado de la pantalla de cada línea: V1 = izquierda (principal), V2 y siguientes = derecha,
+  // V1000 / D = centro (los dos cantan). Con M: y F:, el primero en cantar va a la izquierda.
+  assignSides(lines) {
+    const order = [];
+    lines.forEach((line) => {
+      const id = line.spk;
+      let side = "l";
+      if (id) {
+        const v = id.match(/^v(\d+)$/);
+        if (v) {
+          const n = Number(v[1]);
+          side = n >= 1000 ? "c" : n === 1 ? "l" : "r";
+        } else if (id === "d") {
+          side = "c";
+        } else {
+          if (!order.includes(id)) order.push(id);
+          side = order.indexOf(id) === 0 ? "l" : "r";
+        }
+      }
+      line.side = side;
+      // Voces de fondo, como en Apple Music: toda la línea entre paréntesis
+      line.bg = /^[(（].*[)）]$/.test(line.text || "");
+    });
+    return lines.some((line) => line.side !== "l");
+  },
+
+  /* Palabras (o sílabas) listas para animar: si un mismo tiempo cubre varias palabras, se
+     reparte por letras. Cada unidad: { t, end, text, sb (espacio antes), sa (espacio después) }. */
+  units(line) {
+    if (line.units) return line.units;
+    const out = [];
+    (line.words || []).forEach((w) => {
+      const parts = String(w.text).split(/(\s+)/).filter((part) => part !== "");
+      const items = [];
+      let leading = false;
+      parts.forEach((part) => {
+        if (/^\s+$/.test(part)) {
+          if (items.length) items[items.length - 1].sa = true; else leading = true;
+        } else {
+          items.push({ text: part, sb: false, sa: false });
+        }
+      });
+      if (!items.length) return;
+      if (leading) items[0].sb = true;
+      const total = items.reduce((sum, item) => sum + Array.from(item.text).length, 0) || 1;
+      let used = 0;
+      items.forEach((item) => {
+        const size = Array.from(item.text).length;
+        item.t = w.t + ((w.end - w.t) * used) / total;
+        item.end = w.t + ((w.end - w.t) * (used + size)) / total;
+        used += size;
+        out.push(item);
+      });
+    });
+    line.units = out;
+    return out;
+  },
+
   detect(raw) {
     if (/^\s*WEBVTT/i.test(raw)) return "vtt";
     const cue = raw.match(new RegExp(this.CUE_TIME + "\\s*-->\\s*" + this.CUE_TIME));
@@ -288,10 +385,16 @@ const LyricsParser = {
     const rows = text.split("\n").map((row) => row.trim());
     while (rows.length && !rows[rows.length - 1]) rows.pop();
     while (rows.length && !rows[0]) rows.shift();
-    return {
-      format: "txt", synced: false, wordLevel: false, metaOffset: 0, meta: {},
-      lines: rows.map((row) => ({ t: null, text: row, words: null }))
-    };
+    let sticky = null;
+    const lines = [];
+    rows.forEach((row) => {
+      if (this.SPEAKER_ONLY.test(row)) { sticky = (row.match(this.SPEAKER_ONLY)[1] || row.match(this.SPEAKER_ONLY)[2]).toLowerCase(); return; }
+      const sp = this.takeSpeaker(row);
+      if (sp) sticky = sp.id;
+      lines.push({ t: null, text: sp ? sp.rest.trim() : row, words: null, spk: sticky });
+    });
+    const duet = this.assignSides(lines);
+    return { format: "txt", synced: false, wordLevel: false, duet, metaOffset: 0, meta: {}, lines };
   },
 
   // Separa un texto con marcas <mm:ss.xx> en palabras con su tiempo.
@@ -322,10 +425,14 @@ const LyricsParser = {
 
   parseLRC(text) {
     const lines = [], meta = {};
-    let offset = 0, order = 0;
+    let offset = 0, order = 0, sticky = null;
     text.split("\n").forEach((rawLine) => {
       let row = rawLine.trim();
       if (!row) return;
+
+      // Línea que solo dice quién canta ("V2:"): vale para las siguientes
+      const only = row.match(this.SPEAKER_ONLY);
+      if (only) { sticky = (only[1] || only[2]).toLowerCase(); return; }
 
       const tag = row.match(/^\[([A-Za-z#]+):(.*)\]$/);
       if (tag) {
@@ -343,11 +450,15 @@ const LyricsParser = {
       }
       if (!stamps.length) return; // línea sin tiempo: no se muestra (sigue en el texto editable)
 
-      const parsed = this.parseInline(row.trim(), stamps[0]);
+      const sp = this.takeSpeaker(row.trim());
+      if (sp) sticky = sp.id;
+      const parsed = this.parseInline(sp ? sp.rest.trim() : row.trim(), stamps[0]);
+      if (sp && !parsed.text && !parsed.words) return; // "[00:30.00]V2:" sin letra: solo cambia de cantante
       stamps.forEach((stamp) => {
         const delta = stamp - stamps[0];
         lines.push({
           t: stamp,
+          spk: sticky,
           order: order++,
           text: parsed.text,
           words: parsed.words ? parsed.words.map((word) => ({ t: word.t + delta, text: word.text })) : null,
@@ -361,7 +472,7 @@ const LyricsParser = {
   parseCues(text, kind) {
     const timeRe = new RegExp(this.CUE_TIME + "\\s*-->\\s*" + this.CUE_TIME);
     const lines = [];
-    let order = 0;
+    let order = 0, sticky = null;
     text.split(/\n{2,}/).forEach((block) => {
       const rows = block.split("\n");
       const at = rows.findIndex((row) => timeRe.test(row));
@@ -369,14 +480,22 @@ const LyricsParser = {
       const match = rows[at].match(timeRe);
       const start = this.parseCueTime(match[1]);
       const end = this.parseCueTime(match[2]);
-      const body = rows.slice(at + 1).join(" ")
+      let body = rows.slice(at + 1).join(" ");
+      let voice = null;
+      const tagged = body.match(/<v(?:\.[^>\s]*)?\s+([^>]+)>/i); // VTT: <v Nombre>
+      if (tagged) voice = tagged[1].trim().toLowerCase();
+      body = body
         .replace(/\{[^}]*\}/g, "")
         .replace(/<\/?(?:c|v|i|b|u|ruby|rt|lang)(?:\.[^>\s]*)?(?:\s[^>]*)?>/gi, "")
         .replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
         .replace(/\s+/g, " ").trim();
       if (!body) return;
+      const sp = this.takeSpeaker(body);
+      if (sp) { voice = sp.id; body = sp.rest.trim(); }
+      if (voice) sticky = voice;
       const parsed = this.parseInline(body, start);
-      lines.push({ t: start, order: order++, text: parsed.text, words: parsed.words, end });
+      if (!parsed.text && !parsed.words) return;
+      lines.push({ t: start, order: order++, spk: sticky, text: parsed.text, words: parsed.words, end });
     });
     return this.finalize({ format: kind, synced: true, metaOffset: 0, meta: {} }, lines);
   },
@@ -396,7 +515,8 @@ const LyricsParser = {
         });
       }
     });
-    return { ...info, lines, wordLevel: lines.some((line) => line.words) };
+    const duet = this.assignSides(lines);
+    return { ...info, lines, duet, wordLevel: lines.some((line) => line.words) };
   },
 
   // Decodifica el archivo de letras: UTF-8, UTF-16 o Windows-1252 (archivos antiguos).
@@ -532,15 +652,208 @@ const AppIcon = {
    según el modo. Si no hay puente nativo (navegador), no hace nada.
    ========================================================= */
 const NativeBars = {
+  timer: 0,
+
   sync(mode) {
     try {
-      if (!window.PulsarNative || typeof window.PulsarNative.setBars !== "function") return;
       const css = getComputedStyle(document.documentElement);
-      const status = css.getPropertyValue("--bg").trim();
-      const nav = css.getPropertyValue("--nav-bg").trim() || status;
-      if (!/^#[0-9a-fA-F]{6}$/.test(status) || !/^#[0-9a-fA-F]{6}$/.test(nav)) return;
+      // Los colores animados (@property) se devuelven como rgb(): se pasan a #RRGGBB
+      const status = cssToHex(css.getPropertyValue("--bg"));
+      const nav = cssToHex(css.getPropertyValue("--nav-bg")) || status;
+      if (!status) return;
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", status);
+      if (!window.PulsarNative || typeof window.PulsarNative.setBars !== "function") return;
       window.PulsarNative.setBars(status, nav, mode.id === "light"); // true = iconos oscuros (fondo claro)
     } catch (error) { console.warn("No se pudieron ajustar las barras del sistema", error); }
+  },
+
+  // Con el desvanecido de colores (0.7 s) hay que esperar a que termine para leer el color final.
+  syncSoon() {
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => {
+      this.sync(MODES.find((item) => item.id === Settings.values.mode) || MODES[1]);
+    }, 780);
+  }
+};
+
+/* Convierte cualquier color CSS (rgb(), color(srgb …), oklab(…), #abc…) a #RRGGBB. Vacío si no puede.
+   Los colores animados (@property) llegan en formatos como color(srgb …) u oklab(…): se leen pintando un píxel. */
+function cssToHex(value) {
+  const text = String(value || "").trim();
+  if (/^#[0-9a-f]{6}$/i.test(text)) return text.toUpperCase();
+  if (!text) return "";
+  try {
+    const canvas = cssToHex.canvas || (cssToHex.canvas = document.createElement("canvas"));
+    canvas.width = canvas.height = 1;
+    const ctx = cssToHex.ctx || (cssToHex.ctx = canvas.getContext("2d", { willReadFrequently: true }));
+    ctx.clearRect(0, 0, 1, 1);
+    ctx.fillStyle = "#010203";   // si el color no se entiende, queda este
+    ctx.fillStyle = text;
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+    if (a === 255 && !(r === 1 && g === 2 && b === 3)) {
+      return "#" + [r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("").toUpperCase();
+    }
+  } catch (error) { /* se prueba el formato rgb() */ }
+  const m = text.match(/rgba?\(\s*([\d.]+)[ ,]+([\d.]+)[ ,]+([\d.]+)/);
+  return m ? "#" + [m[1], m[2], m[3]].map((x) => Math.round(Number(x)).toString(16).padStart(2, "0")).join("").toUpperCase() : "";
+}
+
+/* =========================================================
+   BARRA DE ESTADO (v1.03) — ocultarla en Ajustes
+   En el APK lo hace Android (PulsarNative.setStatusBarHidden); la barra vuelve a verse
+   un momento al deslizar desde arriba. En el navegador se usa la pantalla completa.
+   ========================================================= */
+const StatusBar = {
+  native() {
+    return Boolean(window.PulsarNative && typeof window.PulsarNative.setStatusBarHidden === "function");
+  },
+
+  // fromUser = la persona acaba de tocar el interruptor (el navegador solo permite pantalla completa con un toque)
+  apply(fromUser) {
+    const hide = Boolean(Settings.values.hideStatusBar);
+    try {
+      if (this.native()) {
+        window.PulsarNative.setStatusBarHidden(hide);
+      } else if (fromUser) {
+        const root = document.documentElement;
+        if (hide && !document.fullscreenElement && root.requestFullscreen) {
+          root.requestFullscreen({ navigationUI: "hide" }).catch(() => UI.toast("Este navegador no permite la pantalla completa."));
+        } else if (!hide && document.fullscreenElement && document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+    } catch (error) { console.warn("No se pudo cambiar la barra de estado", error); }
+  }
+};
+
+/* =========================================================
+   COLOR DE PORTADA (v1.03)
+   Saca el color principal de la portada de la canción que suena y la app se tiñe de él en
+   tiempo real. La mezcla la hace style.css (variables --cv y --t-…); aquí solo se calcula el
+   color y cuánto se mezcla según la intensidad: Bajo, Medio o Fuerte.
+   Los cambios se desvanecen solos (colores registrados con @property).
+   ========================================================= */
+const CoverColor = {
+  song: null,
+  cache: new Map(), // url de portada → { h, s, l } (o null si no hay color)
+  token: 0,
+  current: null,
+
+  // [fondo, superficies/tarjetas, líneas] que se mezclan con el color de la portada, por modo.
+  // Amoled nunca tiñe el fondo: el negro puro se conserva.
+  TINTS: {
+    dark:   { low: [0.04, 0.05, 0.04], medium: [0.12, 0.14, 0.10], high: [0.24, 0.26, 0.18] },
+    amoled: { low: [0, 0.02, 0.02],    medium: [0, 0.07, 0.06],    high: [0, 0.16, 0.12] },
+    light:  { low: [0, 0.02, 0.03],    medium: [0, 0.05, 0.06],    high: [0.06, 0.11, 0.12] }
+  },
+  ACCENT: { low: 0.6, medium: 0.9, high: 1 }, // cuánto del acento del tema se cambia por el color de la portada
+
+  async update(song) {
+    this.song = song || null;
+    const token = ++this.token;
+    const url = song && Settings.values.coverColor ? Covers.get(song) : null;
+    if (!url) {
+      this.current = null;
+      this.sync();
+      return;
+    }
+    let color = this.cache.get(url);
+    if (color === undefined) {
+      color = await this.extract(url);
+      this.cache.set(url, color);
+      if (this.cache.size > 60) this.cache.delete(this.cache.keys().next().value);
+    }
+    if (token !== this.token) return; // ya cambió la canción mientras se leía la imagen
+    this.current = color;
+    this.sync();
+  },
+
+  extract(url) {
+    return new Promise((resolve) => {
+      const image = new Image();
+      image.onload = () => {
+        try {
+          const size = 40;
+          const canvas = document.createElement("canvas");
+          canvas.width = canvas.height = size;
+          const ctx = canvas.getContext("2d", { willReadFrequently: true });
+          ctx.drawImage(image, 0, 0, size, size);
+          resolve(this.pick(ctx.getImageData(0, 0, size, size).data));
+        } catch (error) { resolve(null); }
+      };
+      image.onerror = () => resolve(null);
+      image.src = url;
+    });
+  },
+
+  // Elige el color "protagonista": el tono más presente, dando más peso a lo colorido y de brillo medio.
+  pick(data) {
+    const bins = Array.from({ length: 24 }, () => ({ w: 0, n: 0, r: 0, g: 0, b: 0 }));
+    let total = 0, nr = 0, ng = 0, nb = 0, nn = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 128) continue;
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      const [h, s, l] = CoverColor.rgbToHsl(r, g, b);
+      total++;
+      if (l < 0.1 || l > 0.93) continue; // casi negro o casi blanco
+      if (s < 0.14) { nr += r; ng += g; nb += b; nn++; continue; }
+      const w = (0.05 + s * s) * (1 - Math.abs(l - 0.5) * 0.9);
+      const bin = bins[Math.min(23, Math.floor(h * 24))];
+      bin.w += w; bin.n++; bin.r += r * w; bin.g += g * w; bin.b += b * w;
+    }
+    let best = bins[0];
+    bins.forEach((bin) => { if (bin.w > best.w) best = bin; });
+    if (best.n && best.n >= total * 0.04) {
+      const [h, s, l] = this.rgbToHsl(best.r / best.w, best.g / best.w, best.b / best.w);
+      return { h, s: Math.min(0.9, Math.max(0.5, s)), l };
+    }
+    if (nn) { // portada en grises o blanco y negro
+      const [h, , l] = this.rgbToHsl(nr / nn, ng / nn, nb / nn);
+      return { h, s: 0.06, l };
+    }
+    return null;
+  },
+
+  rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    const l = (max + min) / 2;
+    if (!d) return [0, 0, l];
+    const s = d / (1 - Math.abs(2 * l - 1));
+    let h;
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    return [((h / 6) + 1) % 1, s, l];
+  },
+
+  hslToHex(h, s, l) {
+    const k = (n) => (n + h * 12) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return "#" + [f(0), f(8), f(4)].map((x) => Math.round(x * 255).toString(16).padStart(2, "0")).join("").toUpperCase();
+  },
+
+  sync() {
+    const root = document.documentElement;
+    const values = Settings.values;
+    const color = values.coverColor ? this.current : null;
+    if (color) {
+      // Dos versiones del color: clara (para Dark y Amoled) y oscura (para Light)
+      const grey = color.s < 0.15;
+      root.style.setProperty("--cv", this.hslToHex(color.h, color.s, grey ? 0.78 : 0.68));
+      root.style.setProperty("--cv-d", this.hslToHex(color.h, color.s, grey ? 0.34 : 0.4));
+    }
+    const mode = root.getAttribute("data-mode") || "dark";
+    const level = this.ACCENT[values.coverIntensity] !== undefined ? values.coverIntensity : "medium";
+    const [bg, surface, line] = color ? this.TINTS[mode][level] : [0, 0, 0];
+    root.style.setProperty("--t-acc", color ? this.ACCENT[level] : 0);
+    root.style.setProperty("--t-bg", bg);
+    root.style.setProperty("--t-s", surface);
+    root.style.setProperty("--t-l", line);
+    NativeBars.syncSoon();
   }
 };
 
@@ -554,7 +867,8 @@ const Lyrics = {
   delay: 0,
   active: -1,
   lineEls: [],
-  wordEls: [],
+  unitEls: [],
+  units: [],
   raf: 0,
   userScrollUntil: 0,
   needsCenter: false,
@@ -642,7 +956,8 @@ const Lyrics = {
     if (!this.el) return;
     const data = this.data;
     this.lineEls = [];
-    this.wordEls = [];
+    this.unitEls = [];
+    this.units = [];
 
     this.el.classList.toggle("is-empty", !data);
     this.bar.classList.toggle("no-data", !data);
@@ -665,18 +980,67 @@ const Lyrics = {
 
     this.el.innerHTML = data.lines.map((line, i) => {
       const seek = data.synced ? ` data-i="${i}"` : "";
+      const side = ` s${line.side || "l"}${line.bg ? " bg" : ""}${line.words ? "" : " nw"}`;
       if (!line.text && !line.words) {
         return data.synced
-          ? `<p class="lyric-line gap"${seek}>${Icons.note}</p>`
+          ? `<p class="lyric-line gap${side}"${seek}>${Icons.note}</p>`
           : `<p class="lyric-line plain gap">&nbsp;</p>`;
       }
-      const inner = line.words
-        ? line.words.map((word) => `<span class="lw">${UI.escapeHTML(word.text)}</span>`).join("")
-        : UI.escapeHTML(line.text);
-      return `<p class="lyric-line${data.synced ? "" : " plain"}"${seek}>${inner}</p>`;
+      const inner = line.words ? this.wordsHTML(line) : UI.escapeHTML(line.text);
+      return `<p class="lyric-line${data.synced ? "" : " plain"}${side}"${seek}>${inner}</p>`;
     }).join("");
     this.lineEls = Array.from(this.el.querySelectorAll(".lyric-line"));
+    this.unitEls = [];
+    this.units = [];
     this.el.scrollTop = 0;
+  },
+
+  /* Palabra por palabra: cada palabra es un bloque que no se parte al cambiar de renglón;
+     dentro van sus sílabas (.lw). En la animación "Letra por letra" cada sílaba se reparte en letras (.lc).
+     El color y el brillo se dibujan en una capa encima (::before / ::after) que se revela con --n (0 a 1). */
+  wordsHTML(line) {
+    const letters = LyricsStyle.anim() === "letters";
+    const esc = (text) => UI.escapeHTML(text);
+    let html = "", open = false, prev = null;
+    LyricsParser.units(line).forEach((unit) => {
+      const joined = prev && !prev.sa && !unit.sb;
+      if (!joined) {
+        if (open) html += "</span>";
+        if (prev) html += " ";
+        html += '<span class="wd">';
+        open = true;
+      }
+      html += letters
+        ? `<span class="lw">${Array.from(unit.text).map((c) => `<span class="lc" data-t="${esc(c)}">${esc(c)}</span>`).join("")}</span>`
+        : `<span class="lw" data-t="${esc(unit.text)}">${esc(unit.text)}</span>`;
+      prev = unit;
+    });
+    if (open) html += "</span>";
+    return html;
+  },
+
+  // Dibuja el avance de las palabras (o letras) de la línea activa. Lo usa también la vista previa de Ajustes.
+  paint(unitEls, units, time, letters) {
+    const clamp = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+    const set = (el, value) => {
+      const text = value.toFixed(3);
+      if (el._n !== text) { el._n = text; el.style.setProperty("--n", text); }
+    };
+    units.forEach((unit, j) => {
+      const el = unitEls[j];
+      if (!el) return;
+      const span = Math.max(0.05, unit.end - unit.t);
+      const p = clamp((time - unit.t) / span);
+      const current = p > 0 && p < 1;
+      if (el._cur !== current) { el._cur = current; el.classList.toggle("cur", current); }
+      if (!letters) { set(el, p); return; }
+      const chars = el.children, count = chars.length || 1;
+      for (let k = 0; k < chars.length; k++) {
+        const start = unit.t + (span * k) / count;
+        const length = Math.max(0.12, span / count);
+        set(chars[k], clamp((time - start) / length));
+      }
+    });
   },
 
   updateBar() {
@@ -712,28 +1076,18 @@ const Lyrics = {
       this.lineEls.forEach((el, i) => {
         el.classList.toggle("active", i === index);
         el.classList.toggle("past", i < index);
+        el.style.setProperty("--d", Math.min(5, Math.abs(i - index))); // distancia a la línea activa (desenfoque)
       });
-      this.wordEls = index >= 0 && this.lineEls[index]
+      this.unitEls = index >= 0 && this.lineEls[index]
         ? Array.from(this.lineEls[index].querySelectorAll(".lw"))
         : [];
+      this.units = index >= 0 && data.lines[index].words ? LyricsParser.units(data.lines[index]) : [];
       this.center(index, force);
     }
 
     if (this.needsCenter && Date.now() >= this.userScrollUntil) this.center(this.active, false);
 
-    if (index >= 0 && data.lines[index].words && this.wordEls.length) {
-      const words = data.lines[index].words;
-      this.wordEls.forEach((el, j) => {
-        const w = words[j];
-        if (!w) return;
-        const p = Math.min(1, Math.max(0, (time - w.t) / (w.end - w.t)));
-        const value = (p * 100).toFixed(1) + "%";
-        if (el.dataset.p !== value) {
-          el.dataset.p = value;
-          el.style.setProperty("--p", value);
-        }
-      });
-    }
+    if (index >= 0 && this.units.length) this.paint(this.unitEls, this.units, time, LyricsStyle.anim() === "letters");
   },
 
   center(index, instant) {
@@ -812,6 +1166,184 @@ const Lyrics = {
       console.error(error);
       UI.toast(error.message || "No se pudo leer el archivo de letras.");
     }
+  }
+};
+
+/* =========================================================
+   ESTILO DE LAS LETRAS (v1.03) — animación, fuente, tamaño, duetos y desenfoque (Ajustes → Letras)
+   Los valores van en atributos de <html> (data-lanim…) y variables CSS; style.css hace el resto.
+   ========================================================= */
+const LYRIC_ANIMS = [
+  { id: "flow", name: "Fluida", hint: "La letra se llena de color con un degradado suave." },
+  { id: "glow", name: "Fluida con glow", hint: "Igual de fluida, con un brillo que acompaña a cada palabra." },
+  { id: "letters", name: "Letra por letra", hint: "Cada letra se enciende y sube un poquito al cantarse." }
+];
+const LYRIC_FONTS = [
+  { id: "default", name: "Predeterminada", stack: "inherit", weight: 700 },
+  { id: "condensed", name: "Condensada", stack: '"sans-serif-condensed", "Roboto Condensed", "Arial Narrow", sans-serif', weight: 700 },
+  { id: "black", name: "Gruesa", stack: '"sans-serif-black", "Roboto Black", "Arial Black", sans-serif', weight: 900 },
+  { id: "serif", name: "Elegante", stack: 'Georgia, "Noto Serif", "Times New Roman", serif', weight: 700 },
+  { id: "script", name: "Manuscrita", stack: '"Dancing Script", "Segoe Script", cursive', weight: 700 },
+  { id: "mono", name: "Máquina", stack: '"Courier New", "Droid Sans Mono", monospace', weight: 700 }
+];
+const LYRIC_SIZES = { small: 20, medium: 24, large: 29 };
+
+const LyricsStyle = {
+  last: "",
+  face: null,
+
+  anim() {
+    const id = Settings.values.lyricsAnim;
+    return LYRIC_ANIMS.some((item) => item.id === id) ? id : "flow";
+  },
+
+  fontStack() {
+    const id = Settings.values.lyricsFont;
+    if (id === "custom" && this.face) return { stack: '"PulsarLyrics", sans-serif', weight: 700 };
+    return LYRIC_FONTS.find((item) => item.id === id) || LYRIC_FONTS[0];
+  },
+
+  apply() {
+    const values = Settings.values;
+    const root = document.documentElement;
+    const anim = this.anim();
+    root.setAttribute("data-lanim", anim);
+    root.setAttribute("data-lblur", values.lyricsBlur === false ? "off" : "on");
+    root.setAttribute("data-lduet", values.lyricsDuet === false ? "off" : "on");
+    root.style.setProperty("--lyric-size", (LYRIC_SIZES[values.lyricsSize] || LYRIC_SIZES.medium) + "px");
+    const font = this.fontStack();
+    root.style.setProperty("--lyric-font", font.stack);
+    root.style.setProperty("--lyric-weight", font.weight);
+    // Con "Letra por letra" el texto se dibuja distinto: hay que volver a armar las líneas
+    if (anim !== this.last) {
+      this.last = anim;
+      Lyrics.render();
+      Lyrics.update(true);
+      LyricsPreview.build();
+    }
+  },
+
+  /* ---------- Fuente propia (.ttf / .otf / .woff / .woff2) ---------- */
+
+  async load(buffer) {
+    const face = new FontFace("PulsarLyrics", buffer);
+    await face.load();
+    if (this.face) document.fonts.delete(this.face);
+    document.fonts.add(face);
+    this.face = face;
+  },
+
+  async restoreFont() {
+    const file = Settings.values.lyricsFontFile;
+    if (!file || !file.data) return;
+    try {
+      await this.load(file.data);
+      this.apply();
+      UI.refreshSettingsControls();
+    } catch (error) {
+      console.warn("No se pudo cargar la fuente guardada", error);
+    }
+  },
+
+  async importFont(file) {
+    try {
+      if (file.size > 10 * 1024 * 1024) throw new Error("La fuente pesa demasiado (máximo 10 MB).");
+      const data = await file.arrayBuffer();
+      await this.load(data);
+      await Settings.set("lyricsFontFile", { name: file.name.replace(/\.[^.]+$/, ""), data });
+      await Settings.set("lyricsFont", "custom");
+      UI.toast("Fuente aplicada a las letras.");
+    } catch (error) {
+      console.warn(error);
+      UI.toast(error && error.message && /pesa/.test(error.message) ? error.message : "No se pudo leer esa fuente.");
+    }
+  },
+
+  async removeFont() {
+    if (this.face) { document.fonts.delete(this.face); this.face = null; }
+    if (Settings.values.lyricsFont === "custom") await Settings.set("lyricsFont", "default");
+    await Settings.set("lyricsFontFile", null);
+  },
+
+  // Botones de fuente en Ajustes (cada uno se ve con su propia fuente)
+  renderFonts() {
+    const box = $("lyric-fonts");
+    if (!box) return;
+    const file = Settings.values.lyricsFontFile;
+    const items = LYRIC_FONTS.map((font) => ({ id: font.id, name: font.name, stack: font.stack, weight: font.weight }));
+    if (file && this.face) items.push({ id: "custom", name: file.name, stack: '"PulsarLyrics", sans-serif', weight: 700 });
+    const key = items.map((item) => item.id + item.name).join("|");
+    if (box.dataset.key !== key) {
+      box.dataset.key = key;
+      box.innerHTML = items.map((item) =>
+        `<button type="button" role="radio" aria-checked="false" data-val="${item.id}" style="font-family:${UI.escapeHTML(item.stack)};font-weight:${item.weight}">${UI.escapeHTML(item.name)}</button>`
+      ).join("");
+    }
+    const removeButton = $("lyric-font-remove");
+    if (removeButton) removeButton.classList.toggle("hidden", !(file && this.face));
+  }
+};
+
+/* Vista previa de las animaciones en Ajustes: dos cantantes y tres palabras que se van cantando. */
+const LyricsPreview = {
+  CYCLE: 7.4,
+  raf: 0,
+  t0: 0,
+  lines: null,
+  els: [],
+  active: -1,
+
+  data() {
+    if (this.lines) return this.lines;
+    const make = (side, words) => ({
+      side, t: words[0][1], end: words[words.length - 1][2],
+      words: words.map(([text, t, end]) => ({ text, t, end }))
+    });
+    this.lines = [
+      make("l", [["Tu ", 0, 0.5], ["música, ", 0.5, 1.7], ["tu ", 1.7, 2.1], ["universo", 2.1, 3.5]]),
+      make("r", [["Brilla ", 3.9, 4.7], ["conmigo", 4.7, 6.3]])
+    ];
+    return this.lines;
+  },
+
+  build() {
+    const box = $("lyric-preview");
+    if (!box) return;
+    box.innerHTML = this.data().map((line, i) =>
+      `<p class="lyric-line s${line.side}" data-pv="${i}">${Lyrics.wordsHTML(line)}</p>`
+    ).join("");
+    this.els = Array.from(box.querySelectorAll(".lyric-line"));
+    this.active = -1;
+    this.t0 = performance.now();
+    this.frame(this.t0);
+  },
+
+  frame(now) {
+    const lines = this.data();
+    const time = (((now - this.t0) / 1000) % this.CYCLE);
+    let index = -1;
+    lines.forEach((line, i) => { if (line.t <= time) index = i; });
+    if (index !== this.active) {
+      this.active = index;
+      this.els.forEach((el, i) => {
+        el.classList.toggle("active", i === index);
+        el.classList.toggle("past", i < index);
+      });
+    }
+    if (index < 0 || !this.els[index]) return;
+    Lyrics.paint(Array.from(this.els[index].querySelectorAll(".lw")), LyricsParser.units(lines[index]), time, LyricsStyle.anim() === "letters");
+  },
+
+  start() {
+    if (this.raf || !$("lyric-preview")) return;
+    if (!this.els.length) this.build();
+    const tick = (now) => {
+      this.raf = 0;
+      if (Router.current !== "settings" || document.hidden) return;
+      this.frame(now);
+      this.raf = requestAnimationFrame(tick);
+    };
+    this.raf = requestAnimationFrame(tick);
   }
 };
 
@@ -1826,7 +2358,7 @@ const Router = {
     if (root.classList.contains("immersive") !== immersive) {
       root.classList.toggle("immersive", immersive);
       // la barra de navegación de Android toma el color del fondo mientras no hay barra inferior
-      NativeBars.sync(MODES.find((item) => item.id === root.getAttribute("data-mode")) || MODES[1]);
+      NativeBars.syncSoon();
     }
     document.querySelectorAll(".settings").forEach((button) => {
       button.classList.toggle("selected", name === "settings");
@@ -1845,7 +2377,7 @@ const Router = {
     UI.updateMiniPlayer();
     if (name === "eq") Equalizer.refreshUI();
     Lyrics.refresh(true);
-    if (name === "settings") UI.renderSettings();
+    if (name === "settings") { UI.renderSettings(); LyricsPreview.start(); }
   }
 };
 
@@ -1909,6 +2441,16 @@ const UI = {
         return;
       }
 
+      const segButton = target.closest("[data-seg] [data-val]");
+      if (segButton) {
+        event.preventDefault();
+        const key = segButton.closest("[data-seg]").dataset.seg;
+        let value = segButton.dataset.val;
+        if (key === "lyricsFont" && value === "custom" && !LyricsStyle.face) return;
+        Settings.set(key, value);
+        return;
+      }
+
       const themeButton = target.closest("[data-theme-id]");
       if (themeButton) {
         event.preventDefault();
@@ -1957,6 +2499,21 @@ const UI = {
         else Player.play(id);
       }
     });
+
+    // Interruptores de Ajustes (color de portada, barra de estado, duetos, desenfoque)
+    document.addEventListener("change", (event) => {
+      const input = event.target.closest && event.target.closest("[data-toggle]");
+      if (input) Settings.set(input.dataset.toggle, input.checked);
+    });
+
+    const fontFile = $("lyric-font-file");
+    if (fontFile) {
+      fontFile.addEventListener("change", (event) => {
+        const file = event.target.files && event.target.files[0];
+        event.target.value = "";
+        if (file) LyricsStyle.importFont(file);
+      });
+    }
 
     this.el.fileInput.addEventListener("change", (event) => {
       const files = Array.from(event.target.files || []);
@@ -2018,6 +2575,8 @@ const UI = {
       case "eq-open": Router.go("eq"); break;
       case "eq-back": Router.go("player"); break;
       case "eq-reset": Equalizer.reset(); break;
+      case "lyric-font-import": $("lyric-font-file").click(); break;
+      case "lyric-font-remove": LyricsStyle.removeFont(); break;
       case "lyrics-edit": LyricsEditor.open(); break;
       case "lyrics-import": this.el.lyricsFile ? this.el.lyricsFile.click() : $("lyrics-file").click(); break;
       case "lyrics-save": LyricsEditor.save(); break;
@@ -2108,7 +2667,34 @@ const UI = {
     });
   },
 
+  // Pone al día los botones e interruptores de Ajustes con los valores guardados
+  refreshSettingsControls() {
+    const values = Settings.values;
+    document.querySelectorAll("[data-seg]").forEach((group) => {
+      const current = String(values[group.dataset.seg]);
+      group.querySelectorAll("[data-val]").forEach((button) => {
+        button.setAttribute("aria-checked", String(button.dataset.val === current));
+      });
+    });
+    document.querySelectorAll("[data-toggle]").forEach((input) => {
+      input.checked = Boolean(values[input.dataset.toggle]);
+    });
+    const intensity = $("cover-intensity");
+    if (intensity) intensity.classList.toggle("disabled", !values.coverColor);
+    const hint = $("status-hint");
+    if (hint) {
+      hint.textContent = StatusBar.native()
+        ? "Para verla un momento, desliza desde el borde de arriba."
+        : "En el navegador usa la pantalla completa. En la app Android oculta la barra de estado.";
+    }
+    LyricsStyle.renderFonts();
+    const anim = LYRIC_ANIMS.find((item) => item.id === LyricsStyle.anim());
+    const animHint = $("lyric-anim-hint");
+    if (animHint && anim) animHint.textContent = anim.hint;
+  },
+
   async renderSettings() {
+    this.refreshSettingsControls();
     let text = Store.available
       ? "Tus canciones se guardan en este dispositivo."
       : "Aviso: este navegador no permite guardar la biblioteca; se perderá al cerrar.";
@@ -2137,10 +2723,11 @@ const UI = {
   resetNowPlaying() {
     this.setCover(this.el.bigCover, null);
     this.setCover(this.el.miniCover, null);
-    this.el.playerTitle.textContent = "Sin reproducción";
-    this.el.playerArtist.textContent = "Pulsar RM";
-    this.el.miniTitle.textContent = "Sin reproducción";
-    this.el.miniArtist.textContent = "Pulsar RM";
+    this.swapText(this.el.playerTitle, "Sin reproducción");
+    this.swapText(this.el.playerArtist, "Pulsar RM");
+    this.swapText(this.el.miniTitle, "Sin reproducción");
+    this.swapText(this.el.miniArtist, "Pulsar RM");
+    CoverColor.update(null);
     this.el.progress.value = 0;
     this.el.currentTime.textContent = "0:00";
     this.el.duration.textContent = "0:00";
@@ -2153,7 +2740,11 @@ const UI = {
     const playing = Player.currentId !== null && !Player.audio.paused;
     const symbol = playing ? Icons.pause : Icons.play;
     document.querySelectorAll('[data-action="toggle"]').forEach((button) => {
-      button.innerHTML = symbol;
+      const state = playing ? "pause" : "play";
+      if (button.dataset.state !== state) { // solo si cambió: así el icono puede animarse
+        button.dataset.state = state;
+        button.innerHTML = symbol;
+      }
       button.setAttribute("aria-label", playing ? "Pausar" : "Reproducir");
     });
     document.querySelectorAll("[data-song-play]").forEach((button) => {
@@ -2194,6 +2785,8 @@ const UI = {
   setCover(element, url) {
     if (!element) return;
     if (url) {
+      const current = element.querySelector("img");
+      if (current && current.getAttribute("src") === url) return; // misma portada: sin parpadeo
       element.textContent = "";
       const image = document.createElement("img");
       image.alt = "";
@@ -2207,13 +2800,23 @@ const UI = {
   // Actualiza título, artista y carátula del reproductor SIN reiniciar la barra de progreso.
   refreshNowPlayingInfo(song) {
     const title = song.name || "Sin título";
-    this.el.playerTitle.textContent = title;
-    this.el.playerArtist.textContent = song.artist;
-    this.el.miniTitle.textContent = title;
-    this.el.miniArtist.textContent = song.artist;
+    this.swapText(this.el.playerTitle, title);
+    this.swapText(this.el.playerArtist, song.artist);
+    this.swapText(this.el.miniTitle, title);
+    this.swapText(this.el.miniArtist, song.artist);
     const url = Covers.get(song);
     this.setCover(this.el.bigCover, url);
     this.setCover(this.el.miniCover, url);
+    CoverColor.update(song);
+  },
+
+  // Cambia un texto con un pequeño desvanecido (solo si de verdad cambió)
+  swapText(element, text) {
+    if (!element || element.textContent === text) return;
+    element.textContent = text;
+    element.classList.remove("swap");
+    void element.offsetWidth; // reinicia la animación
+    element.classList.add("swap");
   },
 
   toggleMenu() {
@@ -2285,10 +2888,14 @@ const UI = {
   toast(message, sticky = false) {
     const box = this.el.toast;
     box.textContent = message;
-    box.classList.remove("hidden");
+    box.classList.remove("hidden", "out");
     clearTimeout(this.toastTimer);
+    clearTimeout(this.toastHide);
     if (!sticky) {
-      this.toastTimer = setTimeout(() => box.classList.add("hidden"), 3500);
+      this.toastTimer = setTimeout(() => {
+        box.classList.add("out"); // se desvanece en vez de desaparecer de golpe
+        this.toastHide = setTimeout(() => box.classList.add("hidden"), 220);
+      }, 3500);
     }
   },
 

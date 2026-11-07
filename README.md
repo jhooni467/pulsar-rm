@@ -1,7 +1,7 @@
 <!-- ================================= --><!--          PULSAR RM               --><!--         README.md                --><!-- ================================= --><div align="center"><h1>🪐 PULSAR RM</h1><p><strong>Your music. Your universe.</strong></p><p>
   Local Music Player for Android
 </p><p>
-  <img src="https://img.shields.io/badge/VERSION-v1.02-8275E8?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/VERSION-v1.03-8275E8?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/PLATFORM-ANDROID-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android">
   <img src="https://img.shields.io/badge/STATUS-IN_DEVELOPMENT-4788C7?style=for-the-badge" alt="Development">
 </p><p>
@@ -51,7 +51,7 @@ Repository| GitHub
 
 📦 Download
 
-<div align="center">Pulsar RM v1.02
+<div align="center">Pulsar RM v1.03
 
 Latest published version
 
@@ -70,9 +70,9 @@ Development focuses on improving stability, refining the interface and expanding
 
 Current version
 
-v1.02 — App feel update
+v1.03 — Cover color & lyrics update
 
-This version makes the app feel more native on Android: system bars that follow the app colors, in-app dialogs and an adaptive layout.
+This version adds cover-based colors, a hideable status bar, smoother animations and a much richer lyrics experience inspired by Apple Music.
 
 Upcoming — v2.00
 
@@ -89,6 +89,18 @@ The next major update is planned to include:
 📚 Version History
 
 <details>
+<summary><strong>v1.03 — Cover color & lyrics update</strong></summary>Improvements and corrections
+
+- Cover color: the whole app can take its colors from the album cover of the song that is playing, in real time, with Low, Medium and Strong intensity (Settings).
+- Status bar: it can be hidden from Settings (swipe down from the top edge to see it for a moment).
+- Smooth color changes: themes, modes and cover colors now fade instead of jumping.
+- Softer animations: cover and title changes, play/pause icon, tab panels, notifications and selectors.
+- Lyrics support: Apple Music style duets (V1:, V2:, V1000:, M:, F:, D:, <v Name>), background vocals in parentheses and speaker-only lines.
+- Duet layout: main singer on the left, secondary singer on the right, both together in the center.
+- Lyrics settings: three animations (Fluid, Fluid with glow, Letter by letter) with live preview, font (including importing your own .ttf/.otf/.woff/.woff2), size, duet layout and blur of distant lines.
+- Fixes: removed the duplicated root workflow and the unused equalizer.js.
+
+</details><details>
 <summary><strong>v1.02 — App feel update</strong></summary>Improvements and corrections
 
 - System bars: the status and navigation bars take the color of the app and adapt to Light, Dark and Amoled modes.
@@ -114,7 +126,7 @@ This release marked the beginning of the project and its development as an Andro
 Detail| Information
 Project| Pulsar RM
 Full name| Pulsar Reproductor de Música
-Current version| v1.02
+Current version| v1.03
 Project type| Independent
 Main platform| Android
 Development| Active
