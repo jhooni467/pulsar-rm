@@ -1,12 +1,12 @@
-/* PULSAR RM 1.03 — Color de portada, barra de estado oculta, letras estilo Apple Music (duetos, animaciones, fuentes)
-   Módulos: Store (IndexedDB) · Settings · CoverColor · Library · Player · Router · UI · Lyrics
+/* PULSAR RM 1.04 — Pantallas independientes de Letras y de Cola de reproducción (sobre la 1.03)
+   Módulos: Store (IndexedDB) · Settings · CoverColor · Library · Player · Queue · Router · UI · Lyrics · LyricsScreen · QueueScreen
    Todos los botones usan delegación de eventos: siguen funcionando aunque el HTML se vuelva a dibujar. */
 
 "use strict";
 
 // ÚNICO lugar donde se escribe la versión. El workflow de GitHub la lee de aquí para
 // el versionName y el versionCode del APK. Formato: "X.YY" (ej. 1.03 → versionCode 103).
-const APP_VERSION = "1.03";
+const APP_VERSION = "1.04";
 
 // Si el APK expone PulsarNative.getVersion(), se muestra la versión REAL instalada;
 // si no, se usa la constante de arriba.
@@ -33,6 +33,13 @@ const Icons = {
   check: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 12.5l3.8 3.8 7.2-8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   note: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></g></svg>',
   x: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  // v1.04 — pantallas de Letras y de Cola
+  grip: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="currentColor"><circle cx="9" cy="6.5" r="1.45"/><circle cx="15" cy="6.5" r="1.45"/><circle cx="9" cy="12" r="1.45"/><circle cx="15" cy="12" r="1.45"/><circle cx="9" cy="17.5" r="1.45"/><circle cx="15" cy="17.5" r="1.45"/></g></svg>',
+  more: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="5.5" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="18.5" r="1.7" fill="currentColor"/></svg>',
+  info: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.4M12 7.8v.01"/></g></svg>',
+  top: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 4.5h12M12 20V9.5M6.5 14L12 8.5l5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  bottom: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 19.5h12M12 4v10.5M6.5 10L12 15.5l5.5-5.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  pencil: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l.9-4L16 4.9a2 2 0 0 1 2.8 0l.3.3a2 2 0 0 1 0 2.8L8.5 18.6z"/><path d="M14.3 6.6l3.1 3.1"/></g></svg>',
   // Portada predeterminada (canciones sin portada): usa los colores del tema y modo activos
   art: '<svg class="art-default" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false"><circle class="art-glow" cx="80" cy="20" r="48"/><circle class="art-ring" cx="50" cy="50" r="42"/><circle class="art-ring art-ring-2" cx="50" cy="50" r="29"/><g transform="translate(34 34) scale(1.36)" fill="none" stroke-linecap="round" stroke-linejoin="round"><path class="art-note" d="M9 18V6l10-2v12"/><circle class="art-note" cx="6.5" cy="18" r="2.5"/><circle class="art-note" cx="16.5" cy="16" r="2.5"/></g></svg>'
 };
@@ -204,7 +211,13 @@ const Settings = {
     lyricsFontFile: null,     // { name, data } de la fuente importada
     lyricsSize: "medium",     // small | medium | large
     lyricsDuet: true,         // cantante principal a la izquierda, secundario a la derecha
-    lyricsBlur: true          // desenfoca suavemente las líneas lejanas
+    lyricsBlur: true,         // desenfoca suavemente las líneas lejanas
+    // v1.04
+    lyricsAlign: "left",      // left | center
+    lyricsBg: "theme",        // theme | cover | glow (fondo de la pantalla de letras)
+    lyricsMode: "sync",       // sync | text (ver la letra sincronizada o solo como texto)
+    lyricsAutoScroll: true,   // la letra se desplaza sola siguiendo la canción
+    shuffle: false            // reproducción aleatoria de la cola
   },
   values: {},
 
@@ -237,6 +250,7 @@ const Settings = {
     LyricsStyle.restoreFont();
     LyricsStyle.apply();
     UI.refreshSettingsControls();
+    QueueScreen.syncControls();
   },
 
   async set(key, value) {
@@ -254,6 +268,7 @@ const Settings = {
     else if (key === "coverIntensity") CoverColor.sync();
     else if (key === "hideStatusBar") StatusBar.apply(true);
     else if (key.startsWith("lyrics")) LyricsStyle.apply();
+    else if (key === "shuffle") QueueScreen.syncControls();
     UI.refreshSettingsControls();
   },
 
@@ -884,6 +899,7 @@ const Lyrics = {
     const pause = (event) => {
       if (event.target.closest && event.target.closest("button")) return; // tocar un botón no es desplazar
       this.userScrollUntil = Date.now() + 3500;
+      LyricsScreen.updateFollow(true); // aparece "Seguir la letra" mientras la persona la mueve a mano
     };
     ["touchstart", "wheel", "pointerdown"].forEach((name) => this.el.addEventListener(name, pause, { passive: true }));
 
@@ -920,11 +936,16 @@ const Lyrics = {
   },
 
   visible() {
-    return Boolean(this.el) && Router.current === "player" && Stage.mode === "lyrics";
+    return Boolean(this.el) && Router.current === "lyrics";
+  },
+
+  // v1.04: "Solo texto" muestra una letra sincronizada como texto normal (sin resaltado ni desplazamiento)
+  textOnly() {
+    return Boolean(this.data) && (!this.data.synced || Settings.values.lyricsMode === "text");
   },
 
   shouldRun() {
-    return this.visible() && this.data && this.data.synced && Player.currentId !== null &&
+    return this.visible() && this.data && this.data.synced && !this.textOnly() && Player.currentId !== null &&
       !Player.audio.paused && !document.hidden;
   },
 
@@ -959,10 +980,15 @@ const Lyrics = {
     this.unitEls = [];
     this.units = [];
 
+    const synced = Boolean(data) && data.synced && !this.textOnly();
     this.el.classList.toggle("is-empty", !data);
+    this.el.classList.toggle("is-plain", Boolean(data) && !synced); // texto normal: empieza arriba, sin espacio para centrar
     this.bar.classList.toggle("no-data", !data);
-    this.bar.classList.toggle("no-sync", !(data && data.synced));
+    this.bar.classList.toggle("no-sync", !synced);
     this.updateBar();
+    const tab = $("tab-lyrics");
+    if (tab) tab.classList.toggle("on", Boolean(data)); // punto en la pestaña "Letra" si la canción tiene letra
+    LyricsScreen.updateFollow(false);
 
     if (!data) {
       this.el.innerHTML = this.song
@@ -979,15 +1005,16 @@ const Lyrics = {
     }
 
     this.el.innerHTML = data.lines.map((line, i) => {
-      const seek = data.synced ? ` data-i="${i}"` : "";
+      const seek = synced ? ` data-i="${i}"` : "";
       const side = ` s${line.side || "l"}${line.bg ? " bg" : ""}${line.words ? "" : " nw"}`;
       if (!line.text && !line.words) {
-        return data.synced
+        return synced
           ? `<p class="lyric-line gap${side}"${seek}>${Icons.note}</p>`
           : `<p class="lyric-line plain gap">&nbsp;</p>`;
       }
-      const inner = line.words ? this.wordsHTML(line) : UI.escapeHTML(line.text);
-      return `<p class="lyric-line${data.synced ? "" : " plain"}${side}"${seek}>${inner}</p>`;
+      // En "Solo texto" las líneas con palabra por palabra se muestran como texto simple
+      const inner = line.words && synced ? this.wordsHTML(line) : UI.escapeHTML(line.text);
+      return `<p class="lyric-line${synced ? "" : " plain"}${side}"${seek}>${inner}</p>`;
     }).join("");
     this.lineEls = Array.from(this.el.querySelectorAll(".lyric-line"));
     this.unitEls = [];
@@ -1047,6 +1074,7 @@ const Lyrics = {
     const data = this.data;
     if (!data) this.badge.textContent = "Sin letra";
     else if (!data.synced) this.badge.textContent = "Texto sin sincronizar";
+    else if (this.textOnly()) this.badge.textContent = `${this.FORMAT_NAMES[data.format] || "LRC"} · solo texto`;
     else this.badge.textContent = `${this.FORMAT_NAMES[data.format] || "LRC"} · ${data.wordLevel ? "palabra por palabra" : "línea por línea"}`;
     const d = this.delay;
     this.delayEl.textContent = (d > 0 ? "+" : d < 0 ? "−" : "") + Math.abs(d).toFixed(2) + " s";
@@ -1066,7 +1094,7 @@ const Lyrics = {
 
   update(force) {
     const data = this.data;
-    if (!data || !data.synced || !this.visible()) return;
+    if (!data || !data.synced || this.textOnly() || !this.visible()) return;
 
     const time = Player.audio.currentTime - this.shift();
     const index = this.find(time);
@@ -1090,17 +1118,29 @@ const Lyrics = {
     if (index >= 0 && this.units.length) this.paint(this.unitEls, this.units, time, LyricsStyle.anim() === "letters");
   },
 
-  center(index, instant) {
+  // instant = centrar sin esperar (al abrir la pantalla o tocar una línea); smoothNow = con animación aunque sea inmediato
+  center(index, instant, smoothNow) {
     if (index < 0 || !this.lineEls[index]) return;
-    if (!instant && Date.now() < this.userScrollUntil) {
-      this.needsCenter = true; // la persona está desplazando a mano: se recentra cuando termine la pausa
+    const auto = Settings.values.lyricsAutoScroll !== false;
+    if (!instant && (Date.now() < this.userScrollUntil || !auto)) {
+      // La persona está desplazando a mano (se recentra cuando termine la pausa) o el desplazamiento automático está apagado
+      this.needsCenter = auto;
+      LyricsScreen.updateFollow(true);
       return;
     }
     this.needsCenter = false;
+    LyricsScreen.updateFollow(false);
     const line = this.lineEls[index];
     const top = line.offsetTop - (this.el.clientHeight - line.offsetHeight) / 2;
-    const smooth = !instant && !UI.prefersReducedMotion();
+    const smooth = (!instant || smoothNow) && !UI.prefersReducedMotion();
     this.el.scrollTo({ top: Math.max(0, top), behavior: smooth ? "smooth" : "auto" });
+  },
+
+  // Botón "Seguir la letra": vuelve a la línea que suena
+  followNow() {
+    this.userScrollUntil = 0;
+    this.needsCenter = false;
+    this.center(this.active, true, true);
   },
 
   seekToLine(index) {
@@ -1186,11 +1226,17 @@ const LYRIC_FONTS = [
   { id: "script", name: "Manuscrita", stack: '"Dancing Script", "Segoe Script", cursive', weight: 700 },
   { id: "mono", name: "Máquina", stack: '"Courier New", "Droid Sans Mono", monospace', weight: 700 }
 ];
-const LYRIC_SIZES = { small: 20, medium: 24, large: 29 };
+const LYRIC_SIZES = { small: 20, medium: 24, large: 29, xl: 34 };
 
 const LyricsStyle = {
   last: "",
+  layout: "",
   face: null,
+
+  // v1.04: "Solo texto" también cambia cómo se arman las líneas
+  mode() {
+    return Settings.values.lyricsMode === "text" ? "text" : "sync";
+  },
 
   anim() {
     const id = Settings.values.lyricsAnim;
@@ -1210,16 +1256,25 @@ const LyricsStyle = {
     root.setAttribute("data-lanim", anim);
     root.setAttribute("data-lblur", values.lyricsBlur === false ? "off" : "on");
     root.setAttribute("data-lduet", values.lyricsDuet === false ? "off" : "on");
+    root.setAttribute("data-lalign", values.lyricsAlign === "center" ? "center" : "left");
+    root.setAttribute("data-lbg", values.lyricsBg === "cover" || values.lyricsBg === "glow" ? values.lyricsBg : "theme");
     root.style.setProperty("--lyric-size", (LYRIC_SIZES[values.lyricsSize] || LYRIC_SIZES.medium) + "px");
     const font = this.fontStack();
     root.style.setProperty("--lyric-font", font.stack);
     root.style.setProperty("--lyric-weight", font.weight);
-    // Con "Letra por letra" el texto se dibuja distinto: hay que volver a armar las líneas
-    if (anim !== this.last) {
-      this.last = anim;
+    // Con "Letra por letra" (o "Solo texto") el texto se dibuja distinto: hay que volver a armar las líneas
+    const signature = anim + "|" + this.mode();
+    if (signature !== this.last) {
+      this.last = signature;
       Lyrics.render();
       Lyrics.update(true);
       LyricsPreview.build();
+    }
+    // Tamaño, fuente, alineación o duetos cambian el alto de las líneas: la línea actual vuelve al centro
+    const layout = [values.lyricsSize, font.stack, values.lyricsAlign, values.lyricsDuet].join("|");
+    if (layout !== this.layout) {
+      this.layout = layout;
+      if (Lyrics.visible()) requestAnimationFrame(() => Lyrics.update(true));
     }
   },
 
@@ -1267,20 +1322,20 @@ const LyricsStyle = {
 
   // Botones de fuente en Ajustes (cada uno se ve con su propia fuente)
   renderFonts() {
-    const box = $("lyric-fonts");
-    if (!box) return;
     const file = Settings.values.lyricsFontFile;
     const items = LYRIC_FONTS.map((font) => ({ id: font.id, name: font.name, stack: font.stack, weight: font.weight }));
     if (file && this.face) items.push({ id: "custom", name: file.name, stack: '"PulsarLyrics", sans-serif', weight: 700 });
     const key = items.map((item) => item.id + item.name).join("|");
-    if (box.dataset.key !== key) {
-      box.dataset.key = key;
-      box.innerHTML = items.map((item) =>
-        `<button type="button" role="radio" aria-checked="false" data-val="${item.id}" style="font-family:${UI.escapeHTML(item.stack)};font-weight:${item.weight}">${UI.escapeHTML(item.name)}</button>`
-      ).join("");
-    }
-    const removeButton = $("lyric-font-remove");
-    if (removeButton) removeButton.classList.toggle("hidden", !(file && this.face));
+    // Hay dos listas: la de Ajustes y la del panel de la pantalla de letras (v1.04)
+    document.querySelectorAll("[data-fonts]").forEach((box) => {
+      if (box.dataset.key !== key) {
+        box.dataset.key = key;
+        box.innerHTML = items.map((item) =>
+          `<button type="button" role="radio" aria-checked="false" data-val="${item.id}" style="font-family:${UI.escapeHTML(item.stack)};font-weight:${item.weight}">${UI.escapeHTML(item.name)}</button>`
+        ).join("");
+      }
+    });
+    document.querySelectorAll(".js-font-remove").forEach((button) => button.classList.toggle("hidden", !(file && this.face)));
   }
 };
 
@@ -1348,13 +1403,106 @@ const LyricsPreview = {
 };
 
 /* =========================================================
-   STAGE — zona central del reproductor: portada / letra / cola
+   PANTALLA DE LETRAS (v1.04) — pantalla completa e independiente
+   Usa el MISMO módulo Lyrics de siempre (parser, sincronía y animaciones de v1.03): aquí solo
+   viven el marco de la pantalla, el fondo, el botón "Seguir la letra" y el panel de personalización.
+   ========================================================= */
+const LyricsScreen = {
+  init() {
+    this.view = $("view-lyrics");
+    this.drawer = $("lyr-drawer");
+    this.follow = $("lyrics-follow");
+    this.bg = $("lyr-bg");
+    this.titleEl = $("lyr-title");
+    this.artistEl = $("lyr-artist");
+    this.styleBtn = $("lyr-style-btn");
+
+    // Si cambia el alto de la letra (panel de personalización, girar el teléfono…),
+    // se recalcula el espacio de arriba y de abajo y la línea actual vuelve al centro.
+    const lyrics = $("lyrics");
+    if (lyrics && typeof ResizeObserver === "function") {
+      new ResizeObserver(() => {
+        this.measure();
+        if (Lyrics.visible()) requestAnimationFrame(() => Lyrics.update(true));
+      }).observe(lyrics);
+    }
+    window.addEventListener("resize", () => this.measure());
+  },
+
+  // Espacio vacío arriba y abajo para que la primera y la última línea puedan quedar en el centro
+  measure() {
+    const el = $("lyrics");
+    if (!el || !el.clientHeight) return;
+    el.style.setProperty("--lyr-pad", Math.max(48, Math.round(el.clientHeight / 2 - 34)) + "px");
+  },
+
+  onShow() {
+    this.measure();
+    this.syncInfo();
+    this.syncBackdrop();
+    this.updateFollow(false);
+  },
+
+  syncInfo() {
+    const song = Library.byId(Player.currentId);
+    UI.swapText(this.titleEl, song ? (song.name || "Sin título") : "Sin reproducción");
+    UI.swapText(this.artistEl, song ? song.artist : "Pulsar RM");
+  },
+
+  // Fondo "Portada": la carátula de la canción, muy desenfocada (CSS en style.css)
+  syncBackdrop() {
+    if (!this.bg) return;
+    const song = Library.byId(Player.currentId);
+    const url = song ? Covers.get(song) : null;
+    if (url) {
+      this.bg.dataset.cover = "1";
+      this.bg.style.setProperty("--lyr-cover", `url("${url}")`);
+    } else {
+      delete this.bg.dataset.cover;
+      this.bg.style.removeProperty("--lyr-cover");
+    }
+  },
+
+  // "Seguir la letra": aparece cuando la letra no está centrada en la línea que suena
+  updateFollow(away) {
+    if (!this.follow) return;
+    const data = Lyrics.data;
+    const show = Boolean(away) && Lyrics.active >= 0 && Boolean(data) && data.synced && !Lyrics.textOnly();
+    this.follow.classList.toggle("hidden", !show);
+  },
+
+  /* ---------- Panel de personalización ---------- */
+
+  isDrawerOpen() {
+    return Boolean(this.drawer) && !this.drawer.classList.contains("hidden");
+  },
+
+  openDrawer() {
+    if (!this.drawer) return;
+    this.drawer.classList.remove("hidden");
+    this.view.classList.add("drawer-open");
+    if (this.styleBtn) this.styleBtn.setAttribute("aria-expanded", "true");
+    UI.refreshSettingsControls();
+  },
+
+  closeDrawer() {
+    if (!this.drawer || this.drawer.classList.contains("hidden")) return;
+    this.drawer.classList.add("hidden");
+    this.view.classList.remove("drawer-open");
+    if (this.styleBtn) this.styleBtn.setAttribute("aria-expanded", "false");
+  },
+
+  toggleDrawer() {
+    if (this.isDrawerOpen()) this.closeDrawer(); else this.openDrawer();
+  }
+};
+
+/* =========================================================
+   STAGE — zona central del reproductor: la portada
+   (v1.04: la letra y la cola ahora tienen su propia pantalla completa)
    ========================================================= */
 const Stage = {
-  mode: "cover",
-
   init() {
-    this.apply();
     this.watchSize();
   },
 
@@ -1374,78 +1522,624 @@ const Stage = {
     if (typeof ResizeObserver === "function") new ResizeObserver(() => this.fitCover()).observe(stage);
     window.addEventListener("resize", () => this.fitCover());
     this.fitCover();
-  },
-
-  set(mode) {
-    this.mode = this.mode === mode ? "cover" : mode; // tocar otra vez la pestaña vuelve a la portada
-    this.apply();
-  },
-
-  apply() {
-    $("stage").dataset.mode = this.mode;
-    $("big-cover").classList.toggle("hidden", this.mode !== "cover");
-    $("lyrics-panel").classList.toggle("hidden", this.mode !== "lyrics");
-    $("queue-panel").classList.toggle("hidden", this.mode !== "queue");
-    [["tab-lyrics", "lyrics"], ["tab-queue", "queue"]].forEach(([id, mode]) => {
-      const button = $(id);
-      button.classList.toggle("active", this.mode === mode);
-      button.setAttribute("aria-pressed", String(this.mode === mode));
-    });
-    if (this.mode === "queue") Queue.render();
-    Lyrics.refresh(true);
   }
 };
 
 /* =========================================================
-   QUEUE — qué canción sigue (sigue el orden de la biblioteca)
+   QUEUE (v1.04) — la cola de reproducción REAL
+   No es un segundo reproductor: Player sigue siendo el único que reproduce. La cola solo decide
+   QUÉ canción sigue, con dos listas de ids:
+     · upcoming = pendientes, en el orden exacto en que van a sonar (esto es lo que se reordena)
+     · history  = ya reproducidas (para el botón Anterior)
+   La canción actual es siempre Player.currentId (no se guarda aquí, así nunca se desincroniza).
+   Reglas que evitan duplicados y canciones fantasma:
+     · sanitize() deja cada id una sola vez, sin la actual y solo si sigue en la biblioteca.
+     · Todo cambio pasa por Queue.commit() (cuando una canción empieza de verdad) o por los
+       métodos de abajo; cada cambio sube `version`.
+   La cola no se guarda al cerrar la app (la reproducción tampoco): se arma al elegir una canción.
    ========================================================= */
 const Queue = {
-  LIMIT: 100,
+  history: [],
+  upcoming: [],
+  version: 0,
+  HISTORY_LIMIT: 100,
 
-  refresh() {
-    if (Stage.mode === "queue") this.render();
+  touch() { this.version++; },
+
+  shuffled(list) {
+    const out = list.slice();
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
   },
 
-  row(song, position, current) {
-    const duration = song.duration ? UI.formatTime(song.duration) : "";
+  // Ids de la biblioteca en su orden, empezando justo después de `id` y dando la vuelta (sin incluir `id`)
+  libraryAfter(id) {
+    const songs = Library.songs;
+    const at = songs.findIndex((song) => song.id === id);
+    const rotated = at < 0 ? songs.slice() : songs.slice(at + 1).concat(songs.slice(0, at));
+    return rotated.map((song) => song.id);
+  },
+
+  // Deja `list` en el orden de la biblioteca (a partir de `afterId`) sin añadir ni perder canciones
+  sortByLibrary(list, afterId) {
+    const rank = new Map(this.libraryAfter(afterId).map((id, i) => [id, i]));
+    return list.filter((id) => rank.has(id)).sort((a, b) => rank.get(a) - rank.get(b));
+  },
+
+  // Cola nueva a partir de la biblioteca: en su orden, o mezclada si el modo aleatorio está activo
+  build(id) {
+    const list = this.libraryAfter(id);
+    this.upcoming = Settings.values.shuffle ? this.shuffled(list) : list;
+    this.touch();
+  },
+
+  // Se acabó la cola: vuelve a empezar con toda la biblioteca (igual que en v1.03)
+  refill() {
+    this.build(Player.currentId);
+  },
+
+  pushHistory(id) {
+    if (id === null || id === undefined) return;
+    this.history.push(id);
+    if (this.history.length > this.HISTORY_LIMIT) this.history.splice(0, this.history.length - this.HISTORY_LIMIT);
+  },
+
+  // Cada id una sola vez, nunca la actual, y solo canciones que siguen en la biblioteca.
+  // `currentId` solo se indica desde commit(), cuando la canción nueva aún no está puesta en Player.
+  sanitize(currentId) {
+    const valid = new Set(Library.songs.map((song) => song.id));
+    const seen = new Set();
+    const current = currentId === undefined ? Player.currentId : currentId;
+    if (current !== null) seen.add(current);
+    const upcoming = [];
+    this.upcoming.forEach((id) => {
+      if (valid.has(id) && !seen.has(id)) { seen.add(id); upcoming.push(id); }
+    });
+    const history = this.history.filter((id) => valid.has(id));
+    if (upcoming.length !== this.upcoming.length || history.length !== this.history.length) this.touch();
+    this.upcoming = upcoming;
+    this.history = history;
+  },
+
+  /* Lo llama Player.play() justo cuando una canción empieza de verdad (con su audio ya cargado).
+     `mode` dice de dónde viene la orden:
+       "queue"   → la siguiente (o una elegida dentro de la cola): sale de los pendientes
+       "prev"    → Anterior: vuelve del historial y la que sonaba pasa a ser la próxima
+       "library" → elegida en la biblioteca: cola nueva a partir de la biblioteca */
+  commit(id, mode, previousId) {
+    if (mode === "queue" && !this.upcoming.includes(id)) mode = "library"; // ya no estaba pendiente
+    if (mode === "prev") {
+      const at = this.history.lastIndexOf(id);
+      if (at >= 0) this.history.splice(at, 1);
+      if (previousId !== null && previousId !== id) {
+        this.upcoming = [previousId].concat(this.upcoming.filter((x) => x !== previousId));
+      }
+    } else if (mode === "queue") {
+      // Si se salta varias, las saltadas pasan al final de la cola: nada desaparece
+      const at = this.upcoming.indexOf(id);
+      const skipped = this.upcoming.splice(0, at);
+      this.upcoming.shift();
+      this.upcoming.push(...skipped);
+      if (previousId !== id) this.pushHistory(previousId);
+    } else {
+      if (previousId !== id) this.pushHistory(previousId);
+      this.build(id);
+    }
+    this.sanitize(id); // la que va a sonar es `id`, no la que sonaba antes
+    this.touch();
+  },
+
+  reset() {
+    this.history = [];
+    this.upcoming = [];
+    this.touch();
+    this.refresh();
+  },
+
+  // Una canción se eliminó de la biblioteca
+  forget(id) {
+    this.upcoming = this.upcoming.filter((x) => x !== id);
+    this.history = this.history.filter((x) => x !== id);
+    this.touch();
+  },
+
+  // Se importó una canción con la música sonando: se suma a los pendientes
+  added(id) {
+    if (Player.currentId === null || id === Player.currentId || this.upcoming.includes(id)) return;
+    if (Settings.values.shuffle && this.upcoming.length) {
+      this.upcoming.splice(Math.floor(Math.random() * (this.upcoming.length + 1)), 0, id);
+    } else {
+      this.upcoming.push(id);
+    }
+    this.touch();
+  },
+
+  totalSeconds() {
+    const byId = new Map(Library.songs.map((song) => [song.id, song]));
+    return this.upcoming.reduce((sum, id) => sum + ((byId.get(id) && byId.get(id).duration) || 0), 0);
+  },
+
+  /* ---------- Acciones de la persona (todas repintan la pantalla de la cola) ---------- */
+
+  remove(id) {
+    const at = this.upcoming.indexOf(id);
+    if (at < 0) return false;
+    this.upcoming.splice(at, 1);
+    this.touch();
+    this.refresh();
+    UI.toast("Quitada de la cola.");
+    return true;
+  },
+
+  move(from, to) {
+    const length = this.upcoming.length;
+    if (from === to || from < 0 || to < 0 || from >= length || to >= length) return false;
+    const [id] = this.upcoming.splice(from, 1);
+    this.upcoming.splice(to, 0, id);
+    this.touch();
+    this.refresh();
+    return true;
+  },
+
+  moveToTop(id) {
+    const at = this.upcoming.indexOf(id);
+    if (at > 0) { this.move(at, 0); UI.toast("Sonará a continuación."); }
+  },
+
+  moveToEnd(id) {
+    const at = this.upcoming.indexOf(id);
+    if (at >= 0 && at < this.upcoming.length - 1) { this.move(at, this.upcoming.length - 1); UI.toast("Movida al final de la cola."); }
+  },
+
+  // Modo aleatorio: al activarlo se mezclan los pendientes; al desactivarlo vuelven al orden de la biblioteca
+  setShuffle(on, announce) {
+    on = Boolean(on);
+    Settings.set("shuffle", on);
+    if (Player.currentId !== null) {
+      this.upcoming = on ? this.shuffled(this.upcoming) : this.sortByLibrary(this.upcoming, Player.currentId);
+      this.touch();
+    }
+    this.refresh();
+    if (announce) UI.toast(on ? "Reproducción aleatoria activada." : "Reproducción aleatoria desactivada.");
+  },
+
+  needCurrent() {
+    if (Player.currentId !== null) return true;
+    UI.toast("Reproduce una canción para usar la cola.");
+    return false;
+  },
+
+  // Mezcla los pendientes una vez (sin cambiar el modo aleatorio)
+  mixNow() {
+    if (!this.needCurrent()) return;
+    this.upcoming = this.shuffled(this.upcoming);
+    this.touch();
+    this.refresh();
+    UI.toast("Cola mezclada.");
+  },
+
+  // Pendientes en el orden de la biblioteca (sin recuperar las que se quitaron)
+  restoreOrder() {
+    if (!this.needCurrent()) return;
+    this.upcoming = this.sortByLibrary(this.upcoming, Player.currentId);
+    this.touch();
+    this.refresh();
+    UI.toast("Orden de la biblioteca restaurado.");
+  },
+
+  // Vuelve a añadir toda la biblioteca (recupera las que se quitaron; respeta el modo aleatorio)
+  restoreAll() {
+    if (!this.needCurrent()) return;
+    this.build(Player.currentId);
+    this.refresh();
+    UI.toast("Biblioteca añadida a la cola.");
+  },
+
+  async clearAsk() {
+    if (!this.needCurrent()) return;
+    if (!this.upcoming.length) { UI.toast("La cola ya está vacía."); return; }
+    if (!(await UI.confirm("¿Vaciar la cola? Las canciones siguen en tu biblioteca.", "Vaciar", true))) return;
+    this.upcoming = [];
+    this.touch();
+    this.refresh();
+    UI.toast("Cola vaciada.");
+  },
+
+  // resetScroll = true cuando cambia la canción (la lista vuelve arriba)
+  refresh(resetScroll) {
+    QueueScreen.refresh(resetScroll);
+  }
+};
+
+/* =========================================================
+   PANTALLA DE COLA (v1.04) — pantalla completa e independiente
+   Canción actual arriba, pendientes debajo. Cada fila: arrastrar para reordenar, tocar para
+   reproducirla ya, ⋮ para más opciones y × para quitarla. Se repinta sola al cambiar la canción.
+   ========================================================= */
+const QueueScreen = {
+  LIMIT: 200,
+  drag: null,
+
+  init() {
+    this.list = $("queue-list");
+    this.nowBox = $("queue-now");
+    this.head = $("queue-head");
+    this.summary = $("queue-summary");
+    this.shuffleBtn = $("queue-shuffle-btn");
+
+    // Arrastrar: la asa de cada fila captura el puntero (funciona igual con dedo y con ratón)
+    this.list.addEventListener("pointerdown", (event) => {
+      const handle = event.target.closest && event.target.closest(".q-handle");
+      if (handle && (event.pointerType !== "mouse" || event.button === 0)) this.startDrag(event, handle);
+    });
+    this.list.addEventListener("pointermove", (event) => this.moveDrag(event));
+    this.list.addEventListener("pointerup", (event) => this.endDrag(event, false));
+    this.list.addEventListener("pointercancel", (event) => this.endDrag(event, true));
+    document.addEventListener("visibilitychange", () => { if (document.hidden) this.cancelDrag(); });
+  },
+
+  onShow() {
+    this.render(true);
+  },
+
+  refresh(resetScroll) {
+    if (!this.list) return;
+    this.syncControls();
+    if (Router.current === "queue") this.render(resetScroll);
+  },
+
+  // Botón y interruptor del modo aleatorio
+  syncControls() {
+    const on = Boolean(Settings.values.shuffle);
+    if (this.shuffleBtn) {
+      this.shuffleBtn.classList.toggle("active", on);
+      this.shuffleBtn.setAttribute("aria-pressed", String(on));
+    }
+  },
+
+  /* ---------- Dibujo ---------- */
+
+  row(song, mode) {
+    const id = song.id;
+    const duration = song.duration ? ` · ${UI.formatTime(song.duration)}` : "";
+    const queue = mode === "queue";
+    const handle = queue
+      ? `<button type="button" class="q-handle" data-drag aria-label="Arrastrar para reordenar">${Icons.grip}</button>`
+      : "";
+    const actions = queue
+      ? `<button type="button" class="q-btn" data-action="queue-row-menu" data-qid="${id}" aria-label="Más opciones">${Icons.more}</button>
+         <button type="button" class="q-btn" data-action="queue-remove" data-qid="${id}" aria-label="Quitar de la cola">${Icons.x}</button>`
+      : `<button type="button" class="q-btn" data-action="queue-row-menu" data-qid="${id}" data-ctx="library" aria-label="Más opciones">${Icons.more}</button>`;
     return `
-      <div class="song-item queue-item${current ? " playing" : ""}" data-song="${song.id}">
-        <span class="queue-num">${current ? Icons.play : position}</span>
+      <div class="q-row${queue ? "" : " lib"}" data-qid="${id}" data-mode="${mode}">
+        ${handle}
         <div class="song-cover">${UI.coverHTML(song)}</div>
+        <div class="song-details">
+          <strong>${UI.escapeHTML(song.name || "Sin título")}</strong>
+          <small>${UI.escapeHTML(song.artist)}${duration}</small>
+        </div>
+        ${actions}
+      </div>`;
+  },
+
+  nowHTML(song) {
+    return `
+      <p class="q-label"><span class="q-bars" aria-hidden="true"><i></i><i></i><i></i></span>Reproduciendo ahora</p>
+      <div class="q-now">
+        <div class="song-cover q-now-cover">${UI.coverHTML(song)}</div>
         <div class="song-details">
           <strong>${UI.escapeHTML(song.name || "Sin título")}</strong>
           <small>${UI.escapeHTML(song.artist)}</small>
         </div>
-        <span class="queue-time">${duration}</span>
+        <button type="button" class="q-btn" data-action="queue-row-menu" data-qid="${song.id}" data-ctx="now" aria-label="Más opciones">${Icons.more}</button>
+        <button type="button" class="round-btn" data-action="toggle" aria-label="Reproducir o pausar"></button>
       </div>`;
   },
 
-  render() {
-    const list = $("queue-list");
+  render(resetScroll) {
+    if (!this.list) return;
+    this.cancelDrag();
+    Queue.sanitize();
+    this.syncControls();
+
+    const top = resetScroll ? 0 : this.list.scrollTop;
     const songs = Library.songs;
+    const current = Library.byId(Player.currentId);
+
     if (!songs.length) {
-      list.innerHTML = `<p class="queue-empty">No hay canciones en la biblioteca.</p>`;
+      this.nowBox.innerHTML = "";
+      this.head.innerHTML = "";
+      this.summary.textContent = "Sin canciones";
+      this.list.innerHTML = `
+        <div class="q-empty">
+          <div class="empty-icon">${Icons.note}</div>
+          <p>Importa música para armar tu cola.</p>
+          <button type="button" class="add-music" data-action="import">+ Importar música</button>
+        </div>`;
       return;
     }
-    const current = Library.indexOf(Player.currentId);
-    if (current < 0) {
-      list.innerHTML = `<p class="queue-label">Elige una canción para empezar</p>` +
-        songs.slice(0, this.LIMIT).map((song, i) => this.row(song, i + 1, false)).join("");
+
+    // Sin canción sonando todavía: se ofrece la biblioteca para empezar (como en v1.03)
+    if (!current) {
+      this.nowBox.innerHTML = `<p class="q-label">Sin reproducción</p>`;
+      this.head.innerHTML = `<p class="q-label">Elige una canción para empezar · ${songs.length}</p>`;
+      this.summary.textContent = "Nada sonando";
+      this.list.innerHTML = songs.slice(0, this.LIMIT).map((song) => this.row(song, "library")).join("");
+      this.list.scrollTop = top;
       return;
     }
-    const upcoming = songs.slice(current + 1).concat(songs.slice(0, current));
-    const shown = upcoming.slice(0, this.LIMIT);
-    let html = `<p class="queue-label">Reproduciendo ahora</p>` + this.row(songs[current], 1, true);
-    if (!upcoming.length) {
-      html += `<p class="queue-empty">No hay más canciones en la biblioteca.</p>`;
+
+    this.nowBox.innerHTML = this.nowHTML(current);
+
+    const byId = new Map(songs.map((song) => [song.id, song]));
+    const ids = Queue.upcoming;
+    const shown = ids.slice(0, this.LIMIT);
+    const count = ids.length;
+
+    this.summary.textContent = count
+      ? `${count} ${count === 1 ? "pendiente" : "pendientes"} · ${UI.formatLong(Queue.totalSeconds())}`
+      : "Sin canciones pendientes";
+
+    this.head.innerHTML = `<p class="q-label">A continuación · ${count}</p>` +
+      (count > 1 ? `<span class="q-hint">Arrastra para reordenar</span>` : "");
+
+    if (!count) {
+      const others = songs.length > 1;
+      this.list.innerHTML = `
+        <div class="q-empty">
+          <p>No hay más canciones en la cola.<br>Al terminar la actual vuelve a empezar con tu biblioteca.</p>
+          ${others ? `<button type="button" class="chip-btn" data-action="queue-restore">Añadir toda la biblioteca</button>` : ""}
+        </div>`;
     } else {
-      html += `<p class="queue-label">A continuación · ${upcoming.length}</p>` +
-        shown.map((song, i) => this.row(song, i + 1, false)).join("");
-      if (upcoming.length > shown.length) {
-        html += `<p class="queue-empty">… y ${upcoming.length - shown.length} más</p>`;
-      }
+      this.list.innerHTML = shown.map((id) => this.row(byId.get(id), "queue")).join("") +
+        (count > shown.length ? `<p class="q-more">… y ${count - shown.length} más</p>` : "");
     }
-    list.innerHTML = html;
+    this.list.scrollTop = top;
+    UI.updatePlayState(); // el botón de reproducir/pausar de la tarjeta recién dibujada
+  },
+
+  // Tocar una fila: la canción suena ya. La de la cola sale de los pendientes; la de la biblioteca arma una cola nueva.
+  activate(id, mode) {
+    if (id === Player.currentId) { Player.toggle(); return; }
+    Player.play(id, mode === "library" ? "library" : "queue");
+  },
+
+  /* ---------- Reordenar arrastrando ---------- */
+
+  startDrag(event, handle) {
+    if (this.drag) return;
+    const row = handle.closest(".q-row");
+    const rows = Array.from(this.list.querySelectorAll(".q-row:not(.lib)"));
+    const from = rows.indexOf(row);
+    if (!row || from < 0) return;
+    event.preventDefault();
+    const pitch = rows.length > 1 ? rows[1].offsetTop - rows[0].offsetTop : row.offsetHeight + 8;
+    this.drag = {
+      id: Number(row.dataset.qid), row, rows, from, to: from, pitch,
+      startY: event.clientY, lastY: event.clientY, startScroll: this.list.scrollTop,
+      version: Queue.version, pointerId: event.pointerId, handle, raf: 0
+    };
+    try { handle.setPointerCapture(event.pointerId); } catch (error) { /* no crítico */ }
+    row.classList.add("dragging");
+    this.list.classList.add("is-dragging");
+    try { if (navigator.vibrate) navigator.vibrate(12); } catch (error) { /* sin vibración */ }
+    this.autoScroll();
+  },
+
+  moveDrag(event) {
+    const d = this.drag;
+    if (!d || event.pointerId !== d.pointerId) return;
+    d.lastY = event.clientY;
+    this.applyDrag();
+  },
+
+  // Coloca la fila bajo el dedo y abre hueco desplazando las demás
+  applyDrag() {
+    const d = this.drag;
+    if (!d) return;
+    const dy = (d.lastY - d.startY) + (this.list.scrollTop - d.startScroll);
+    d.row.style.transform = `translateY(${dy}px)`;
+    const to = Math.max(0, Math.min(d.rows.length - 1, Math.round(d.from + dy / d.pitch)));
+    if (to === d.to) return;
+    d.to = to;
+    d.rows.forEach((row, i) => {
+      if (row === d.row) return;
+      let shift = 0;
+      if (d.from < to && i > d.from && i <= to) shift = -d.pitch;
+      else if (d.from > to && i >= to && i < d.from) shift = d.pitch;
+      row.style.transform = shift ? `translateY(${shift}px)` : "";
+    });
+  },
+
+  // Cerca del borde de arriba o de abajo la lista se desplaza sola
+  autoScroll() {
+    const d = this.drag;
+    if (!d) return;
+    const rect = this.list.getBoundingClientRect();
+    const zone = 56;
+    let speed = 0;
+    if (d.lastY < rect.top + zone) speed = -Math.ceil((rect.top + zone - d.lastY) / 5);
+    else if (d.lastY > rect.bottom - zone) speed = Math.ceil((d.lastY - (rect.bottom - zone)) / 5);
+    speed = Math.max(-20, Math.min(20, speed));
+    if (speed) {
+      const before = this.list.scrollTop;
+      this.list.scrollTop = before + speed;
+      if (this.list.scrollTop !== before) this.applyDrag();
+    }
+    d.raf = requestAnimationFrame(() => this.autoScroll());
+  },
+
+  endDrag(event, cancelled) {
+    const d = this.drag;
+    if (!d || (event && event.pointerId !== d.pointerId)) return;
+    cancelAnimationFrame(d.raf);
+    this.drag = null;
+    try { d.handle.releasePointerCapture(d.pointerId); } catch (error) { /* ya liberado */ }
+    this.list.classList.remove("is-dragging");
+
+    const unchanged = cancelled || d.to === d.from;
+    const settle = () => {
+      d.rows.forEach((row) => { row.style.transform = ""; row.style.transition = ""; row.classList.remove("dragging"); });
+      // Solo se aplica si la cola no cambió mientras se arrastraba (otra canción, borrado…)
+      if (!unchanged && d.version === Queue.version && Queue.upcoming[d.from] === d.id) Queue.move(d.from, d.to);
+      else if (!unchanged) this.render();
+    };
+    if (unchanged) { settle(); return; }
+    // La fila se acomoda en su hueco y después se guarda el nuevo orden
+    d.row.style.transition = "transform 0.12s ease";
+    d.row.style.transform = `translateY(${(d.to - d.from) * d.pitch}px)`;
+    setTimeout(settle, 130);
+  },
+
+  cancelDrag() {
+    if (!this.drag) return;
+    const d = this.drag;
+    this.endDrag({ pointerId: d.pointerId }, true);
+  }
+};
+
+/* =========================================================
+   HOJAS INFERIORES (v1.04) — opciones de una canción, información musical y opciones de mezcla
+   ========================================================= */
+const Sheets = {
+  closeAll() {
+    SongMenu.close();
+    SongInfo.close();
+    QueueOptions.close();
+  },
+  anyOpen() {
+    return SongMenu.isOpen() || SongInfo.isOpen() || QueueOptions.isOpen();
+  }
+};
+
+const SongMenu = {
+  id: null,
+  ctx: "queue",
+
+  isOpen() {
+    const el = $("song-menu");
+    return Boolean(el) && !el.classList.contains("hidden");
+  },
+
+  // ctx: "queue" (pendiente), "now" (la que suena) o "library" (aún sin cola)
+  open(id, ctx) {
+    const song = Library.byId(id);
+    if (!song) return;
+    Sheets.closeAll();
+    this.id = id;
+    this.ctx = ctx || "queue";
+    $("sm-cover").innerHTML = UI.coverHTML(song);
+    $("sm-title").textContent = song.name || "Sin título";
+    $("sm-artist").textContent = song.artist;
+
+    const at = Queue.upcoming.indexOf(id);
+    const items = [];
+    if (this.ctx === "queue" || this.ctx === "library") items.push(["play", Icons.play, "Reproducir ahora"]);
+    if (this.ctx === "queue" && at > 0) items.push(["top", Icons.top, "Reproducir a continuación"]);
+    if (this.ctx === "queue" && at >= 0 && at < Queue.upcoming.length - 1) items.push(["end", Icons.bottom, "Mover al final de la cola"]);
+    items.push(["info", Icons.info, "Información de la canción"]);
+    if (this.ctx === "now") items.push(["edit", Icons.pencil, "Editar información"]);
+    if (this.ctx === "queue") items.push(["remove", Icons.x, "Quitar de la cola", true]);
+
+    $("sm-items").innerHTML = items.map(([key, icon, label, danger]) =>
+      `<button type="button" class="a-item${danger ? " danger" : ""}" data-action="songmenu" data-sm="${key}">
+         <span class="a-ic">${icon}</span><span class="a-tx"><strong>${label}</strong></span>
+       </button>`).join("");
+    $("song-menu").classList.remove("hidden");
+  },
+
+  close() {
+    const el = $("song-menu");
+    if (el) el.classList.add("hidden");
+  },
+
+  run(key) {
+    const id = this.id, ctx = this.ctx;
+    this.close();
+    if (id === null || !Library.byId(id)) return;
+    switch (key) {
+      case "play": QueueScreen.activate(id, ctx === "library" ? "library" : "queue"); break;
+      case "top": Queue.moveToTop(id); break;
+      case "end": Queue.moveToEnd(id); break;
+      case "info": SongInfo.open(id); break;
+      case "edit": Editor.open(id); break;
+      case "remove": Queue.remove(id); break;
+    }
+  }
+};
+
+const SongInfo = {
+  id: null,
+
+  isOpen() {
+    const el = $("song-info");
+    return Boolean(el) && !el.classList.contains("hidden");
+  },
+
+  lyricsSummary(song) {
+    if (!song.lyrics || !song.lyrics.raw || !song.lyrics.raw.trim()) return "Sin letra";
+    const data = LyricsParser.parse(song.lyrics.raw);
+    if (!data.synced) return "Texto sin sincronizar";
+    return `${Lyrics.FORMAT_NAMES[data.format] || "LRC"} · ${data.wordLevel ? "palabra por palabra" : "línea por línea"}`;
+  },
+
+  open(id) {
+    const song = Library.byId(id);
+    if (!song) return;
+    Sheets.closeAll();
+    this.id = id;
+    $("si-cover").innerHTML = UI.coverHTML(song);
+    $("si-title").textContent = song.name || "Sin título";
+    $("si-artist").textContent = song.artist;
+
+    const extension = (String(song.fileName || "").split(".").pop() || "").toUpperCase();
+    const added = song.addedAt ? new Date(song.addedAt).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" }) : "";
+    const at = Queue.upcoming.indexOf(id);
+    const place = id === Player.currentId ? "Reproduciendo ahora" : at >= 0 ? `Puesto ${at + 1} de ${Queue.upcoming.length}` : "No está pendiente";
+    const rows = [
+      ["Duración", song.duration ? UI.formatTime(song.duration) : "—"],
+      ["En la cola", place],
+      ["Letra", this.lyricsSummary(song)],
+      ["Archivo", song.fileName || "—"],
+      ["Formato", extension || song.mime || "—"],
+      ["Tamaño", song.size ? UI.formatBytes(song.size) : "—"],
+      ["Añadida", added || "—"]
+    ];
+    $("si-list").innerHTML = rows.map(([label, value]) =>
+      `<div class="info-row"><dt>${label}</dt><dd>${UI.escapeHTML(value)}</dd></div>`).join("");
+    $("song-info").classList.remove("hidden");
+  },
+
+  close() {
+    const el = $("song-info");
+    if (el) el.classList.add("hidden");
+  },
+
+  edit() {
+    const id = this.id;
+    this.close();
+    if (id !== null) Editor.open(id);
+  }
+};
+
+const QueueOptions = {
+  isOpen() {
+    const el = $("queue-options");
+    return Boolean(el) && !el.classList.contains("hidden");
+  },
+
+  open() {
+    Sheets.closeAll();
+    UI.refreshSettingsControls();
+    $("queue-options").classList.remove("hidden");
+  },
+
+  close() {
+    const el = $("queue-options");
+    if (el) el.classList.add("hidden");
   }
 };
 
@@ -1973,6 +2667,7 @@ const Library = {
         const meta = this.buildMeta(file, duration);
         await Store.addSong(meta, file);
         this.songs.push(meta);
+        Queue.added(meta.id); // si hay música sonando, la nueva se suma a los pendientes
         added++;
       } catch (error) {
         console.error("Error al importar", file.name, error);
@@ -2011,6 +2706,7 @@ const Library = {
       await Store.removeSong(id);
       this.songs = this.songs.filter((item) => item.id !== id);
       Covers.release(id);
+      Queue.forget(id); // y desaparece de la cola
       UI.renderAll();
     } catch (error) {
       console.error(error);
@@ -2073,7 +2769,9 @@ const Player = {
     this.setupMediaSession();
   },
 
-  async play(id) {
+  // mode = de dónde viene la orden, para que la cola lo anote bien (ver Queue.commit):
+  //   "library" (por defecto, elegida en la biblioteca) · "queue" (siguiente o elegida en la cola) · "prev" (Anterior)
+  async play(id, mode = "library") {
     const song = Library.byId(id);
     if (!song) return;
 
@@ -2092,13 +2790,14 @@ const Player = {
 
     const previousUrl = this.objectUrl;
     this.objectUrl = URL.createObjectURL(blob);
+    Queue.commit(id, mode, this.currentId); // la cola se actualiza justo cuando la canción empieza de verdad
     this.currentId = id;
     this.audio.src = this.objectUrl;
     if (previousUrl) URL.revokeObjectURL(previousUrl);
 
     Lyrics.load(song);
     UI.showNowPlaying(song);
-    Queue.refresh();
+    Queue.refresh(true);
     this.updateMediaMetadata(song);
     Equalizer.onPlay();
 
@@ -2131,22 +2830,43 @@ const Player = {
     }
   },
 
+  // v1.04: la siguiente sale de la cola (Queue.upcoming); si se acabó, vuelve a empezar con la biblioteca
   next() {
     if (!Library.songs.length) return;
-    let index = Library.indexOf(this.currentId) + 1;
-    if (index >= Library.songs.length) index = 0;
-    this.play(Library.songs[index].id);
+    if (this.currentId === null) {
+      this.play(Library.songs[0].id, "library");
+      return;
+    }
+    Queue.sanitize();
+    if (!Queue.upcoming.length) Queue.refill();
+    const nextId = Queue.upcoming[0];
+    if (nextId === undefined) { // la única canción de la biblioteca: empieza de nuevo
+      this.audio.currentTime = 0;
+      if (this.audio.paused) this.toggle();
+      return;
+    }
+    this.play(nextId, "queue");
   },
 
+  // Anterior: reinicia la canción si ya avanzó; si no, vuelve a la última reproducida (historial de la cola)
   previous() {
     if (!Library.songs.length) return;
     if (this.currentId !== null && this.audio.currentTime > 3) {
       this.audio.currentTime = 0;
       return;
     }
-    let index = Library.indexOf(this.currentId) - 1;
+    Queue.sanitize();
+    if (Queue.history.length) {
+      this.play(Queue.history[Queue.history.length - 1], "prev");
+      return;
+    }
+    if (this.currentId !== null && Settings.values.shuffle) { // aleatorio y sin historial: reinicia
+      this.audio.currentTime = 0;
+      return;
+    }
+    let index = Library.indexOf(this.currentId) - 1; // sin historial: la anterior de la biblioteca, como antes
     if (index < 0) index = Library.songs.length - 1;
-    this.play(Library.songs[index].id);
+    this.play(Library.songs[index].id, "library");
   },
 
   handleEnded() {
@@ -2176,6 +2896,7 @@ const Player = {
     this.audio.load();
     if (url) URL.revokeObjectURL(url);
     Lyrics.clear();
+    Queue.reset();
     UI.resetNowPlaying();
   },
 
@@ -2231,9 +2952,12 @@ const Player = {
    y el botón/gesto Atrás de Android sigue la ruta; en Inicio, Atrás sale de la app.
    ========================================================= */
 const Router = {
-  views: ["home", "library", "player", "eq", "settings"],
+  views: ["home", "library", "player", "eq", "lyrics", "queue", "settings"],
   // Pantalla "padre": a dónde vuelve Atrás. Inicio es la raíz (Atrás en Inicio = salir).
-  parents: { library: "home", settings: "home", player: "home", eq: "player" },
+  // v1.04: Letras y Cola cuelgan del Reproductor, igual que el Ecualizador.
+  parents: { library: "home", settings: "home", player: "home", eq: "player", lyrics: "player", queue: "player" },
+  // Pantallas completas del reproductor: sin barra de arriba, sin barra de abajo y sin mini reproductor
+  immersiveViews: ["player", "eq", "lyrics", "queue"],
   current: "home",
   lastBase: "home", // última pantalla de la barra inferior (Inicio o Biblioteca): a ella se vuelve al cerrar Reproductor o Ajustes
   stack: ["home"],  // ruta actual, igual que las entradas del historial: ["home"], ["home","player","eq"]…
@@ -2317,6 +3041,8 @@ const Router = {
     if (UI.dismissConfirm) { UI.dismissConfirm(); return true; }
     if (LyricsEditor.isOpen()) { LyricsEditor.close(); return true; }
     if (Editor.isOpen()) { Editor.close(); return true; }
+    if (Sheets.anyOpen()) { Sheets.closeAll(); return true; }
+    if (LyricsScreen.isDrawerOpen()) { LyricsScreen.closeDrawer(); return true; }
     if (UI.el.playerMenu && !UI.el.playerMenu.classList.contains("hidden")) { UI.closeMenu(); return true; }
     return false;
   },
@@ -2351,9 +3077,11 @@ const Router = {
     if (name === "home" || name === "library") this.lastBase = name;
     Editor.discard();
     LyricsEditor.discard();
+    Sheets.closeAll();
+    LyricsScreen.closeDrawer();
     UI.closeMenu();
-    // Modo inmersivo: en el reproductor (y su ecualizador) se ocultan la barra de arriba y la de abajo.
-    const immersive = name === "player" || name === "eq";
+    // Modo inmersivo: en el reproductor y sus pantallas (ecualizador, letras, cola) se ocultan la barra de arriba y la de abajo.
+    const immersive = this.immersiveViews.includes(name);
     const root = document.documentElement;
     if (root.classList.contains("immersive") !== immersive) {
       root.classList.toggle("immersive", immersive);
@@ -2376,6 +3104,8 @@ const Router = {
     window.scrollTo(0, 0);
     UI.updateMiniPlayer();
     if (name === "eq") Equalizer.refreshUI();
+    if (name === "lyrics") LyricsScreen.onShow();
+    if (name === "queue") QueueScreen.onShow();
     Lyrics.refresh(true);
     if (name === "settings") { UI.renderSettings(); LyricsPreview.start(); }
   }
@@ -2413,9 +3143,6 @@ const UI = {
       coverFile: $("cover-file"),
       playerTitle: $("player-title"),
       playerArtist: $("player-artist"),
-      progress: $("progress"),
-      currentTime: $("current-time"),
-      duration: $("duration"),
       storageInfo: $("storage-info"),
       appVersion: $("app-version"),
       toast: $("toast")
@@ -2481,7 +3208,7 @@ const UI = {
       const actionButton = target.closest("[data-action]");
       if (actionButton) {
         event.preventDefault();
-        this.handleAction(actionButton.dataset.action);
+        this.handleAction(actionButton.dataset.action, actionButton);
         return;
       }
 
@@ -2489,6 +3216,13 @@ const UI = {
       if (removeButton) {
         event.stopPropagation();
         Library.remove(Number(removeButton.dataset.remove));
+        return;
+      }
+
+      // Pantalla de cola: tocar una fila la reproduce (el asa de arrastre no cuenta como toque)
+      const queueRow = target.closest(".q-row");
+      if (queueRow) {
+        if (!target.closest(".q-handle")) QueueScreen.activate(Number(queueRow.dataset.qid), queueRow.dataset.mode);
         return;
       }
 
@@ -2503,7 +3237,9 @@ const UI = {
     // Interruptores de Ajustes (color de portada, barra de estado, duetos, desenfoque)
     document.addEventListener("change", (event) => {
       const input = event.target.closest && event.target.closest("[data-toggle]");
-      if (input) Settings.set(input.dataset.toggle, input.checked);
+      if (!input) return;
+      if (input.dataset.toggle === "shuffle") Queue.setShuffle(input.checked, true); // además de guardarse, reordena la cola
+      else Settings.set(input.dataset.toggle, input.checked);
     });
 
     const fontFile = $("lyric-font-file");
@@ -2541,21 +3277,24 @@ const UI = {
       this.renderLibrary();
     });
 
-    const progress = this.el.progress;
-    progress.addEventListener("input", () => {
-      Player.seeking = true;
-      const duration = Player.audio.duration;
-      if (Number.isFinite(duration)) {
-        this.el.currentTime.textContent = this.formatTime((progress.value / 1000) * duration);
-      }
-    });
-    progress.addEventListener("change", () => {
-      Player.seekTo(progress.value / 1000);
-      Player.seeking = false;
+    // v1.04: hay una barra de progreso en el reproductor y otra en la pantalla de letras; las dos funcionan igual
+    document.querySelectorAll("[data-progress]").forEach((progress) => {
+      progress.addEventListener("input", () => {
+        Player.seeking = true;
+        const duration = Player.audio.duration;
+        if (Number.isFinite(duration)) {
+          const text = this.formatTime((progress.value / 1000) * duration);
+          document.querySelectorAll("[data-cur]").forEach((el) => { el.textContent = text; });
+        }
+      });
+      progress.addEventListener("change", () => {
+        Player.seekTo(progress.value / 1000);
+        Player.seeking = false;
+      });
     });
   },
 
-  handleAction(action) {
+  handleAction(action, element) {
     switch (action) {
       case "import": this.el.fileInput.click(); break;
       case "toggle": Player.toggle(); break;
@@ -2564,14 +3303,29 @@ const UI = {
       case "clear": Library.clear(); break;
       case "close": Router.go(Router.lastBase); break;
       case "menu": this.toggleMenu(); break;
-      case "edit": this.closeMenu(); Editor.open(); break;
+      case "edit": this.closeMenu(); Editor.open(Player.currentId); break;
       case "edit-cancel": Editor.close(); break;
       case "edit-save": Editor.save(); break;
       case "edit-pick-image": this.el.coverFile.click(); break;
       case "edit-remove-image": Editor.removeCover(); break;
       case "edit-reset": Editor.resetFromFile(); break;
-      case "stage-lyrics": Stage.set("lyrics"); break;
-      case "stage-queue": Stage.set("queue"); break;
+      case "lyrics-open": Router.go("lyrics"); break;
+      case "queue-open": Router.go("queue"); break;
+      case "back-player": Router.go("player"); break;
+      case "lyrics-style": LyricsScreen.toggleDrawer(); break;
+      case "lyrics-style-close": LyricsScreen.closeDrawer(); break;
+      case "lyrics-follow": Lyrics.followNow(); break;
+      case "queue-shuffle": Queue.setShuffle(!Settings.values.shuffle, true); break;
+      case "queue-options": QueueOptions.open(); break;
+      case "queue-mix": QueueOptions.close(); Queue.mixNow(); break;
+      case "queue-sort": QueueOptions.close(); Queue.restoreOrder(); break;
+      case "queue-restore": QueueOptions.close(); Queue.restoreAll(); break;
+      case "queue-clear": QueueOptions.close(); Queue.clearAsk(); break;
+      case "queue-remove": Queue.remove(Number(element.dataset.qid)); break;
+      case "queue-row-menu": SongMenu.open(Number(element.dataset.qid), element.dataset.ctx || "queue"); break;
+      case "songmenu": SongMenu.run(element.dataset.sm); break;
+      case "songinfo-edit": SongInfo.edit(); break;
+      case "sheet-close": Sheets.closeAll(); break;
       case "eq-open": Router.go("eq"); break;
       case "eq-back": Router.go("player"); break;
       case "eq-reset": Equalizer.reset(); break;
@@ -2688,6 +3442,7 @@ const UI = {
         : "En el navegador usa la pantalla completa. En la app Android oculta la barra de estado.";
     }
     LyricsStyle.renderFonts();
+    QueueScreen.syncControls();
     const anim = LYRIC_ANIMS.find((item) => item.id === LyricsStyle.anim());
     const animHint = $("lyric-anim-hint");
     if (animHint && anim) animHint.textContent = anim.hint;
@@ -2710,11 +3465,16 @@ const UI = {
 
   /* ---------- Reproductor ---------- */
 
+  // Pone todas las barras de progreso (reproductor y pantalla de letras) y sus tiempos
+  setProgressUI(value, current, duration) {
+    document.querySelectorAll("[data-progress]").forEach((el) => { el.value = value; });
+    document.querySelectorAll("[data-cur]").forEach((el) => { el.textContent = current; });
+    if (duration !== undefined) document.querySelectorAll("[data-dur]").forEach((el) => { el.textContent = duration; });
+  },
+
   showNowPlaying(song) {
     this.refreshNowPlayingInfo(song);
-    this.el.progress.value = 0;
-    this.el.currentTime.textContent = "0:00";
-    this.el.duration.textContent = this.formatTime(song.duration);
+    this.setProgressUI(0, "0:00", this.formatTime(song.duration));
     this.markPlaying();
     this.updatePlayState();
     this.updateMiniPlayer();
@@ -2728,9 +3488,9 @@ const UI = {
     this.swapText(this.el.miniTitle, "Sin reproducción");
     this.swapText(this.el.miniArtist, "Pulsar RM");
     CoverColor.update(null);
-    this.el.progress.value = 0;
-    this.el.currentTime.textContent = "0:00";
-    this.el.duration.textContent = "0:00";
+    this.setProgressUI(0, "0:00", "0:00");
+    LyricsScreen.syncInfo();
+    LyricsScreen.syncBackdrop();
     this.markPlaying();
     this.updatePlayState();
     this.updateMiniPlayer();
@@ -2751,6 +3511,7 @@ const UI = {
       const isCurrent = Number(button.dataset.songPlay) === Player.currentId;
       button.innerHTML = isCurrent && playing ? Icons.pause : Icons.play;
     });
+    document.documentElement.dataset.playing = playing ? "1" : "0"; // la cola anima su indicador mientras suena
     if ("mediaSession" in navigator) {
       navigator.mediaSession.playbackState = playing ? "playing" : "paused";
     }
@@ -2760,18 +3521,18 @@ const UI = {
     if (Player.seeking) return;
     const duration = Player.audio.duration;
     const hasDuration = Number.isFinite(duration) && duration > 0;
-    this.el.progress.value = hasDuration ? (Player.audio.currentTime / duration) * 1000 : 0;
-    this.el.currentTime.textContent = this.formatTime(Player.audio.currentTime);
+    this.setProgressUI(hasDuration ? (Player.audio.currentTime / duration) * 1000 : 0, this.formatTime(Player.audio.currentTime));
   },
 
   setDuration(seconds) {
     if (Number.isFinite(seconds) && seconds > 0) {
-      this.el.duration.textContent = this.formatTime(seconds);
+      const text = this.formatTime(seconds);
+      document.querySelectorAll("[data-dur]").forEach((el) => { el.textContent = text; });
     }
   },
 
   updateMiniPlayer() {
-    const visible = Player.currentId !== null && Router.current !== "player" && Router.current !== "eq";
+    const visible = Player.currentId !== null && !Router.immersiveViews.includes(Router.current);
     this.el.miniPlayer.classList.toggle("hidden", !visible);
   },
 
@@ -2808,6 +3569,8 @@ const UI = {
     this.setCover(this.el.bigCover, url);
     this.setCover(this.el.miniCover, url);
     CoverColor.update(song);
+    LyricsScreen.syncInfo();     // título y artista de la pantalla de letras
+    LyricsScreen.syncBackdrop(); // fondo "Portada" de la pantalla de letras
   },
 
   // Cambia un texto con un pequeño desvanecido (solo si de verdad cambió)
@@ -2906,6 +3669,14 @@ const UI = {
     return `${minutes}:${String(remaining).padStart(2, "0")}`;
   },
 
+  // "1 h 12 min" / "48 min" (duración total de la cola)
+  formatLong(seconds) {
+    const total = Math.max(0, Math.round((Number(seconds) || 0) / 60));
+    const hours = Math.floor(total / 60), minutes = total % 60;
+    if (hours) return `${hours} h ${minutes} min`;
+    return `${Math.max(total, 0)} min`;
+  },
+
   formatBytes(bytes) {
     if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
     if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -2938,8 +3709,9 @@ const Editor = {
     return Boolean(UI.el.editSheet) && !UI.el.editSheet.classList.contains("hidden");
   },
 
-  open() {
-    const song = Library.byId(Player.currentId);
+  // v1.04: `id` permite editar cualquier canción (por ejemplo desde la cola); sin `id`, la que suena
+  open(id) {
+    const song = Library.byId(id === undefined ? Player.currentId : id);
     if (!song) {
       UI.toast("Reproduce una canción para editar su información.");
       return;
@@ -3093,6 +3865,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   Player.init();
   Themes.init();
   Lyrics.init();
+  LyricsScreen.init();
+  QueueScreen.init();
   LyricsEditor.init();
   Stage.init();
   Equalizer.init();

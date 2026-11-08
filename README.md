@@ -1,7 +1,7 @@
 <!-- ================================= --><!--          PULSAR RM               --><!--         README.md                --><!-- ================================= --><div align="center"><h1>🪐 PULSAR RM</h1><p><strong>Your music. Your universe.</strong></p><p>
   Local Music Player for Android
 </p><p>
-  <img src="https://img.shields.io/badge/VERSION-v1.03-8275E8?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/VERSION-v1.04-8275E8?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/PLATFORM-ANDROID-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android">
   <img src="https://img.shields.io/badge/STATUS-IN_DEVELOPMENT-4788C7?style=for-the-badge" alt="Development">
 </p><p>
@@ -51,7 +51,7 @@ Repository| GitHub
 
 📦 Download
 
-<div align="center">Pulsar RM v1.03
+<div align="center">Pulsar RM v1.04
 
 Latest published version
 
@@ -70,15 +70,37 @@ Development focuses on improving stability, refining the interface and expanding
 
 Current version
 
-v1.03 — Cover color & lyrics update
+v1.04 — Lyrics & Queue screens
 
-This version adds cover-based colors, a hideable status bar, smoother animations and a much richer lyrics experience inspired by Apple Music.
+This version moves the lyrics and the playback queue out of the player into two independent full screens, and turns the queue into a real, editable one.
+
+Upcoming — v2.00
+
+The next major update is planned to include:
+
+- Animated startup screen featuring the Pulsar RM logo.
+- Automatic audio scanning from a user-selected folder.
+- Minimum audio duration filter, configurable from 30 to 45 seconds.
+
+«These features are planned and are not presented as currently available.»
 
 ---
 
 📚 Version History
 
 <details>
+<summary><strong>v1.04 — Lyrics & Queue screens</strong></summary>Improvements and corrections
+
+- Lyrics screen: a full screen only for lyrics, opened with the "Letra" button of the player. Synced (line by line or word by word) and plain lyrics, automatic scrolling, and the three v1.03 animations unchanged.
+- Customization: the Aa button opens a panel where every change is visible live: animation, font (including your own), size (now with "Enorme"), alignment (left or centered), view (synced or text only), background (theme, blurred cover or glow), automatic scrolling, duets and blur. The same options are in Settings.
+- "Seguir la letra" button when you scroll away from the current line, and the progress bar and controls without leaving the screen.
+- Queue screen: a full screen with the current song and the upcoming ones. Drag to reorder, remove one by one, tap a song to play it now.
+- Real queue: Next, Previous and the end of a song follow the queue you arranged. Skipped songs move to the end of the queue, never disappear, and nothing is duplicated.
+- Shuffle: a shuffle mode plus mix options (mix now, library order, add the whole library back, clear the queue).
+- Song information: details of any song of the queue (duration, file, format, size, lyrics, position) with direct access to edit it.
+- Navigation: Lyrics and Queue hang from the player like the equalizer; the Android back button/gesture closes panels first and then goes back one screen.
+
+</details><details>
 <summary><strong>v1.03 — Cover color & lyrics update</strong></summary>Improvements and corrections
 
 - Cover color: the whole app can take its colors from the album cover of the song that is playing, in real time, with Low, Medium and Strong intensity (Settings).
@@ -116,7 +138,7 @@ This release marked the beginning of the project and its development as an Andro
 Detail| Information
 Project| Pulsar RM
 Full name| Pulsar Reproductor de Música
-Current version| v1.03
+Current version| v1.04
 Project type| Independent
 Main platform| Android
 Development| Active

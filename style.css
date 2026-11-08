@@ -1676,62 +1676,6 @@ html[data-lanim="letters"] .lyric-line.active .lc[data-t]::before {
   margin-bottom: 14px;
 }
 
-/* ---- Cola ---- */
-
-.queue-list {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  text-align: left;
-}
-
-.queue-label {
-  margin: 6px 4px 0;
-  color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-}
-
-.queue-empty {
-  padding: 10px;
-  color: var(--muted);
-  font-size: 12px;
-  text-align: center;
-}
-
-.queue-item {
-  padding: 8px 10px;
-  gap: 10px;
-}
-
-.queue-item .song-cover {
-  width: 40px;
-  height: 40px;
-}
-
-.queue-num {
-  width: 20px;
-  flex-shrink: 0;
-  text-align: center;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.queue-item.playing .queue-num {
-  color: var(--accent);
-}
-
-.queue-time {
-  flex-shrink: 0;
-  color: var(--muted);
-  font-size: 11px;
-}
-
 /* ---- Pestañas de abajo ---- */
 
 .player-tabs {
@@ -2937,4 +2881,710 @@ html.immersive .player-tabs {
 .tab-btn,
 .settings {
   transition: border-color 0.3s ease, color 0.3s ease, background-color 0.3s ease, transform 0.12s ease, opacity 0.15s ease;
+}
+
+
+/* =========================================================
+   v1.04 — PANTALLAS INDEPENDIENTES: LETRAS Y COLA DE REPRODUCCIÓN
+   Usan los mismos colores, modos (Light / Dark / Amoled) y temas de siempre.
+   Son pantallas completas (como el ecualizador): sin barra de arriba, sin barra de abajo
+   y con su propio desplazamiento interno.
+   ========================================================= */
+
+/* Marco común: cabecera + contenido que ocupa todo el alto disponible */
+.view.fs.active {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--pad-t, 0px) - var(--pad-b, 0px));
+  height: calc(100dvh - var(--pad-t, 0px) - var(--pad-b, 0px));
+  min-height: 0;
+}
+
+.fs-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 2px -10px 6px -10px;
+}
+
+.fs-title {
+  flex: 1;
+  min-width: 0;
+  padding: 0 6px;
+  text-align: left;
+}
+
+.fs-title strong,
+.fs-title small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fs-title strong {
+  font-size: 17px;
+}
+
+.fs-title small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.fs-top .close-player {
+  flex: none;
+  padding: 8px 10px;
+}
+
+.fs-top .close-player:first-child {
+  padding-left: 14px;
+}
+
+/* Botón de la cabecera que se queda "encendido" (modo aleatorio, panel abierto) */
+.toggle-icon.active,
+#lyr-style-btn[aria-expanded="true"] {
+  color: var(--accent);
+}
+
+.toggle-icon.active .icon {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 55%, transparent));
+}
+
+/* ---------- LETRAS ---------- */
+
+/* Sin la animación de deslizamiento (un transform movería el fondo fijo): solo se desvanece */
+#view-lyrics.view.active {
+  position: relative;
+  isolation: isolate;
+  animation: fadeIn 0.3s ease-out backwards;
+}
+
+#view-lyrics .lyrics-bar {
+  flex: none;
+  border-bottom: 0;
+  padding: 0 2px 8px 6px;
+}
+
+#view-lyrics .lyrics-badge {
+  min-width: 0;
+}
+
+.lyr-body {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+}
+
+#view-lyrics .lyrics {
+  flex: 1;
+  min-width: 0;
+  padding: 0 4px;
+}
+
+#view-lyrics .lyrics::before,
+#view-lyrics .lyrics::after {
+  height: var(--lyr-pad, 30dvh);
+}
+
+/* Texto normal: empieza arriba y deja aire abajo para poder leer hasta el final */
+#view-lyrics .lyrics.is-plain {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 90%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 90%, transparent 100%);
+}
+
+#view-lyrics .lyrics.is-plain::before {
+  height: 14px;
+}
+
+#view-lyrics .lyrics.is-plain::after {
+  height: 80px;
+}
+
+/* La letra sin sincronizar (o "Solo texto") se lee cómoda en pantalla completa */
+#view-lyrics .lyric-line.plain {
+  font-size: calc(var(--lyric-size, 24px) * 0.74);
+  font-weight: 600;
+  line-height: 1.45;
+  margin-bottom: 0.7em;
+  color: var(--text);
+  opacity: 0.9;
+}
+
+#view-lyrics .lyric-line.plain.gap {
+  margin-bottom: 0.4em;
+}
+
+/* "Seguir la letra" */
+.follow-btn {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  border-radius: 30px;
+  background: var(--elevated);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: bold;
+  white-space: nowrap;
+  box-shadow: 0 8px 22px -8px rgba(0, 0, 0, 0.5);
+  animation: followIn 0.25s ease-out;
+}
+
+@keyframes followIn {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* Controles de abajo (más compactos que los del reproductor) */
+.lyr-transport {
+  flex: none;
+}
+
+html.immersive #view-lyrics .controls {
+  --play: 56px;
+  margin-top: 2px;
+  gap: clamp(26px, 9vw, 44px);
+}
+
+html.immersive #view-lyrics .progress-container {
+  margin-top: 6px;
+}
+
+.view.drawer-open .lyr-transport {
+  display: none;
+}
+
+/* Alineación: centrada (los duetos se centran también) */
+html[data-lalign="center"] .lyric-line,
+html[data-lalign="center"] .lyric-line.sr,
+html[data-lalign="center"] .lyric-line.sc {
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+  transform-origin: center center;
+}
+
+/* Fondo de la pantalla de letras */
+.lyr-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+html[data-lbg="cover"] .lyr-bg,
+html[data-lbg="glow"] .lyr-bg {
+  opacity: 1;
+}
+
+.lyr-bg-img {
+  position: absolute;
+  inset: 0;
+}
+
+/* Resplandor del color del tema (también es el fondo de "Portada" si la canción no tiene portada) */
+html[data-lbg="glow"] .lyr-bg-img,
+html[data-lbg="cover"] .lyr-bg:not([data-cover]) .lyr-bg-img {
+  background:
+    radial-gradient(90% 55% at 50% 0%, rgba(128, 128, 128, 0.18), transparent 70%),
+    radial-gradient(80% 50% at 50% 100%, rgba(128, 128, 128, 0.12), transparent 70%);
+}
+
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  html[data-lbg="glow"] .lyr-bg-img,
+  html[data-lbg="cover"] .lyr-bg:not([data-cover]) .lyr-bg-img {
+    background:
+      radial-gradient(90% 55% at 50% 0%, color-mix(in srgb, var(--accent) 32%, transparent), transparent 70%),
+      radial-gradient(80% 50% at 50% 100%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%);
+  }
+  html[data-mode="amoled"][data-lbg] .lyr-bg-img {
+    opacity: 0.8;
+  }
+}
+
+/* Portada desenfocada */
+html[data-lbg="cover"] .lyr-bg[data-cover] .lyr-bg-img {
+  inset: -18%;
+  background: var(--lyr-cover) center / cover no-repeat;
+  filter: blur(42px) saturate(1.35);
+  opacity: 0.55;
+}
+
+html[data-lbg="cover"][data-mode="light"] .lyr-bg[data-cover] .lyr-bg-img {
+  opacity: 0.4;
+}
+
+/* Un velo para que el texto siempre se lea bien sobre la portada */
+html[data-lbg="cover"] .lyr-bg[data-cover]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.1) 40%, rgba(0, 0, 0, 0.3));
+}
+
+html[data-lbg="cover"][data-mode="light"] .lyr-bg[data-cover]::after {
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.25) 40%, rgba(255, 255, 255, 0.5));
+}
+
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  /* Sobre la portada, las líneas apagadas toman el color del texto del modo (no un gris fijo) */
+  html[data-lbg="cover"] #view-lyrics .lyrics {
+    --lyric-dim: color-mix(in srgb, var(--text) 40%, transparent);
+    --lyric-dim2: color-mix(in srgb, var(--text) 58%, transparent);
+    --lyric-past: color-mix(in srgb, var(--text) 52%, transparent);
+  }
+}
+
+/* Panel de personalización */
+.lyr-drawer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  max-height: 46dvh;
+  margin-top: 8px;
+  background: var(--elevated);
+  border: 1px solid var(--border2);
+  border-radius: 22px;
+  animation: drawerIn 0.26s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes drawerIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.dr-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 8px 18px;
+}
+
+.dr-head h3 {
+  font-size: 16px;
+}
+
+.dr-head .chip-btn {
+  padding: 8px 18px;
+}
+
+.dr-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 16px 16px 18px;
+  text-align: left;
+}
+
+.dr-group {
+  margin-top: 12px;
+}
+
+.dr-body .seg button {
+  padding: 9px 4px;
+  font-size: 12px;
+}
+
+.dr-body .set-row {
+  margin-top: 14px;
+}
+
+/* ---------- COLA ---------- */
+
+.q-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.q-nowbox {
+  flex: none;
+}
+
+.q-now {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px 10px 10px;
+  border-radius: 20px;
+  background: linear-gradient(145deg, var(--card-a), var(--card-b));
+  border: 1px solid var(--accent);
+}
+
+.q-now .song-cover {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+}
+
+.q-now .song-details strong {
+  font-size: 15px;
+}
+
+.q-now .song-details small {
+  font-size: 12px;
+}
+
+.q-now .round-btn {
+  width: 44px;
+  height: 44px;
+  font-size: 17px;
+}
+
+/* Indicador que se mueve mientras suena */
+.q-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 11px;
+  color: var(--accent);
+}
+
+.q-bars i {
+  display: block;
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: currentColor;
+  transform: scaleY(0.35);
+  transform-origin: bottom;
+}
+
+html[data-playing="1"] .q-bars i {
+  animation: qBars 0.9s ease-in-out infinite;
+}
+
+html[data-playing="1"] .q-bars i:nth-child(2) { animation-delay: 0.2s; }
+html[data-playing="1"] .q-bars i:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes qBars {
+  0%, 100% { transform: scaleY(0.3); }
+  50%      { transform: scaleY(1); }
+}
+
+.q-head {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.q-head .q-label {
+  margin-top: 6px;
+}
+
+.q-hint {
+  color: var(--muted);
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.q-list {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  text-align: left;
+}
+
+.q-list::-webkit-scrollbar {
+  display: none;
+}
+
+.q-row {
+  flex: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 62px;
+  padding: 0 4px 0 0;
+  background: var(--surface);
+  border: 1px solid var(--item-border);
+  border-radius: 15px;
+  cursor: pointer;
+  touch-action: pan-y;
+  transition: background-color 0.2s ease, border-color 0.25s ease, box-shadow 0.2s ease;
+}
+
+.q-row.lib {
+  padding-left: 10px;
+}
+
+.q-row .song-cover {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+}
+
+.q-handle {
+  flex: none;
+  align-self: stretch;
+  width: 36px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  touch-action: none;
+  cursor: grab;
+}
+
+.q-handle .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.q-btn {
+  flex: none;
+  width: 36px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--muted);
+}
+
+.q-btn .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.q-now .q-btn {
+  width: 34px;
+}
+
+/* Arrastrando: las demás filas se apartan con suavidad; la que se mueve sigue al dedo */
+.q-list.is-dragging {
+  overflow-y: hidden; /* el desplazamiento lo hace el propio arrastre (cerca de los bordes) */
+  touch-action: none;
+}
+
+.q-list.is-dragging .q-row:not(.dragging) {
+  transition: transform 0.18s ease;
+}
+
+.q-row.dragging {
+  z-index: 5;
+  cursor: grabbing;
+  background: var(--surface2);
+  border-color: var(--accent);
+  box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.5);
+  transition: box-shadow 0.15s ease;
+}
+
+.q-empty {
+  margin: auto;
+  padding: 24px 16px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.q-empty .empty-icon {
+  margin-bottom: 10px;
+}
+
+.q-empty .chip-btn,
+.q-empty .add-music {
+  margin-top: 14px;
+}
+
+.q-more {
+  padding: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ---------- HOJAS INFERIORES (opciones, información, mezcla) ---------- */
+
+.asheet {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.asheet-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--backdrop);
+  animation: fadeIn 0.2s ease-out;
+}
+
+.asheet-panel {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  max-height: 86dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--elevated);
+  border: 1px solid var(--border2);
+  border-bottom: 0;
+  border-radius: 24px 24px 0 0;
+  padding: 18px 18px calc(16px + env(safe-area-inset-bottom, 0px));
+  text-align: left;
+  animation: sheetUp 0.26s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@keyframes sheetUp {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.asheet-panel h3 {
+  font-size: 17px;
+}
+
+.a-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.a-head .song-cover {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+}
+
+.a-head .song-details strong {
+  font-size: 15px;
+}
+
+.a-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+}
+
+.a-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 13px 4px;
+  text-align: left;
+  color: var(--text);
+  border-radius: 12px;
+}
+
+.a-item + .a-item {
+  border-top: 1px solid var(--border-soft);
+}
+
+.a-ic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  color: var(--accent);
+}
+
+.a-ic .icon {
+  width: 21px;
+  height: 21px;
+}
+
+.a-tx {
+  flex: 1;
+  min-width: 0;
+}
+
+.a-tx strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.a-tx small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.a-item.danger,
+.a-item.danger .a-ic {
+  color: var(--danger);
+}
+
+.asheet-panel .set-row {
+  margin-top: 12px;
+}
+
+.info-list {
+  margin-top: 6px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 2px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 14px;
+}
+
+.info-row dt {
+  flex: none;
+  color: var(--muted);
+}
+
+.info-row dd {
+  min-width: 0;
+  text-align: right;
+  word-break: break-word;
+}
+
+.asheet-panel .sheet-actions {
+  margin-top: 16px;
+}
+
+/* Que no se seleccione texto en las pantallas nuevas (solo los editores lo permiten) */
+.fs-top,
+.q-row,
+.q-now,
+.q-head,
+.a-item,
+.lyr-transport,
+.follow-btn,
+.lyr-drawer {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Teléfono acostado: poca altura, se compactan los controles */
+@media (max-height: 520px) {
+  html.immersive #view-lyrics .lyr-transport .progress-container { display: none; }
+  .lyr-drawer { max-height: 62dvh; }
+  .q-now .song-cover { width: 44px; height: 44px; }
 }
