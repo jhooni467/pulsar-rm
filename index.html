@@ -80,12 +80,18 @@
           <span id="song-count">0 canciones</span>
         </div>
 
-        <div class="tabs">
-          <button type="button" class="active">Canciones</button>
+        <div id="lib-tabs" class="tabs" role="tablist" aria-label="Explorar la biblioteca">
+          <button type="button" role="tab" data-lib-tab="songs" class="active" aria-selected="true">Canciones</button>
+          <button type="button" role="tab" data-lib-tab="albums" aria-selected="false">Álbumes</button>
+          <button type="button" role="tab" data-lib-tab="artists" aria-selected="false">Artistas</button>
+          <button type="button" role="tab" data-lib-tab="genres" aria-selected="false">Géneros</button>
           <button type="button" class="add-music small" data-action="import">+ Importar</button>
         </div>
+        <div id="lib-banner" class="lib-banner hidden"></div>
 
         <div id="song-list" class="song-list"></div>
+        <div id="album-grid" class="album-grid hidden"></div>
+        <div id="group-list" class="song-list hidden"></div>
       </section>
     </section>
 
@@ -97,6 +103,8 @@
           <button type="button" id="player-menu-button" class="close-player more-btn" data-action="menu" aria-label="Más opciones" aria-haspopup="true" aria-expanded="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="5.5" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="18.5" r="1.7" fill="currentColor"/></svg></button>
           <div id="player-menu" class="popover hidden" role="menu">
             <button type="button" role="menuitem" data-action="edit"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l.9-4L16 4.9a2 2 0 0 1 2.8 0l.3.3a2 2 0 0 1 0 2.8L8.5 18.6z"/><path d="M14.3 6.6l3.1 3.1"/></g></svg><span>Editar información</span></button>
+            <button type="button" role="menuitem" data-view="info"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8v.1"/></g></svg><span>Información de la canción</span></button>
+            <button type="button" role="menuitem" data-view="timer"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7"/><path d="M12 13.5V9.8M9.6 3h4.8M18.6 6.2l1.2-1.2"/></g></svg><span>Temporizador</span></button>
           </div>
         </div>
         <!-- Zona central: portada, letra o cola ("Siguiente") -->
@@ -109,33 +117,210 @@
         <p id="player-artist">Pulsar RM</p>
 
         <div class="progress-container">
-          <span id="current-time" data-cur>0:00</span>
+          <span id="current-time" data-time="current">0:00</span>
           <input id="progress" data-progress type="range" min="0" max="1000" value="0" aria-label="Progreso">
-          <span id="duration" data-dur>0:00</span>
+          <span id="duration" data-time="duration">0:00</span>
         </div>
 
         <div class="controls">
+          <button type="button" class="side-btn" id="btn-shuffle" data-action="shuffle" aria-label="Reproducción aleatoria" aria-pressed="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h3.2c1.6 0 3 .8 3.9 2.1l3.8 5.8c.9 1.3 2.3 2.1 3.9 2.1H21"/><path d="M18.5 4.5L21 7l-2.5 2.5"/><path d="M18.5 14.5L21 17l-2.5 2.5"/><path d="M3 17h3.2c1.1 0 2.1-.4 2.9-1.1"/><path d="M13.6 8.4c.8-.7 1.8-1.1 2.9-1.1H21"/></g></svg></button>
           <button type="button" data-action="prev" aria-label="Anterior"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2" y="6" width="2" height="12" rx="1" fill="currentColor"/><path d="M12.6 7v10L6 12z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M21 7v10L14.6 12z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
           <button type="button" class="round-btn big" data-action="toggle" aria-label="Reproducir o pausar"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 5v14l12-7z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
           <button type="button" data-action="next" aria-label="Siguiente"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="20" y="6" width="2" height="12" rx="1" fill="currentColor"/><path d="M11.4 7v10L18 12z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 7v10l6.4-5z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
+          <button type="button" class="side-btn" id="btn-repeat" data-action="repeat" aria-label="Repetir" data-mode="all" aria-pressed="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11V9.5A2.5 2.5 0 0 1 6.5 7H20"/><path d="M17 4l3 3-3 3"/><path d="M20 13v1.5a2.5 2.5 0 0 1-2.5 2.5H4"/><path d="M7 20l-3-3 3-3"/></g></svg><b class="badge-one">1</b></button>
         </div>
 
         <div class="player-tabs">
-          <button type="button" id="tab-lyrics" class="tab-btn" data-action="lyrics-open" aria-label="Abrir la letra"><svg class="icon tab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></g></svg><span>Letra</span></button>
-          <button type="button" id="tab-queue" class="tab-btn" data-action="queue-open" aria-label="Abrir la cola de reproducción"><svg class="icon tab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></g></svg><span>Siguiente</span></button>
-          <button type="button" id="tab-eq" class="tab-btn" data-action="eq-open" aria-label="Abrir ecualizador">
-            <svg class="eq-icon tab-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="3" x2="6" y2="21"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="18" y1="3" x2="18" y2="21"/><circle cx="6" cy="9" r="2.6" fill="currentColor"/><circle cx="12" cy="15" r="2.6" fill="currentColor"/><circle cx="18" cy="7" r="2.6" fill="currentColor"/></svg>
-            <span>Ecualizador</span>
-          </button>
+          <button type="button" id="tab-lyrics" class="tab-btn" data-view="lyrics" aria-label="Abrir letras"><svg class="icon tab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14M5 11h9M5 16h14M5 20h6"/></g></svg><span>Letra</span></button>
+          <button type="button" id="tab-queue" class="tab-btn" data-view="queue" aria-label="Abrir la cola"><svg class="icon tab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h11M4 12h11M4 17h7"/><path d="M18 9v8l4-4z" fill="currentColor"/></g></svg><span>Cola</span></button>
+          <button type="button" id="tab-eq" class="tab-btn" data-view="eq" aria-label="Abrir el ecualizador"><svg class="eq-icon tab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="3" x2="6" y2="21"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="18" y1="3" x2="18" y2="21"/><circle cx="6" cy="9" r="2.6" fill="currentColor"/><circle cx="12" cy="15" r="2.6" fill="currentColor"/><circle cx="18" cy="7" r="2.6" fill="currentColor"/></svg><span>Ecualizador</span></button>
         </div>
       </div>
     </section>
 
+
+    <!-- ============ LETRAS ============ -->
+    <section id="view-lyrics" class="view sub" data-view-name="lyrics">
+      <div id="lyrics-backdrop" class="lyrics-backdrop" aria-hidden="true"></div>
+      <header class="sub-top">
+        <button type="button" class="close-player" data-action="back" aria-label="Volver"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6l-6 6 6 6"/></g></svg></button>
+        <div class="sub-title"><strong id="lyrics-song">Sin reproducción</strong><small id="lyrics-song-artist">Pulsar RM</small></div>
+        <button type="button" id="lyrics-options-btn" class="close-player" data-action="lyrics-options" aria-label="Personalizar la letra" aria-expanded="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></g></svg></button>
+      </header>
+      <div id="lyrics-bar" class="lyrics-bar no-data no-sync">
+        <span id="lyrics-badge" class="lyrics-badge">Sin letra</span>
+        <div class="lyrics-actions">
+          <button type="button" class="mini-btn text only-sync" data-action="lyrics-center" aria-label="Centrar en la línea que suena"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></g></svg><span>Centrar</span></button>
+          <span class="delay-group">
+            <button type="button" class="mini-btn" data-action="lyrics-earlier" aria-label="Adelantar la letra"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 12h12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <span id="lyrics-delay" class="delay-value">0.00 s</span>
+            <button type="button" class="mini-btn" data-action="lyrics-later" aria-label="Retrasar la letra"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 12h12M12 6v12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          </span>
+          <button type="button" class="mini-btn text" data-action="lyrics-edit"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l.9-4L16 4.9a2 2 0 0 1 2.8 0l.3.3a2 2 0 0 1 0 2.8L8.5 18.6z"/><path d="M14.3 6.6l3.1 3.1"/></g></svg><span>Editar</span></button>
+        </div>
+      </div>
+
+      <div id="lyrics-options" class="lyrics-options hidden" aria-label="Personalizar la letra">
+        <div class="opt-row">
+          <span class="set-label">Vista</span>
+          <div class="seg" role="radiogroup" aria-label="Vista de la letra" data-seg="lyricsView">
+            <button type="button" role="radio" aria-checked="false" data-val="sync">Sincronizada</button>
+            <button type="button" role="radio" aria-checked="false" data-val="plain">Texto</button>
+          </div>
+        </div>
+        <div class="opt-row">
+          <span class="set-label">Animación</span>
+          <div class="seg" role="radiogroup" aria-label="Animación de la letra" data-seg="lyricsAnim">
+            <button type="button" role="radio" aria-checked="false" data-val="flow">Fluida</button>
+            <button type="button" role="radio" aria-checked="false" data-val="glow">Glow</button>
+            <button type="button" role="radio" aria-checked="false" data-val="letters">Letras</button>
+          </div>
+        </div>
+        <div class="opt-row">
+          <span class="set-label">Tamaño</span>
+          <div class="seg" role="radiogroup" aria-label="Tamaño de la letra" data-seg="lyricsSize">
+            <button type="button" role="radio" aria-checked="false" data-val="small">Pequeño</button>
+            <button type="button" role="radio" aria-checked="false" data-val="medium">Medio</button>
+            <button type="button" role="radio" aria-checked="false" data-val="large">Grande</button>
+          </div>
+        </div>
+        <div class="opt-row">
+          <span class="set-label">Espaciado</span>
+          <div class="seg" role="radiogroup" aria-label="Espaciado entre líneas" data-seg="lyricsSpacing">
+            <button type="button" role="radio" aria-checked="false" data-val="compact">Compacto</button>
+            <button type="button" role="radio" aria-checked="false" data-val="normal">Normal</button>
+            <button type="button" role="radio" aria-checked="false" data-val="wide">Amplio</button>
+          </div>
+        </div>
+        <div class="opt-row">
+          <span class="set-label">Fondo</span>
+          <div class="seg" role="radiogroup" aria-label="Fondo de la letra" data-seg="lyricsBg">
+            <button type="button" role="radio" aria-checked="false" data-val="theme">Del tema</button>
+            <button type="button" role="radio" aria-checked="false" data-val="cover">Portada</button>
+          </div>
+        </div>
+        <label class="eq-switch set-row"><span>Desplazamiento automático<small>La letra sigue a la canción sola</small></span>
+          <input type="checkbox" data-toggle="lyricsAutoScroll"><span class="eq-switch-ui" aria-hidden="true"></span></label>
+        <label class="eq-switch set-row"><span>Mantener la pantalla encendida<small>Solo mientras ves la letra</small></span>
+          <input type="checkbox" data-toggle="keepScreenOn"><span class="eq-switch-ui" aria-hidden="true"></span></label>
+        <button type="button" class="link-btn" data-action="open-lyrics-settings">Fuente, duetos y más en Ajustes</button>
+      </div>
+
+      <div id="lyrics" class="lyrics is-empty" aria-live="off"></div>
+
+      <div class="sub-dock">
+        <div class="progress-container">
+          <span data-time="current">0:00</span>
+          <input data-progress type="range" min="0" max="1000" value="0" aria-label="Progreso">
+          <span data-time="duration">0:00</span>
+        </div>
+        <div class="controls compact">
+          <button type="button" data-action="prev" aria-label="Anterior"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2" y="6" width="2" height="12" rx="1" fill="currentColor"/><path d="M12.6 7v10L6 12z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M21 7v10L14.6 12z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
+          <button type="button" class="round-btn" data-action="toggle" aria-label="Reproducir o pausar"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 5v14l12-7z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
+          <button type="button" data-action="next" aria-label="Siguiente"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="20" y="6" width="2" height="12" rx="1" fill="currentColor"/><path d="M11.4 7v10L18 12z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 7v10l6.4-5z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ COLA ============ -->
+    <section id="view-queue" class="view sub" data-view-name="queue">
+      <header class="sub-top">
+        <button type="button" class="close-player" data-action="back" aria-label="Volver"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6l-6 6 6 6"/></g></svg></button>
+        <div class="sub-title"><strong>Cola</strong><small id="queue-summary">Sin canciones</small></div>
+        <button type="button" class="close-player" data-action="queue-add" aria-label="Añadir canciones a la cola"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></g></svg></button>
+      </header>
+      <div class="queue-tools" role="toolbar" aria-label="Opciones de la cola">
+        <button type="button" class="tool-chip" id="q-shuffle" data-action="shuffle" aria-pressed="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h3.2c1.6 0 3 .8 3.9 2.1l3.8 5.8c.9 1.3 2.3 2.1 3.9 2.1H21"/><path d="M18.5 4.5L21 7l-2.5 2.5"/><path d="M18.5 14.5L21 17l-2.5 2.5"/><path d="M3 17h3.2c1.1 0 2.1-.4 2.9-1.1"/><path d="M13.6 8.4c.8-.7 1.8-1.1 2.9-1.1H21"/></g></svg><span>Aleatorio</span></button>
+        <button type="button" class="tool-chip" id="q-repeat" data-action="repeat" aria-pressed="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11V9.5A2.5 2.5 0 0 1 6.5 7H20"/><path d="M17 4l3 3-3 3"/><path d="M20 13v1.5a2.5 2.5 0 0 1-2.5 2.5H4"/><path d="M7 20l-3-3 3-3"/></g></svg><span>Repetir</span></button>
+        <button type="button" class="tool-chip" data-action="queue-mix"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h3.2c1.6 0 3 .8 3.9 2.1l3.8 5.8c.9 1.3 2.3 2.1 3.9 2.1H21"/><path d="M18.5 4.5L21 7l-2.5 2.5"/><path d="M18.5 14.5L21 17l-2.5 2.5"/><path d="M3 17h3.2c1.1 0 2.1-.4 2.9-1.1"/><path d="M13.6 8.4c.8-.7 1.8-1.1 2.9-1.1H21"/></g></svg><span>Mezclar lo pendiente</span></button>
+        <button type="button" class="tool-chip" id="q-timer" data-view="timer"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7"/><path d="M12 13.5V9.8M9.6 3h4.8M18.6 6.2l1.2-1.2"/></g></svg><span id="q-timer-label">Temporizador</span></button>
+        <button type="button" class="tool-chip" data-action="queue-clear"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M9.5 7V5h5v2M7 7l.8 12h8.4L17 7"/></g></svg><span>Vaciar pendientes</span></button>
+      </div>
+      <details id="queue-mixbox" class="mixbox">
+        <summary>Mezcla y transición entre canciones<span id="mix-state" class="mix-state"></span></summary>
+        <label class="eq-switch set-row"><span>Reproducción continua<small>La siguiente canción ya está lista: sin pausas entre temas</small></span>
+          <input type="checkbox" data-toggle="gapless"><span class="eq-switch-ui" aria-hidden="true"></span></label>
+        <label class="eq-switch set-row"><span>Crossfade<small>Una canción se funde con la siguiente</small></span>
+          <input type="checkbox" data-toggle="crossfade"><span class="eq-switch-ui" aria-hidden="true"></span></label>
+        <div id="mix-duration" class="set-block">
+          <div class="range-head"><span class="set-label">Duración del fundido</span><b id="mix-secs">4 s</b></div>
+          <input type="range" class="range" min="1" max="12" step="1" data-range="crossfadeSecs" aria-label="Duración del crossfade en segundos">
+        </div>
+      </details>
+      <div id="queue-list" class="queue-list" aria-live="polite"></div>
+    </section>
+
+    <!-- ============ TEMPORIZADOR ============ -->
+    <section id="view-timer" class="view sub" data-view-name="timer">
+      <header class="sub-top">
+        <button type="button" class="close-player" data-action="back" aria-label="Volver"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6l-6 6 6 6"/></g></svg></button>
+        <div class="sub-title"><strong>Temporizador</strong><small>Detiene la música automáticamente</small></div>
+        
+      </header>
+      <div id="timer-state" class="timer-hero">
+        <div class="timer-ring" aria-hidden="true"><svg viewBox="0 0 120 120"><circle class="ring-bg" cx="60" cy="60" r="54"/><circle id="timer-arc" class="ring-fg" cx="60" cy="60" r="54"/></svg>
+          <div class="timer-read"><strong id="timer-clock">—</strong><small id="timer-caption">Sin temporizador</small></div></div>
+      </div>
+      <div class="card">
+        <h3>Detener en…</h3>
+        <div id="timer-presets" class="chip-grid"></div>
+        <div class="timer-custom">
+          <label class="field"><span>Minutos (1 a 480)</span><input id="timer-custom" type="number" inputmode="numeric" min="1" max="480" placeholder="Otro tiempo"></label>
+          <button type="button" class="add-music small" data-action="timer-custom">Iniciar</button>
+        </div>
+        <button type="button" class="tool-chip wide" data-action="timer-track"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.2V5.5a2 2 0 0 1 2-2h6.7l8.3 8.3a2 2 0 0 1 0 2.8l-5.9 5.9a2 2 0 0 1-2.8 0z"/><circle cx="8" cy="8" r="1.2" fill="currentColor"/></g></svg><span>Al terminar la canción actual</span></button>
+      </div>
+      <div id="timer-active" class="card hidden">
+        <h3>Temporizador activo</h3>
+        <div class="chip-grid two">
+          <button type="button" class="eq-chip" data-action="timer-add">+ 5 min</button>
+          <button type="button" class="eq-chip danger" data-action="timer-cancel">Cancelar</button>
+        </div>
+      </div>
+      <p class="hint">Al terminar el tiempo, el volumen baja poco a poco (unos 8 segundos) y la música se pausa. Usa la hora real del sistema, así que no se desajusta con la pantalla apagada.</p>
+      <p id="timer-native-note" class="hint"></p>
+    </section>
+
+    <!-- ============ INFORMACIÓN DE LA CANCIÓN ============ -->
+    <section id="view-info" class="view sub" data-view-name="info">
+      <header class="sub-top">
+        <button type="button" class="close-player" data-action="back" aria-label="Volver"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6l-6 6 6 6"/></g></svg></button>
+        <div class="sub-title"><strong>Información</strong><small>Datos de la canción</small></div>
+        
+      </header>
+      <div class="info-hero">
+        <div id="info-cover" class="info-cover"></div>
+        <h2 id="info-title">—</h2>
+        <p id="info-artist">—</p>
+      </div>
+      <div class="info-actions">
+        <button type="button" class="chip-btn" data-action="info-play"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h11M4 12h11M4 17h7"/><path d="M18 9v8l4-4z" fill="currentColor"/></g></svg><span>Reproducir</span></button>
+        <button type="button" class="chip-btn" data-action="info-next">Reproducir siguiente</button>
+        <button type="button" class="chip-btn" data-action="info-edit">Editar</button>
+      </div>
+      <div id="info-links" class="info-links"></div>
+      <div id="info-list" class="card info-list"></div>
+    </section>
+
+    <!-- ============ ÁLBUM / ARTISTA / GÉNERO ============ -->
+    <section id="view-collection" class="view sub" data-view-name="collection">
+      <header class="sub-top">
+        <button type="button" class="close-player" data-action="back" aria-label="Volver"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6l-6 6 6 6"/></g></svg></button>
+        <div class="sub-title"><strong id="col-title">—</strong><small id="col-sub">—</small></div>
+        
+      </header>
+      <div class="info-actions">
+        <button type="button" class="add-music small" data-action="col-play">Reproducir</button>
+        <button type="button" class="chip-btn" data-action="col-shuffle"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h3.2c1.6 0 3 .8 3.9 2.1l3.8 5.8c.9 1.3 2.3 2.1 3.9 2.1H21"/><path d="M18.5 4.5L21 7l-2.5 2.5"/><path d="M18.5 14.5L21 17l-2.5 2.5"/><path d="M3 17h3.2c1.1 0 2.1-.4 2.9-1.1"/><path d="M13.6 8.4c.8-.7 1.8-1.1 2.9-1.1H21"/></g></svg><span>Aleatorio</span></button>
+      </div>
+      <div id="col-list" class="song-list"></div>
+    </section>
+
     <!-- ============ ECUALIZADOR ============ -->
-    <section id="view-eq" class="view off" data-view-name="eq">
+    <section id="view-eq" class="view sub off" data-view-name="eq">
       <div class="eq-top">
-        <button type="button" class="close-player" data-action="eq-back" aria-label="Volver al reproductor"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14.5 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        <h2>Ecualizador</h2>
+        <button type="button" class="close-player" data-action="back" aria-label="Volver"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14.5 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <div class="sub-title"><strong>Ecualizador</strong><small id="eq-summary">Desactivado · Plano</small></div>
         <label class="eq-switch">
           <input id="eq-enabled" type="checkbox">
           <span class="eq-switch-ui" aria-hidden="true"></span>
@@ -154,142 +339,9 @@
       <p class="hint">Arrastra cada barra de −12 a +12 dB (frecuencias en Hz). Al tocar un modo o mover una barra, el ecualizador se activa solo.</p>
       <div class="eq-actions">
         <button type="button" class="ghost-btn" data-action="eq-reset">Restablecer</button>
+        <button type="button" class="ghost-btn" data-action="open-audio-settings">Más ajustes de sonido</button>
       </div>
-    </section>
-
-
-    <!-- ============ LETRAS (pantalla completa) ============ -->
-    <section id="view-lyrics" class="view fs" data-view-name="lyrics">
-      <div id="lyr-bg" class="lyr-bg" aria-hidden="true"><div class="lyr-bg-img"></div></div>
-
-      <header class="fs-top">
-        <button type="button" class="close-player" data-action="back-player" aria-label="Volver al reproductor"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14.5 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        <div class="fs-title">
-          <strong id="lyr-title">Sin reproducción</strong>
-          <small id="lyr-artist">Pulsar RM</small>
-        </div>
-        <button type="button" class="close-player" data-action="queue-open" aria-label="Abrir la cola de reproducción"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></g></svg></button>
-        <button type="button" id="lyr-style-btn" class="close-player" data-action="lyrics-style" aria-label="Personalizar la letra" aria-expanded="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18l4.6-11 4.6 11M4.9 13.6h5.4M14.5 18l3.1-7.4 3.1 7.4M15.8 15.6h3.6"/></g></svg></button>
-      </header>
-
-            <div id="lyrics-bar" class="lyrics-bar no-data no-sync">
-              <span id="lyrics-badge" class="lyrics-badge">Sin letra</span>
-              <div class="lyrics-actions">
-                <span class="delay-group">
-                  <button type="button" class="mini-btn" data-action="lyrics-earlier" aria-label="Adelantar la letra"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 12h12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-                  <span id="lyrics-delay" class="delay-value">0.00 s</span>
-                  <button type="button" class="mini-btn" data-action="lyrics-later" aria-label="Retrasar la letra"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 12h12M12 6v12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-                </span>
-                <button type="button" class="mini-btn text" data-action="lyrics-edit"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l.9-4L16 4.9a2 2 0 0 1 2.8 0l.3.3a2 2 0 0 1 0 2.8L8.5 18.6z"/><path d="M14.3 6.6l3.1 3.1"/></g></svg><span>Editar</span></button>
-              </div>
-            </div>
-
-      <div class="lyr-body">
-        <div id="lyrics" class="lyrics is-empty" aria-live="off"></div>
-        <button type="button" id="lyrics-follow" class="follow-btn hidden" data-action="lyrics-follow">Seguir la letra</button>
-      </div>
-
-      <div class="lyr-transport">
-        <div class="progress-container">
-          <span data-cur>0:00</span>
-          <input data-progress type="range" min="0" max="1000" value="0" aria-label="Progreso">
-          <span data-dur>0:00</span>
-        </div>
-        <div class="controls">
-          <button type="button" data-action="prev" aria-label="Anterior"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2" y="6" width="2" height="12" rx="1" fill="currentColor"/><path d="M12.6 7v10L6 12z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M21 7v10L14.6 12z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
-          <button type="button" class="round-btn big" data-action="toggle" aria-label="Reproducir o pausar"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 5v14l12-7z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>
-          <button type="button" data-action="next" aria-label="Siguiente"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="20" y="6" width="2" height="12" rx="1" fill="currentColor"/><path d="M11.4 7v10L18 12z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 7v10l6.4-5z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
-        </div>
-      </div>
-
-      <!-- Personalización visual: se ve en directo porque la letra se acomoda arriba -->
-      <section id="lyr-drawer" class="lyr-drawer hidden" aria-label="Personalizar la letra">
-        <div class="dr-head">
-          <h3>Personalizar letra</h3>
-          <button type="button" class="chip-btn" data-action="lyrics-style-close">Listo</button>
-        </div>
-        <div class="dr-body">
-        <div class="dr-group">
-          <span class="set-label">Animación</span>
-          <div class="seg" role="radiogroup" aria-label="Animación" data-seg="lyricsAnim">
-            <button type="button" role="radio" aria-checked="false" data-val="flow">Fluida</button>
-            <button type="button" role="radio" aria-checked="false" data-val="glow">Con glow</button>
-            <button type="button" role="radio" aria-checked="false" data-val="letters">Letra a letra</button>
-          </div>
-        </div>
-          <div class="dr-group">
-            <span class="set-label">Fuente</span>
-            <div class="seg wrap" role="radiogroup" aria-label="Fuente de las letras" data-seg="lyricsFont" data-fonts></div>
-            <div class="set-actions">
-              <button type="button" class="chip-btn" data-action="lyric-font-import">Importar fuente…</button>
-              <button type="button" class="chip-btn muted js-font-remove hidden" data-action="lyric-font-remove">Quitar fuente importada</button>
-            </div>
-          </div>
-        <div class="dr-group">
-          <span class="set-label">Tamaño</span>
-          <div class="seg" role="radiogroup" aria-label="Tamaño" data-seg="lyricsSize">
-            <button type="button" role="radio" aria-checked="false" data-val="small">Pequeño</button>
-            <button type="button" role="radio" aria-checked="false" data-val="medium">Medio</button>
-            <button type="button" role="radio" aria-checked="false" data-val="large">Grande</button>
-            <button type="button" role="radio" aria-checked="false" data-val="xl">Enorme</button>
-          </div>
-        </div>
-        <div class="dr-group">
-          <span class="set-label">Alineación</span>
-          <div class="seg" role="radiogroup" aria-label="Alineación" data-seg="lyricsAlign">
-            <button type="button" role="radio" aria-checked="false" data-val="left">Izquierda</button>
-            <button type="button" role="radio" aria-checked="false" data-val="center">Centrada</button>
-          </div>
-        </div>
-        <div class="dr-group">
-          <span class="set-label">Vista</span>
-          <div class="seg" role="radiogroup" aria-label="Vista" data-seg="lyricsMode">
-            <button type="button" role="radio" aria-checked="false" data-val="sync">Sincronizada</button>
-            <button type="button" role="radio" aria-checked="false" data-val="text">Solo texto</button>
-          </div>
-        </div>
-        <div class="dr-group">
-          <span class="set-label">Fondo</span>
-          <div class="seg" role="radiogroup" aria-label="Fondo" data-seg="lyricsBg">
-            <button type="button" role="radio" aria-checked="false" data-val="theme">Del tema</button>
-            <button type="button" role="radio" aria-checked="false" data-val="cover">Portada</button>
-            <button type="button" role="radio" aria-checked="false" data-val="glow">Resplandor</button>
-          </div>
-        </div>
-        <label class="eq-switch set-row">
-          <span>Desplazamiento automático<small>La letra sigue a la canción sola</small></span>
-          <input type="checkbox" data-toggle="lyricsAutoScroll">
-          <span class="eq-switch-ui" aria-hidden="true"></span>
-        </label>
-        <label class="eq-switch set-row">
-          <span>Duetos a dos lados<small>V1 a la izquierda, V2 a la derecha</small></span>
-          <input type="checkbox" data-toggle="lyricsDuet">
-          <span class="eq-switch-ui" aria-hidden="true"></span>
-        </label>
-        <label class="eq-switch set-row">
-          <span>Desenfocar líneas lejanas<small>Resalta la línea que está sonando</small></span>
-          <input type="checkbox" data-toggle="lyricsBlur">
-          <span class="eq-switch-ui" aria-hidden="true"></span>
-        </label>
-        </div>
-      </section>
-    </section>
-
-    <!-- ============ COLA DE REPRODUCCIÓN (pantalla completa) ============ -->
-    <section id="view-queue" class="view fs" data-view-name="queue">
-      <header class="fs-top">
-        <button type="button" class="close-player" data-action="back-player" aria-label="Volver al reproductor"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14.5 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        <div class="fs-title">
-          <strong>Cola de reproducción</strong>
-          <small id="queue-summary">Sin canciones pendientes</small>
-        </div>
-        <button type="button" id="queue-shuffle-btn" class="close-player toggle-icon" data-action="queue-shuffle" aria-pressed="false" aria-label="Reproducción aleatoria"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h2.4c1.6 0 3.1.8 4 2.1l4.2 5.8c.9 1.3 2.4 2.1 4 2.1H21M18.5 14.6L21 17l-2.5 2.4M3 17h2.4c1.6 0 3.1-.8 4-2.1M14 9.1c.9-1.3 2.4-2.1 4-2.1H21M18.5 4.6L21 7l-2.5 2.4"/></g></svg></button>
-        <button type="button" class="close-player" data-action="queue-options" aria-label="Opciones de mezcla"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="5.5" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="18.5" r="1.7" fill="currentColor"/></svg></button>
-      </header>
-
-      <div id="queue-now" class="q-nowbox"></div>
-      <div id="queue-head" class="q-head"></div>
-      <div id="queue-list" class="q-list"></div>
+      <p id="eq-engine" class="hint eq-engine"></p>
     </section>
 
     <!-- ============ AJUSTES ============ -->
@@ -298,6 +350,19 @@
         <h2>Ajustes</h2>
       </div>
 
+      <!-- Acceso rápido a cada categoría -->
+      <nav id="settings-nav" class="settings-nav" aria-label="Categorías de ajustes">
+        <button type="button" data-jump="appearance" class="active">Apariencia</button>
+        <button type="button" data-jump="lyrics">Letras</button>
+        <button type="button" data-jump="playback">Reproducción</button>
+        <button type="button" data-jump="audio">Audio</button>
+        <button type="button" data-jump="library">Biblioteca</button>
+        <button type="button" data-jump="performance">Rendimiento</button>
+      </nav>
+
+      <!-- ===== A · APARIENCIA ===== -->
+      <section id="set-appearance" class="set-group" data-group="appearance">
+        <header class="group-head"><span class="group-ico"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.8 1.8-1.7 0-.6-.3-1-.5-1.4-.3-.4-.4-.8-.4-1.2 0-.9.7-1.6 1.6-1.6H17a3.5 3.5 0 0 0 3.5-3.5C20.5 7 16.7 3.5 12 3.5z"/><circle cx="7.8" cy="11" r=".9" fill="currentColor"/><circle cx="10.5" cy="7.4" r=".9" fill="currentColor"/><circle cx="15" cy="7.8" r=".9" fill="currentColor"/></g></svg></span><div><h2>Apariencia</h2><p>Modo de la app, temas y colores</p></div></header>
       <div class="card">
         <h3>Modo de la app</h3>
         <p>Elige cómo se ve la app. Los temas de abajo se adaptan al modo. El icono cambia al cerrar la app.</p>
@@ -342,18 +407,11 @@
         </div>
       </div>
 
-      <div class="card">
-        <h3>Pantalla</h3>
-        <label class="eq-switch set-row">
-          <span>Ocultar la barra de estado</span>
-          <input type="checkbox" data-toggle="hideStatusBar">
-          <span class="eq-switch-ui" aria-hidden="true"></span>
-        </label>
-        <small id="status-hint" class="set-hint"></small>
-      </div>
+      </section>
 
-      <h2 class="settings-group">Letras</h2>
-
+      <!-- ===== B · LETRAS Y ANIMACIONES ===== -->
+      <section id="set-lyrics" class="set-group" data-group="lyrics">
+        <header class="group-head"><span class="group-ico"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14M5 11h9M5 16h14M5 20h6"/></g></svg></span><div><h2>Letras y animaciones</h2><p>Cómo se ven y se mueven las letras</p></div></header>
       <div class="card">
         <h3>Animación</h3>
         <p>Cómo se ilumina la letra mientras suena. Funciona mejor con letras palabra por palabra.</p>
@@ -368,10 +426,10 @@
 
       <div class="card">
         <h3>Fuente y tamaño</h3>
-        <div id="lyric-fonts" class="seg wrap" role="radiogroup" aria-label="Fuente de las letras" data-seg="lyricsFont" data-fonts></div>
+        <div id="lyric-fonts" class="seg wrap" role="radiogroup" aria-label="Fuente de las letras" data-seg="lyricsFont"></div>
         <div class="set-actions">
           <button type="button" class="chip-btn" data-action="lyric-font-import">Importar fuente…</button>
-          <button type="button" id="lyric-font-remove" class="chip-btn muted js-font-remove hidden" data-action="lyric-font-remove">Quitar fuente importada</button>
+          <button type="button" id="lyric-font-remove" class="chip-btn muted hidden" data-action="lyric-font-remove">Quitar fuente importada</button>
         </div>
         <small class="set-hint">Acepta archivos .ttf, .otf, .woff y .woff2.</small>
         <div class="set-block">
@@ -380,13 +438,12 @@
             <button type="button" role="radio" aria-checked="false" data-val="small">Pequeño</button>
             <button type="button" role="radio" aria-checked="false" data-val="medium">Medio</button>
             <button type="button" role="radio" aria-checked="false" data-val="large">Grande</button>
-            <button type="button" role="radio" aria-checked="false" data-val="xl">Enorme</button>
           </div>
         </div>
       </div>
 
       <div class="card">
-        <h3>Estilo Apple Music</h3>
+        <h3>Estilo de la letra</h3>
         <label class="eq-switch set-row">
           <span>Duetos a dos lados<small>V1 (principal) a la izquierda, V2 a la derecha</small></span>
           <input type="checkbox" data-toggle="lyricsDuet">
@@ -400,48 +457,201 @@
       </div>
 
       <div class="card">
-        <h3>Pantalla de letras</h3>
-        <p>Cómo se ve la pantalla completa de la letra. También puedes cambiarlo desde ella con el botón Aa.</p>
-        <div class="set-block">
-          <span class="set-label">Alineación</span>
-          <div class="seg" role="radiogroup" aria-label="Alineación" data-seg="lyricsAlign">
-            <button type="button" role="radio" aria-checked="false" data-val="left">Izquierda</button>
-            <button type="button" role="radio" aria-checked="false" data-val="center">Centrada</button>
-          </div>
-        </div>
+        <h3>Visualización</h3>
         <div class="set-block">
           <span class="set-label">Vista</span>
-          <div class="seg" role="radiogroup" aria-label="Vista" data-seg="lyricsMode">
+          <div class="seg" role="radiogroup" aria-label="Vista de la letra" data-seg="lyricsView">
             <button type="button" role="radio" aria-checked="false" data-val="sync">Sincronizada</button>
-            <button type="button" role="radio" aria-checked="false" data-val="text">Solo texto</button>
+            <button type="button" role="radio" aria-checked="false" data-val="plain">Texto normal</button>
           </div>
         </div>
         <div class="set-block">
-          <span class="set-label">Fondo</span>
-          <div class="seg" role="radiogroup" aria-label="Fondo" data-seg="lyricsBg">
-            <button type="button" role="radio" aria-checked="false" data-val="theme">Del tema</button>
-            <button type="button" role="radio" aria-checked="false" data-val="cover">Portada</button>
-            <button type="button" role="radio" aria-checked="false" data-val="glow">Resplandor</button>
+          <span class="set-label">Espaciado entre líneas</span>
+          <div class="seg" role="radiogroup" aria-label="Espaciado entre líneas" data-seg="lyricsSpacing">
+            <button type="button" role="radio" aria-checked="false" data-val="compact">Compacto</button>
+            <button type="button" role="radio" aria-checked="false" data-val="normal">Normal</button>
+            <button type="button" role="radio" aria-checked="false" data-val="wide">Amplio</button>
           </div>
         </div>
-        <label class="eq-switch set-row">
-          <span>Desplazamiento automático<small>La letra sigue a la canción sola</small></span>
-          <input type="checkbox" data-toggle="lyricsAutoScroll">
-          <span class="eq-switch-ui" aria-hidden="true"></span>
-        </label>
+        <div class="set-block">
+          <span class="set-label">Fondo de la pantalla de letras</span>
+          <div class="seg" role="radiogroup" aria-label="Fondo de la letra" data-seg="lyricsBg">
+            <button type="button" role="radio" aria-checked="false" data-val="theme">Color del tema</button>
+            <button type="button" role="radio" aria-checked="false" data-val="cover">Portada difuminada</button>
+          </div>
+        </div>
+        <label class="eq-switch set-row"><span>Desplazamiento automático<small>La letra sigue a la canción sola</small></span>
+          <input type="checkbox" data-toggle="lyricsAutoScroll"><span class="eq-switch-ui" aria-hidden="true"></span></label>
+        <label class="eq-switch set-row"><span>Mantener la pantalla encendida<small>Solo mientras ves la letra</small></span>
+          <input type="checkbox" data-toggle="keepScreenOn"><span class="eq-switch-ui" aria-hidden="true"></span></label>
       </div>
+      </section>
 
+      <!-- ===== C · REPRODUCCIÓN ===== -->
+      <section id="set-playback" class="set-group" data-group="playback">
+        <header class="group-head"><span class="group-ico"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h11M4 12h11M4 17h7"/><path d="M18 9v8l4-4z" fill="currentColor"/></g></svg></span><div><h2>Reproducción</h2><p>Cola, repetición, mezcla y temporizador</p></div></header>
       <div class="card">
-        <h3>Biblioteca</h3>
+        <h3>Reproducción</h3>
+        <div class="set-block">
+          <span class="set-label">Repetir</span>
+          <div class="seg" role="radiogroup" aria-label="Modo de repetición" data-seg="repeat">
+            <button type="button" role="radio" aria-checked="false" data-val="off">No repetir</button>
+            <button type="button" role="radio" aria-checked="false" data-val="all">Toda la cola</button>
+            <button type="button" role="radio" aria-checked="false" data-val="one">Una canción</button>
+          </div>
+        </div>
+        <label class="eq-switch set-row"><span>Reproducción aleatoria<small>Mezcla las canciones pendientes de la cola</small></span>
+          <input type="checkbox" data-toggle="shuffle"><span class="eq-switch-ui" aria-hidden="true"></span></label>
+        <label class="eq-switch set-row"><span>«Anterior» reinicia la canción<small>Si ya pasaron 3 segundos, vuelve al principio en lugar de ir a la anterior</small></span>
+          <input type="checkbox" data-toggle="prevRestart"><span class="eq-switch-ui" aria-hidden="true"></span></label>
+        <button type="button" class="chip-btn set-link" data-view="queue">Abrir la cola</button>
+      </div>
+      <div class="card">
+        <h3>Mezcla y transiciones</h3>
+        <p>Evita silencios entre canciones.</p>
+        <label class="eq-switch set-row"><span>Reproducción continua<small>La siguiente canción se prepara de antemano</small></span>
+          <input type="checkbox" data-toggle="gapless"><span class="eq-switch-ui" aria-hidden="true"></span></label>
+        <label class="eq-switch set-row"><span>Crossfade<small>Una canción se funde con la siguiente</small></span>
+          <input type="checkbox" data-toggle="crossfade"><span class="eq-switch-ui" aria-hidden="true"></span></label>
+        <div id="set-mix-duration" class="set-block">
+          <div class="range-head"><span class="set-label">Duración del fundido</span><b data-range-out="crossfadeSecs">4 s</b></div>
+          <input type="range" class="range" min="1" max="12" step="1" data-range="crossfadeSecs" aria-label="Duración del crossfade en segundos">
+        </div>
+      </div>
+      <div class="card">
+        <h3>Temporizador</h3>
+        <p id="set-timer-text">Detén la música automáticamente después de un tiempo.</p>
+        <button type="button" class="chip-btn set-link" data-view="timer">Configurar temporizador</button>
+      </div>
+      <div class="card">
+        <h3>Segundo plano e interrupciones</h3>
+        <label class="eq-switch set-row"><span>Música en segundo plano<small>Sigue sonando con la pantalla apagada o en otra app</small></span>
+          <input type="checkbox" data-toggle="bgPlayback"><span class="eq-switch-ui" aria-hidden="true"></span></label>
+        <div class="set-block">
+          <span class="set-label">Cuando otra app necesita el audio</span>
+          <div class="seg" role="radiogroup" aria-label="Comportamiento ante interrupciones" data-seg="focusMode">
+            <button type="button" role="radio" aria-checked="false" data-val="duck">Bajar el volumen</button>
+            <button type="button" role="radio" aria-checked="false" data-val="pause">Pausar</button>
+          </div>
+        </div>
+        <label class="eq-switch set-row"><span>Pausar al desconectar los auriculares</span>
+          <input type="checkbox" data-toggle="pauseOnNoisy"><span class="eq-switch-ui" aria-hidden="true"></span></label>
+        <small id="bg-hint" class="set-hint"></small>
+      </div>
+      </section>
+
+      <!-- ===== D · AUDIO ===== -->
+      <section id="set-audio" class="set-group" data-group="audio">
+        <header class="group-head"><span class="group-ico"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3.5" y="14" width="4" height="6" rx="1.6"/><rect x="16.5" y="14" width="4" height="6" rx="1.6"/></g></svg></span><div><h2>Audio</h2><p>Ecualizador y procesamiento de sonido</p></div></header>
+      <div class="card">
+        <h3>Ecualizador</h3>
+        <p id="set-eq-text">10 bandas reales, con modos predefinidos y ajuste manual.</p>
+        <button type="button" class="chip-btn set-link" data-view="eq">Abrir el ecualizador</button>
+      </div>
+      <div class="card">
+        <h3>Ajustes de sonido</h3>
+        <label class="eq-switch set-row"><span>Limitador de picos<small>Evita la saturación cuando subes graves en el ecualizador</small></span>
+          <input type="checkbox" data-toggle="limiter"><span class="eq-switch-ui" aria-hidden="true"></span></label>
+        <label class="eq-switch set-row"><span>Audio mono<small>Mezcla izquierda y derecha en un solo canal</small></span>
+          <input type="checkbox" data-toggle="mono"><span class="eq-switch-ui" aria-hidden="true"></span></label>
+        <div class="set-block">
+          <div class="range-head"><span class="set-label">Balance izquierda / derecha</span><b data-range-out="balance">Centro</b></div>
+          <input type="range" class="range" min="-100" max="100" step="5" data-range="balance" data-scale="100" aria-label="Balance izquierda derecha">
+        </div>
+        <small id="audio-hint" class="set-hint"></small>
+      </div>
+      </section>
+
+      <!-- ===== E · BIBLIOTECA MUSICAL ===== -->
+      <section id="set-library" class="set-group" data-group="library">
+        <header class="group-head"><span class="group-ico"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4l2 2.2h8A1.5 1.5 0 0 1 20.5 9.7v7.8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/></g></svg></span><div><h2>Biblioteca musical</h2><p>Carpetas, actualización y gestión de archivos</p></div></header>
+      <div class="card">
+        <h3>Carpetas autorizadas</h3>
+        <p id="folders-text">Elige las carpetas que Pulsar RM puede leer. Se conserva el permiso entre sesiones.</p>
+        <div id="folder-list" class="folder-list"></div>
+        <button type="button" class="chip-btn set-link" id="folder-add" data-action="folder-add"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></g></svg><span>Añadir carpeta</span></button>
+      </div>
+      <div class="card">
+        <h3>Actualizar biblioteca</h3>
+        <p>La app no revisa tus carpetas por su cuenta: pulsa el botón cuando quieras traer canciones nuevas o cambios.</p>
+        <button type="button" class="add-music" id="scan-btn" data-action="scan"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.3-4.2L4 8.6"/><path d="M4 4v4.6h4.6"/><path d="M4 13a8 8 0 0 0 14.3 4.2L20 15.4"/><path d="M20 20v-4.6h-4.6"/></g></svg><span>Actualizar biblioteca</span></button>
+        <div id="scan-progress" class="scan-progress hidden" aria-live="polite">
+          <div class="scan-bar"><span id="scan-fill"></span></div>
+          <small id="scan-text">Preparando…</small>
+          <button type="button" class="link-btn" data-action="scan-cancel">Cancelar</button>
+        </div>
+        <div id="scan-result" class="scan-result hidden" aria-live="polite"></div>
+        <small id="scan-last" class="set-hint"></small>
+      </div>
+      <div class="card">
+        <h3>Información musical</h3>
+        <div id="lib-stats" class="stat-grid"></div>
+      </div>
+      <div class="card">
+        <h3>Gestión de archivos</h3>
         <p id="storage-info">Calculando espacio…</p>
+        <div class="set-actions">
+          <button type="button" class="chip-btn" data-action="import">Importar archivos</button>
+          <button type="button" id="restore-ignored" class="chip-btn muted hidden" data-action="restore-ignored">Restaurar quitadas</button>
+          <button type="button" id="prune-missing" class="chip-btn muted hidden" data-action="prune-missing">Quitar no disponibles</button>
+        </div>
         <button type="button" class="danger-btn" data-action="clear">Borrar biblioteca</button>
       </div>
+      </section>
 
+      <!-- ===== F · RENDIMIENTO Y PANTALLA ===== -->
+      <section id="set-performance" class="set-group" data-group="performance">
+        <header class="group-head"><span class="group-ico"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 17.5a8.5 8.5 0 1 1 15 0"/><path d="M12 13.5l4-4.5"/><circle cx="12" cy="13.5" r="1" fill="currentColor"/></g></svg></span><div><h2>Rendimiento y pantalla</h2><p>Tasa de refresco, animaciones y optimización</p></div></header>
+      <div class="card">
+        <h3>Tasa de refresco</h3>
+        <p>Los <b>Hz</b> son las veces por segundo que la pantalla se actualiza. Una tasa alta se ve más fluida pero gasta más batería.</p>
+        <div id="hz-grid" class="hz-grid" role="radiogroup" aria-label="Tasa de refresco"></div>
+        <small id="hz-info" class="set-hint"></small>
+      </div>
+      <div class="card">
+        <h3>Animaciones y optimización</h3>
+        <div class="set-block">
+          <span class="set-label">Animaciones</span>
+          <div class="seg" role="radiogroup" aria-label="Nivel de animaciones" data-seg="animations">
+            <button type="button" role="radio" aria-checked="false" data-val="full">Completas</button>
+            <button type="button" role="radio" aria-checked="false" data-val="reduced">Reducidas</button>
+            <button type="button" role="radio" aria-checked="false" data-val="off">Sin animaciones</button>
+          </div>
+        </div>
+        <label class="eq-switch set-row"><span>Efectos visuales<small>Brillos, sombras y desenfoques. Apágalo si la app va lenta</small></span>
+          <input type="checkbox" data-toggle="visualFx"><span class="eq-switch-ui" aria-hidden="true"></span></label>
+        <div class="set-block">
+          <span class="set-label">Límite de FPS de las animaciones</span>
+          <div class="seg" role="radiogroup" aria-label="Límite de cuadros por segundo" data-seg="fpsCap">
+            <button type="button" role="radio" aria-checked="false" data-val="auto">Automático</button>
+            <button type="button" role="radio" aria-checked="false" data-val="60">60</button>
+            <button type="button" role="radio" aria-checked="false" data-val="30">30</button>
+          </div>
+        </div>
+        <small class="set-hint">Los <b>FPS</b> son los cuadros que la app dibuja por segundo en sus animaciones (letras, vista previa). No cambian los Hz de la pantalla: limitarlos ahorra batería.</small>
+      </div>
+      <div class="card">
+        <h3>Pantalla</h3>
+        <label class="eq-switch set-row">
+          <span>Ocultar la barra de estado</span>
+          <input type="checkbox" data-toggle="hideStatusBar">
+          <span class="eq-switch-ui" aria-hidden="true"></span>
+        </label>
+        <small id="status-hint" class="set-hint"></small>
+      </div>
+
+      </section>
+
+      <!-- ===== ACERCA DE ===== -->
+      <section id="set-about" class="set-group" data-group="about">
       <div class="card">
         <h3>Acerca de</h3>
         <p>Pulsar RM · versión <span id="app-version"></span></p>
         <p>Tus canciones se guardan solo en este dispositivo.</p>
+        <p id="about-device"></p>
       </div>
+
+      </section>
     </section>
 
   </main>
@@ -494,53 +704,6 @@
     <div class="sheet-actions">
       <button type="button" class="ghost-btn" data-action="edit-cancel">Cancelar</button>
       <button type="button" class="add-music" data-action="edit-save">Guardar</button>
-    </div>
-  </div>
-</div>
-
-<!-- Opciones de una canción (cola) -->
-<div id="song-menu" class="asheet hidden" role="dialog" aria-modal="true" aria-label="Opciones de la canción">
-  <div class="asheet-backdrop" data-action="sheet-close"></div>
-  <div class="asheet-panel">
-    <div class="a-head">
-      <div id="sm-cover" class="song-cover"></div>
-      <div class="song-details"><strong id="sm-title"></strong><small id="sm-artist"></small></div>
-    </div>
-    <div id="sm-items" class="a-list"></div>
-  </div>
-</div>
-
-<!-- Información musical de una canción -->
-<div id="song-info" class="asheet hidden" role="dialog" aria-modal="true" aria-label="Información de la canción">
-  <div class="asheet-backdrop" data-action="sheet-close"></div>
-  <div class="asheet-panel">
-    <div class="a-head">
-      <div id="si-cover" class="song-cover"></div>
-      <div class="song-details"><strong id="si-title"></strong><small id="si-artist"></small></div>
-    </div>
-    <dl id="si-list" class="info-list"></dl>
-    <div class="sheet-actions">
-      <button type="button" class="ghost-btn" data-action="sheet-close">Cerrar</button>
-      <button type="button" class="add-music" data-action="songinfo-edit">Editar información</button>
-    </div>
-  </div>
-</div>
-
-<!-- Opciones de mezcla de la cola -->
-<div id="queue-options" class="asheet hidden" role="dialog" aria-modal="true" aria-label="Opciones de mezcla">
-  <div class="asheet-backdrop" data-action="sheet-close"></div>
-  <div class="asheet-panel">
-    <h3>Opciones de mezcla</h3>
-    <label class="eq-switch set-row">
-      <span>Reproducción aleatoria<small>Las canciones pendientes suenan en orden aleatorio</small></span>
-      <input type="checkbox" data-toggle="shuffle">
-      <span class="eq-switch-ui" aria-hidden="true"></span>
-    </label>
-    <div class="a-list">
-      <button type="button" class="a-item" data-action="queue-mix"><span class="a-ic"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h2.4c1.6 0 3.1.8 4 2.1l4.2 5.8c.9 1.3 2.4 2.1 4 2.1H21M18.5 14.6L21 17l-2.5 2.4M3 17h2.4c1.6 0 3.1-.8 4-2.1M14 9.1c.9-1.3 2.4-2.1 4-2.1H21M18.5 4.6L21 7l-2.5 2.4"/></g></svg></span><span class="a-tx"><strong>Mezclar la cola ahora</strong><small>Mezcla una vez los pendientes</small></span></button>
-      <button type="button" class="a-item" data-action="queue-sort"><span class="a-ic"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h11M4 17h6"/></g></svg></span><span class="a-tx"><strong>Orden de la biblioteca</strong><small>Pendientes en el orden de tu biblioteca</small></span></button>
-      <button type="button" class="a-item" data-action="queue-restore"><span class="a-ic"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4.2 4.6v4.2h4.2"/></g></svg></span><span class="a-tx"><strong>Añadir toda la biblioteca</strong><small>Recupera las canciones que quitaste</small></span></button>
-      <button type="button" class="a-item danger" data-action="queue-clear"><span class="a-ic"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="a-tx"><strong>Vaciar la cola</strong><small>Las canciones siguen en tu biblioteca</small></span></button>
     </div>
   </div>
 </div>
@@ -598,7 +761,9 @@
     } catch (e) {}
   })();
 </script>
+<script src="native.js"></script>
 <script src="script.js"></script>
+<script src="features.js"></script>
 
 <!-- Service worker (necesario para instalar como app y usar sin conexión) -->
 <script>

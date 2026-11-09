@@ -1,11 +1,13 @@
-/* PULSAR RM 1.04 — Pantallas independientes de Letras y de Cola de reproducción (sobre la 1.03)
-   Módulos: Store (IndexedDB) · Settings · CoverColor · Library · Player · Queue · Router · UI · Lyrics · LyricsScreen · QueueScreen
+/* PULSAR RM 1.04 — Pantallas secundarias (Letras, Cola, Ecualizador, Información), cola real, mezcla con crossfade,
+   temporizador, segundo plano en Android, biblioteca por carpetas, tasa de refresco y Ajustes reorganizados.
+   Archivos: native.js (puente con Android) · script.js (núcleo) · features.js (módulos de la v1.04)
+   Módulos del núcleo: Store (IndexedDB) · Settings · CoverColor · Lyrics · Queue · AudioGraph · Equalizer · Library · Player · Router · UI
    Todos los botones usan delegación de eventos: siguen funcionando aunque el HTML se vuelva a dibujar. */
 
 "use strict";
 
 // ÚNICO lugar donde se escribe la versión. El workflow de GitHub la lee de aquí para
-// el versionName y el versionCode del APK. Formato: "X.YY" (ej. 1.03 → versionCode 103).
+// el versionName y el versionCode del APK. Formato: "X.YY" (ej. 1.04 → versionCode 104).
 const APP_VERSION = "1.04";
 
 // Si el APK expone PulsarNative.getVersion(), se muestra la versión REAL instalada;
@@ -33,13 +35,6 @@ const Icons = {
   check: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 12.5l3.8 3.8 7.2-8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   note: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></g></svg>',
   x: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  // v1.04 — pantallas de Letras y de Cola
-  grip: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="currentColor"><circle cx="9" cy="6.5" r="1.45"/><circle cx="15" cy="6.5" r="1.45"/><circle cx="9" cy="12" r="1.45"/><circle cx="15" cy="12" r="1.45"/><circle cx="9" cy="17.5" r="1.45"/><circle cx="15" cy="17.5" r="1.45"/></g></svg>',
-  more: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="5.5" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="18.5" r="1.7" fill="currentColor"/></svg>',
-  info: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.4M12 7.8v.01"/></g></svg>',
-  top: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 4.5h12M12 20V9.5M6.5 14L12 8.5l5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  bottom: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 19.5h12M12 4v10.5M6.5 10L12 15.5l5.5-5.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  pencil: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l.9-4L16 4.9a2 2 0 0 1 2.8 0l.3.3a2 2 0 0 1 0 2.8L8.5 18.6z"/><path d="M14.3 6.6l3.1 3.1"/></g></svg>',
   // Portada predeterminada (canciones sin portada): usa los colores del tema y modo activos
   art: '<svg class="art-default" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false"><circle class="art-glow" cx="80" cy="20" r="48"/><circle class="art-ring" cx="50" cy="50" r="42"/><circle class="art-ring art-ring-2" cx="50" cy="50" r="29"/><g transform="translate(34 34) scale(1.36)" fill="none" stroke-linecap="round" stroke-linejoin="round"><path class="art-note" d="M9 18V6l10-2v12"/><circle class="art-note" cx="6.5" cy="18" r="2.5"/><circle class="art-note" cx="16.5" cy="16" r="2.5"/></g></svg>'
 };
@@ -103,16 +98,51 @@ const Store = {
     if (!this.available) {
       meta.id = this.memory.nextId++;
       this.memory.songs.set(meta.id, meta);
-      this.memory.blobs.set(meta.id, blob);
+      if (blob) this.memory.blobs.set(meta.id, blob);
       return Promise.resolve(meta);
     }
     return this._tx(["songs", "blobs"], "readwrite", (tx, done) => {
       const request = tx.objectStore("songs").add(meta);
       request.onsuccess = () => {
         meta.id = request.result;
-        tx.objectStore("blobs").put(blob, meta.id);
+        if (blob) tx.objectStore("blobs").put(blob, meta.id); // las canciones de carpetas no guardan copia del archivo
         done(meta);
       };
+    });
+  },
+
+  // v1.04 — varias canciones en una sola transacción (lectura de carpetas)
+  addSongs(list) {
+    if (!list.length) return Promise.resolve(list);
+    if (!this.available) {
+      list.forEach((meta) => { meta.id = this.memory.nextId++; this.memory.songs.set(meta.id, meta); });
+      return Promise.resolve(list);
+    }
+    return this._tx("songs", "readwrite", (tx, done) => {
+      const store = tx.objectStore("songs");
+      let pending = list.length;
+      list.forEach((meta) => {
+        const request = store.add(meta);
+        request.onsuccess = () => { meta.id = request.result; if (--pending === 0) done(list); };
+      });
+    });
+  },
+
+  updateSongs(list) {
+    if (!list.length) return Promise.resolve(list);
+    if (!this.available) { list.forEach((meta) => this.memory.songs.set(meta.id, meta)); return Promise.resolve(list); }
+    return this._tx("songs", "readwrite", (tx, done) => {
+      const store = tx.objectStore("songs");
+      list.forEach((meta) => store.put(meta));
+      done(list);
+    });
+  },
+
+  removeSongs(ids) {
+    if (!ids.length) return Promise.resolve();
+    if (!this.available) { ids.forEach((id) => { this.memory.songs.delete(id); this.memory.blobs.delete(id); }); return Promise.resolve(); }
+    return this._tx(["songs", "blobs"], "readwrite", (tx) => {
+      ids.forEach((id) => { tx.objectStore("songs").delete(id); tx.objectStore("blobs").delete(id); });
     });
   },
 
@@ -212,14 +242,55 @@ const Settings = {
     lyricsSize: "medium",     // small | medium | large
     lyricsDuet: true,         // cantante principal a la izquierda, secundario a la derecha
     lyricsBlur: true,         // desenfoca suavemente las líneas lejanas
-    // v1.04
-    lyricsAlign: "left",      // left | center
-    lyricsBg: "theme",        // theme | cover | glow (fondo de la pantalla de letras)
-    lyricsMode: "sync",       // sync | text (ver la letra sincronizada o solo como texto)
+    // v1.04 — letras
+    lyricsView: "sync",       // sync (sincronizada) | plain (texto normal, sin resaltado)
     lyricsAutoScroll: true,   // la letra se desplaza sola siguiendo la canción
-    shuffle: false            // reproducción aleatoria de la cola
+    lyricsSpacing: "normal",  // compact | normal | wide
+    lyricsBg: "theme",        // theme | cover (portada difuminada de fondo)
+    keepScreenOn: false,      // pantalla encendida mientras se ve la letra
+    // v1.04 — reproducción
+    shuffle: false,           // reproducción aleatoria
+    repeat: "all",            // off | all | one  (all = como en la v1.03: al acabar vuelve al principio)
+    prevRestart: true,        // "Anterior" reinicia la canción si ya pasaron 3 s
+    gapless: true,            // reproducción continua: la siguiente ya está lista al acabar
+    crossfade: false,         // fundido cruzado entre canciones
+    crossfadeSecs: 4,         // duración del fundido (1 a 12 s)
+    bgPlayback: true,         // música en segundo plano
+    focusMode: "duck",        // al llegar un aviso de otra app: duck (bajar volumen) | pause
+    pauseOnNoisy: true,       // pausar al desconectar auriculares
+    // v1.04 — audio
+    limiter: true,            // limitador de picos (evita la saturación)
+    mono: false,              // mezcla izquierda y derecha en un solo canal
+    balance: 0,               // -1 (izquierda) a 1 (derecha)
+    // v1.04 — biblioteca
+    folders: [],              // carpetas autorizadas [{ uri, name, addedAt, lastScan, count }]
+    ignoredKeys: [],          // archivos de carpetas que el usuario quitó de la biblioteca
+    lastScan: null,           // resumen de la última actualización
+    libTab: "songs",          // songs | albums | artists | genres
+    // v1.04 — rendimiento y pantalla
+    refreshHz: 0,             // 0 = automático (lo decide el dispositivo) | 60 | 90 | 120
+    animations: "full",       // full | reduced | off
+    visualFx: true,           // desenfoques y resplandores
+    fpsCap: "auto",           // auto | 30 | 60 (cuántos cuadros por segundo dibujan las animaciones de la app)
+    // v1.04 — avisos de una sola vez
+    notifAsked: false,        // ya se pidió el permiso de notificaciones
+    perfInit: false           // ya se revisó si el dispositivo necesita el modo ligero
   },
   values: {},
+  watchers: {},
+
+  // Los módulos se suscriben a los ajustes que usan: Settings.watch("crossfade", (valor) => …)
+  watch(keys, handler) {
+    (Array.isArray(keys) ? keys : [keys]).forEach((key) => {
+      (this.watchers[key] = this.watchers[key] || []).push(handler);
+    });
+  },
+
+  notify(key, initial) {
+    (this.watchers[key] || []).forEach((handler) => {
+      try { handler(this.values[key], key, Boolean(initial)); } catch (error) { console.error("Ajuste", key, error); }
+    });
+  },
 
   async load() {
     this.values = { ...this.defaults };
@@ -249,8 +320,8 @@ const Settings = {
     StatusBar.apply(false);
     LyricsStyle.restoreFont();
     LyricsStyle.apply();
+    Object.keys(this.watchers).forEach((key) => this.notify(key, true)); // cada módulo aplica lo que había guardado
     UI.refreshSettingsControls();
-    QueueScreen.syncControls();
   },
 
   async set(key, value) {
@@ -268,7 +339,7 @@ const Settings = {
     else if (key === "coverIntensity") CoverColor.sync();
     else if (key === "hideStatusBar") StatusBar.apply(true);
     else if (key.startsWith("lyrics")) LyricsStyle.apply();
-    else if (key === "shuffle") QueueScreen.syncControls();
+    this.notify(key, false);
     UI.refreshSettingsControls();
   },
 
@@ -899,15 +970,14 @@ const Lyrics = {
     const pause = (event) => {
       if (event.target.closest && event.target.closest("button")) return; // tocar un botón no es desplazar
       this.userScrollUntil = Date.now() + 3500;
-      LyricsScreen.updateFollow(true); // aparece "Seguir la letra" mientras la persona la mueve a mano
     };
     ["touchstart", "wheel", "pointerdown"].forEach((name) => this.el.addEventListener(name, pause, { passive: true }));
 
-    const audio = Player.audio;
-    audio.addEventListener("play", () => this.refresh(false));
-    audio.addEventListener("pause", () => this.update(false));
-    audio.addEventListener("seeked", () => this.update(false));
-    audio.addEventListener("ended", () => this.update(false));
+    // Solo cuentan los avisos del reproductor que está sonando (con dos decks, el otro puede estar preparando la siguiente)
+    Player.onActive("play", () => this.refresh(false));
+    Player.onActive("pause", () => this.update(false));
+    Player.onActive("seeked", () => this.update(false));
+    Player.onActive("ended", () => this.update(false));
     document.addEventListener("visibilitychange", () => this.refresh(false));
 
     this.render();
@@ -921,6 +991,8 @@ const Lyrics = {
     this.active = -1;
     this.render();
     this.refresh(true);
+    // Canciones de carpetas: la letra puede estar en un .lrc junto al archivo o dentro de él (Android la lee ahora)
+    if (song && !song.lyrics && typeof LyricsScreen !== "undefined") LyricsScreen.fetchNative(song);
   },
 
   clear() {
@@ -935,17 +1007,18 @@ const Lyrics = {
     return -((this.data && this.data.metaOffset) || 0) + this.delay;
   },
 
+  // La letra se ve en su propia pantalla (v1.04)
   visible() {
     return Boolean(this.el) && Router.current === "lyrics";
   },
 
-  // v1.04: "Solo texto" muestra una letra sincronizada como texto normal (sin resaltado ni desplazamiento)
-  textOnly() {
-    return Boolean(this.data) && (!this.data.synced || Settings.values.lyricsMode === "text");
+  // ¿Se muestra sincronizada? Una letra con tiempos se puede ver también como texto normal (Ajustes → Letras)
+  live() {
+    return Boolean(this.data && this.data.synced && Settings.values.lyricsView !== "plain");
   },
 
   shouldRun() {
-    return this.visible() && this.data && this.data.synced && !this.textOnly() && Player.currentId !== null &&
+    return this.visible() && this.live() && Player.currentId !== null &&
       !Player.audio.paused && !document.hidden;
   },
 
@@ -962,10 +1035,12 @@ const Lyrics = {
 
   startLoop() {
     if (this.raf) return;
-    const tick = () => {
+    let last = 0;
+    const tick = (now) => {
       this.raf = 0;
       if (!this.shouldRun()) return;
-      this.update(false);
+      const gap = Performance.frameGap(); // límite de FPS (Ajustes → Rendimiento)
+      if (!gap || now - last >= gap) { last = now; this.update(false); }
       this.raf = requestAnimationFrame(tick);
     };
     this.raf = requestAnimationFrame(tick);
@@ -980,15 +1055,11 @@ const Lyrics = {
     this.unitEls = [];
     this.units = [];
 
-    const synced = Boolean(data) && data.synced && !this.textOnly();
+    const live = this.live();
     this.el.classList.toggle("is-empty", !data);
-    this.el.classList.toggle("is-plain", Boolean(data) && !synced); // texto normal: empieza arriba, sin espacio para centrar
     this.bar.classList.toggle("no-data", !data);
-    this.bar.classList.toggle("no-sync", !synced);
+    this.bar.classList.toggle("no-sync", !live);
     this.updateBar();
-    const tab = $("tab-lyrics");
-    if (tab) tab.classList.toggle("on", Boolean(data)); // punto en la pestaña "Letra" si la canción tiene letra
-    LyricsScreen.updateFollow(false);
 
     if (!data) {
       this.el.innerHTML = this.song
@@ -1005,16 +1076,16 @@ const Lyrics = {
     }
 
     this.el.innerHTML = data.lines.map((line, i) => {
-      const seek = synced ? ` data-i="${i}"` : "";
+      const seek = live ? ` data-i="${i}"` : "";
       const side = ` s${line.side || "l"}${line.bg ? " bg" : ""}${line.words ? "" : " nw"}`;
       if (!line.text && !line.words) {
-        return synced
+        return live
           ? `<p class="lyric-line gap${side}"${seek}>${Icons.note}</p>`
           : `<p class="lyric-line plain gap">&nbsp;</p>`;
       }
-      // En "Solo texto" las líneas con palabra por palabra se muestran como texto simple
-      const inner = line.words && synced ? this.wordsHTML(line) : UI.escapeHTML(line.text);
-      return `<p class="lyric-line${synced ? "" : " plain"}${side}"${seek}>${inner}</p>`;
+      // Como texto normal no se necesita el dibujo palabra por palabra
+      const inner = line.words && live ? this.wordsHTML(line) : UI.escapeHTML(line.text);
+      return `<p class="lyric-line${live ? "" : " plain"}${side}"${seek}>${inner}</p>`;
     }).join("");
     this.lineEls = Array.from(this.el.querySelectorAll(".lyric-line"));
     this.unitEls = [];
@@ -1074,7 +1145,7 @@ const Lyrics = {
     const data = this.data;
     if (!data) this.badge.textContent = "Sin letra";
     else if (!data.synced) this.badge.textContent = "Texto sin sincronizar";
-    else if (this.textOnly()) this.badge.textContent = `${this.FORMAT_NAMES[data.format] || "LRC"} · solo texto`;
+    else if (!this.live()) this.badge.textContent = `${this.FORMAT_NAMES[data.format] || "LRC"} · vista de texto`;
     else this.badge.textContent = `${this.FORMAT_NAMES[data.format] || "LRC"} · ${data.wordLevel ? "palabra por palabra" : "línea por línea"}`;
     const d = this.delay;
     this.delayEl.textContent = (d > 0 ? "+" : d < 0 ? "−" : "") + Math.abs(d).toFixed(2) + " s";
@@ -1094,7 +1165,7 @@ const Lyrics = {
 
   update(force) {
     const data = this.data;
-    if (!data || !data.synced || this.textOnly() || !this.visible()) return;
+    if (!data || !this.live() || !this.visible()) return;
 
     const time = Player.audio.currentTime - this.shift();
     const index = this.find(time);
@@ -1118,34 +1189,30 @@ const Lyrics = {
     if (index >= 0 && this.units.length) this.paint(this.unitEls, this.units, time, LyricsStyle.anim() === "letters");
   },
 
-  // instant = centrar sin esperar (al abrir la pantalla o tocar una línea); smoothNow = con animación aunque sea inmediato
-  center(index, instant, smoothNow) {
+  center(index, instant, manual) {
     if (index < 0 || !this.lineEls[index]) return;
-    const auto = Settings.values.lyricsAutoScroll !== false;
-    if (!instant && (Date.now() < this.userScrollUntil || !auto)) {
-      // La persona está desplazando a mano (se recentra cuando termine la pausa) o el desplazamiento automático está apagado
-      this.needsCenter = auto;
-      LyricsScreen.updateFollow(true);
+    // Desplazamiento automático apagado: solo se centra cuando la persona lo pide (botón «Centrar»)
+    if (!instant && !manual && Settings.values.lyricsAutoScroll === false) return;
+    if (!instant && Date.now() < this.userScrollUntil) {
+      this.needsCenter = true; // la persona está desplazando a mano: se recentra cuando termine la pausa
       return;
     }
     this.needsCenter = false;
-    LyricsScreen.updateFollow(false);
     const line = this.lineEls[index];
     const top = line.offsetTop - (this.el.clientHeight - line.offsetHeight) / 2;
-    const smooth = (!instant || smoothNow) && !UI.prefersReducedMotion();
+    const smooth = !instant && !UI.prefersReducedMotion();
     this.el.scrollTo({ top: Math.max(0, top), behavior: smooth ? "smooth" : "auto" });
   },
 
-  // Botón "Seguir la letra": vuelve a la línea que suena
-  followNow() {
+  // Botón «Centrar»: vuelve a la línea que suena aunque el desplazamiento automático esté apagado
+  recenter() {
     this.userScrollUntil = 0;
-    this.needsCenter = false;
-    this.center(this.active, true, true);
+    if (this.active >= 0) this.center(this.active, false, true);
   },
 
   seekToLine(index) {
     const line = this.data && this.data.lines[index];
-    if (!line || Player.currentId === null) return;
+    if (!line || Player.currentId === null || !this.live()) return;
     Player.audio.currentTime = Math.max(0, line.t + this.shift());
     this.userScrollUntil = 0;
     this.update(true);
@@ -1226,17 +1293,11 @@ const LYRIC_FONTS = [
   { id: "script", name: "Manuscrita", stack: '"Dancing Script", "Segoe Script", cursive', weight: 700 },
   { id: "mono", name: "Máquina", stack: '"Courier New", "Droid Sans Mono", monospace', weight: 700 }
 ];
-const LYRIC_SIZES = { small: 20, medium: 24, large: 29, xl: 34 };
+const LYRIC_SIZES = { small: 20, medium: 24, large: 29 };
 
 const LyricsStyle = {
   last: "",
-  layout: "",
   face: null,
-
-  // v1.04: "Solo texto" también cambia cómo se arman las líneas
-  mode() {
-    return Settings.values.lyricsMode === "text" ? "text" : "sync";
-  },
 
   anim() {
     const id = Settings.values.lyricsAnim;
@@ -1256,25 +1317,21 @@ const LyricsStyle = {
     root.setAttribute("data-lanim", anim);
     root.setAttribute("data-lblur", values.lyricsBlur === false ? "off" : "on");
     root.setAttribute("data-lduet", values.lyricsDuet === false ? "off" : "on");
-    root.setAttribute("data-lalign", values.lyricsAlign === "center" ? "center" : "left");
-    root.setAttribute("data-lbg", values.lyricsBg === "cover" || values.lyricsBg === "glow" ? values.lyricsBg : "theme");
+    const view = values.lyricsView === "plain" ? "plain" : "sync";
+    root.setAttribute("data-lview", view);
+    root.setAttribute("data-lspace", ["compact", "wide"].includes(values.lyricsSpacing) ? values.lyricsSpacing : "normal");
+    root.setAttribute("data-lbg", values.lyricsBg === "cover" ? "cover" : "theme");
     root.style.setProperty("--lyric-size", (LYRIC_SIZES[values.lyricsSize] || LYRIC_SIZES.medium) + "px");
     const font = this.fontStack();
     root.style.setProperty("--lyric-font", font.stack);
     root.style.setProperty("--lyric-weight", font.weight);
-    // Con "Letra por letra" (o "Solo texto") el texto se dibuja distinto: hay que volver a armar las líneas
-    const signature = anim + "|" + this.mode();
+    // Con "Letra por letra" (o al pasar a texto normal) el texto se dibuja distinto: hay que volver a armar las líneas
+    const signature = anim + "|" + view;
     if (signature !== this.last) {
       this.last = signature;
       Lyrics.render();
       Lyrics.update(true);
       LyricsPreview.build();
-    }
-    // Tamaño, fuente, alineación o duetos cambian el alto de las líneas: la línea actual vuelve al centro
-    const layout = [values.lyricsSize, font.stack, values.lyricsAlign, values.lyricsDuet].join("|");
-    if (layout !== this.layout) {
-      this.layout = layout;
-      if (Lyrics.visible()) requestAnimationFrame(() => Lyrics.update(true));
     }
   },
 
@@ -1322,20 +1379,20 @@ const LyricsStyle = {
 
   // Botones de fuente en Ajustes (cada uno se ve con su propia fuente)
   renderFonts() {
+    const box = $("lyric-fonts");
+    if (!box) return;
     const file = Settings.values.lyricsFontFile;
     const items = LYRIC_FONTS.map((font) => ({ id: font.id, name: font.name, stack: font.stack, weight: font.weight }));
     if (file && this.face) items.push({ id: "custom", name: file.name, stack: '"PulsarLyrics", sans-serif', weight: 700 });
     const key = items.map((item) => item.id + item.name).join("|");
-    // Hay dos listas: la de Ajustes y la del panel de la pantalla de letras (v1.04)
-    document.querySelectorAll("[data-fonts]").forEach((box) => {
-      if (box.dataset.key !== key) {
-        box.dataset.key = key;
-        box.innerHTML = items.map((item) =>
-          `<button type="button" role="radio" aria-checked="false" data-val="${item.id}" style="font-family:${UI.escapeHTML(item.stack)};font-weight:${item.weight}">${UI.escapeHTML(item.name)}</button>`
-        ).join("");
-      }
-    });
-    document.querySelectorAll(".js-font-remove").forEach((button) => button.classList.toggle("hidden", !(file && this.face)));
+    if (box.dataset.key !== key) {
+      box.dataset.key = key;
+      box.innerHTML = items.map((item) =>
+        `<button type="button" role="radio" aria-checked="false" data-val="${item.id}" style="font-family:${UI.escapeHTML(item.stack)};font-weight:${item.weight}">${UI.escapeHTML(item.name)}</button>`
+      ).join("");
+    }
+    const removeButton = $("lyric-font-remove");
+    if (removeButton) removeButton.classList.toggle("hidden", !(file && this.face));
   }
 };
 
@@ -1395,7 +1452,8 @@ const LyricsPreview = {
     const tick = (now) => {
       this.raf = 0;
       if (Router.current !== "settings" || document.hidden) return;
-      this.frame(now);
+      const gap = Performance.frameGap();
+      if (!gap || now - (this.lastFrame || 0) >= gap) { this.lastFrame = now; this.frame(now); }
       this.raf = requestAnimationFrame(tick);
     };
     this.raf = requestAnimationFrame(tick);
@@ -1403,103 +1461,8 @@ const LyricsPreview = {
 };
 
 /* =========================================================
-   PANTALLA DE LETRAS (v1.04) — pantalla completa e independiente
-   Usa el MISMO módulo Lyrics de siempre (parser, sincronía y animaciones de v1.03): aquí solo
-   viven el marco de la pantalla, el fondo, el botón "Seguir la letra" y el panel de personalización.
-   ========================================================= */
-const LyricsScreen = {
-  init() {
-    this.view = $("view-lyrics");
-    this.drawer = $("lyr-drawer");
-    this.follow = $("lyrics-follow");
-    this.bg = $("lyr-bg");
-    this.titleEl = $("lyr-title");
-    this.artistEl = $("lyr-artist");
-    this.styleBtn = $("lyr-style-btn");
-
-    // Si cambia el alto de la letra (panel de personalización, girar el teléfono…),
-    // se recalcula el espacio de arriba y de abajo y la línea actual vuelve al centro.
-    const lyrics = $("lyrics");
-    if (lyrics && typeof ResizeObserver === "function") {
-      new ResizeObserver(() => {
-        this.measure();
-        if (Lyrics.visible()) requestAnimationFrame(() => Lyrics.update(true));
-      }).observe(lyrics);
-    }
-    window.addEventListener("resize", () => this.measure());
-  },
-
-  // Espacio vacío arriba y abajo para que la primera y la última línea puedan quedar en el centro
-  measure() {
-    const el = $("lyrics");
-    if (!el || !el.clientHeight) return;
-    el.style.setProperty("--lyr-pad", Math.max(48, Math.round(el.clientHeight / 2 - 34)) + "px");
-  },
-
-  onShow() {
-    this.measure();
-    this.syncInfo();
-    this.syncBackdrop();
-    this.updateFollow(false);
-  },
-
-  syncInfo() {
-    const song = Library.byId(Player.currentId);
-    UI.swapText(this.titleEl, song ? (song.name || "Sin título") : "Sin reproducción");
-    UI.swapText(this.artistEl, song ? song.artist : "Pulsar RM");
-  },
-
-  // Fondo "Portada": la carátula de la canción, muy desenfocada (CSS en style.css)
-  syncBackdrop() {
-    if (!this.bg) return;
-    const song = Library.byId(Player.currentId);
-    const url = song ? Covers.get(song) : null;
-    if (url) {
-      this.bg.dataset.cover = "1";
-      this.bg.style.setProperty("--lyr-cover", `url("${url}")`);
-    } else {
-      delete this.bg.dataset.cover;
-      this.bg.style.removeProperty("--lyr-cover");
-    }
-  },
-
-  // "Seguir la letra": aparece cuando la letra no está centrada en la línea que suena
-  updateFollow(away) {
-    if (!this.follow) return;
-    const data = Lyrics.data;
-    const show = Boolean(away) && Lyrics.active >= 0 && Boolean(data) && data.synced && !Lyrics.textOnly();
-    this.follow.classList.toggle("hidden", !show);
-  },
-
-  /* ---------- Panel de personalización ---------- */
-
-  isDrawerOpen() {
-    return Boolean(this.drawer) && !this.drawer.classList.contains("hidden");
-  },
-
-  openDrawer() {
-    if (!this.drawer) return;
-    this.drawer.classList.remove("hidden");
-    this.view.classList.add("drawer-open");
-    if (this.styleBtn) this.styleBtn.setAttribute("aria-expanded", "true");
-    UI.refreshSettingsControls();
-  },
-
-  closeDrawer() {
-    if (!this.drawer || this.drawer.classList.contains("hidden")) return;
-    this.drawer.classList.add("hidden");
-    this.view.classList.remove("drawer-open");
-    if (this.styleBtn) this.styleBtn.setAttribute("aria-expanded", "false");
-  },
-
-  toggleDrawer() {
-    if (this.isDrawerOpen()) this.closeDrawer(); else this.openDrawer();
-  }
-};
-
-/* =========================================================
-   STAGE — zona central del reproductor: la portada
-   (v1.04: la letra y la cola ahora tienen su propia pantalla completa)
+   STAGE — zona central del reproductor: portada cuadrada
+   (v1.04: la letra y la cola ya no van aquí, tienen su propia pantalla)
    ========================================================= */
 const Stage = {
   init() {
@@ -1526,654 +1489,380 @@ const Stage = {
 };
 
 /* =========================================================
-   QUEUE (v1.04) — la cola de reproducción REAL
-   No es un segundo reproductor: Player sigue siendo el único que reproduce. La cola solo decide
-   QUÉ canción sigue, con dos listas de ids:
-     · upcoming = pendientes, en el orden exacto en que van a sonar (esto es lo que se reordena)
-     · history  = ya reproducidas (para el botón Anterior)
-   La canción actual es siempre Player.currentId (no se guarda aquí, así nunca se desincroniza).
-   Reglas que evitan duplicados y canciones fantasma:
-     · sanitize() deja cada id una sola vez, sin la actual y solo si sigue en la biblioteca.
-     · Todo cambio pasa por Queue.commit() (cuando una canción empieza de verdad) o por los
-       métodos de abajo; cada cambio sube `version`.
-   La cola no se guarda al cerrar la app (la reproducción tampoco): se arma al elegir una canción.
+   QUEUE (v1.04) — la cola de reproducción es una lista real
+   ids = canciones en el orden en que suenan · pos = la que suena ahora.
+   Al tocar una canción de la biblioteca, la cola pasa a ser la lista desde la que se tocó
+   (igual que en la v1.03). Desde la pantalla Cola se puede reordenar, quitar, añadir y mezclar.
+   La pantalla Cola (QueueScreen, features.js) solo dibuja y pide cambios a este módulo.
    ========================================================= */
 const Queue = {
-  history: [],
-  upcoming: [],
-  version: 0,
-  HISTORY_LIMIT: 100,
+  ids: [],
+  pos: -1,
+  backup: null, // orden original mientras la reproducción aleatoria está activa
 
-  touch() { this.version++; },
+  get currentId() { return this.pos >= 0 ? this.ids[this.pos] : null; },
+
+  playable(id) {
+    const song = Library.byId(id);
+    return Boolean(song) && !song.missing;
+  },
 
   shuffled(list) {
-    const out = list.slice();
-    for (let i = out.length - 1; i > 0; i--) {
+    const copy = list.slice();
+    for (let i = copy.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [out[i], out[j]] = [out[j], out[i]];
+      [copy[i], copy[j]] = [copy[j], copy[i]];
     }
-    return out;
+    return copy;
   },
 
-  // Ids de la biblioteca en su orden, empezando justo después de `id` y dando la vuelta (sin incluir `id`)
-  libraryAfter(id) {
-    const songs = Library.songs;
-    const at = songs.findIndex((song) => song.id === id);
-    const rotated = at < 0 ? songs.slice() : songs.slice(at + 1).concat(songs.slice(0, at));
-    return rotated.map((song) => song.id);
+  // Se llama con cualquier cambio: la canción que sigue pudo cambiar, así que se prepara de nuevo.
+  changed() {
+    Player.invalidatePreload();
+    if (typeof MediaBridge !== "undefined") MediaBridge.update();
+    if (typeof QueueScreen !== "undefined") QueueScreen.refresh();
   },
 
-  // Deja `list` en el orden de la biblioteca (a partir de `afterId`) sin añadir ni perder canciones
-  sortByLibrary(list, afterId) {
-    const rank = new Map(this.libraryAfter(afterId).map((id, i) => [id, i]));
-    return list.filter((id) => rank.has(id)).sort((a, b) => rank.get(a) - rank.get(b));
-  },
-
-  // Cola nueva a partir de la biblioteca: en su orden, o mezclada si el modo aleatorio está activo
-  build(id) {
-    const list = this.libraryAfter(id);
-    this.upcoming = Settings.values.shuffle ? this.shuffled(list) : list;
-    this.touch();
-  },
-
-  // Se acabó la cola: vuelve a empezar con toda la biblioteca (igual que en v1.03)
-  refill() {
-    this.build(Player.currentId);
-  },
-
-  pushHistory(id) {
-    if (id === null || id === undefined) return;
-    this.history.push(id);
-    if (this.history.length > this.HISTORY_LIMIT) this.history.splice(0, this.history.length - this.HISTORY_LIMIT);
-  },
-
-  // Cada id una sola vez, nunca la actual, y solo canciones que siguen en la biblioteca.
-  // `currentId` solo se indica desde commit(), cuando la canción nueva aún no está puesta en Player.
-  sanitize(currentId) {
-    const valid = new Set(Library.songs.map((song) => song.id));
-    const seen = new Set();
-    const current = currentId === undefined ? Player.currentId : currentId;
-    if (current !== null) seen.add(current);
-    const upcoming = [];
-    this.upcoming.forEach((id) => {
-      if (valid.has(id) && !seen.has(id)) { seen.add(id); upcoming.push(id); }
-    });
-    const history = this.history.filter((id) => valid.has(id));
-    if (upcoming.length !== this.upcoming.length || history.length !== this.history.length) this.touch();
-    this.upcoming = upcoming;
-    this.history = history;
-  },
-
-  /* Lo llama Player.play() justo cuando una canción empieza de verdad (con su audio ya cargado).
-     `mode` dice de dónde viene la orden:
-       "queue"   → la siguiente (o una elegida dentro de la cola): sale de los pendientes
-       "prev"    → Anterior: vuelve del historial y la que sonaba pasa a ser la próxima
-       "library" → elegida en la biblioteca: cola nueva a partir de la biblioteca */
-  commit(id, mode, previousId) {
-    if (mode === "queue" && !this.upcoming.includes(id)) mode = "library"; // ya no estaba pendiente
-    if (mode === "prev") {
-      const at = this.history.lastIndexOf(id);
-      if (at >= 0) this.history.splice(at, 1);
-      if (previousId !== null && previousId !== id) {
-        this.upcoming = [previousId].concat(this.upcoming.filter((x) => x !== previousId));
-      }
-    } else if (mode === "queue") {
-      // Si se salta varias, las saltadas pasan al final de la cola: nada desaparece
-      const at = this.upcoming.indexOf(id);
-      const skipped = this.upcoming.splice(0, at);
-      this.upcoming.shift();
-      this.upcoming.push(...skipped);
-      if (previousId !== id) this.pushHistory(previousId);
+  // Empieza una cola nueva desde la canción `id`. `context` = ids de la lista desde la que se tocó.
+  startAt(id, context) {
+    let list = Array.isArray(context) && context.includes(id) ? context.filter((x) => this.playable(x) || x === id) : Library.playableIds();
+    if (!list.includes(id)) list = [id];
+    if (Settings.values.shuffle) {
+      this.backup = list.slice();
+      this.ids = [id, ...this.shuffled(list.filter((x) => x !== id))];
+      this.pos = 0;
     } else {
-      if (previousId !== id) this.pushHistory(previousId);
-      this.build(id);
+      this.backup = null;
+      this.ids = list;
+      this.pos = list.indexOf(id);
     }
-    this.sanitize(id); // la que va a sonar es `id`, no la que sonaba antes
-    this.touch();
+    this.changed();
   },
 
-  reset() {
-    this.history = [];
-    this.upcoming = [];
-    this.touch();
-    this.refresh();
-  },
-
-  // Una canción se eliminó de la biblioteca
-  forget(id) {
-    this.upcoming = this.upcoming.filter((x) => x !== id);
-    this.history = this.history.filter((x) => x !== id);
-    this.touch();
-  },
-
-  // Se importó una canción con la música sonando: se suma a los pendientes
-  added(id) {
-    if (Player.currentId === null || id === Player.currentId || this.upcoming.includes(id)) return;
-    if (Settings.values.shuffle && this.upcoming.length) {
-      this.upcoming.splice(Math.floor(Math.random() * (this.upcoming.length + 1)), 0, id);
-    } else {
-      this.upcoming.push(id);
+  // La reproducción pasó a `id` (siguiente, anterior, saltar…): la cola solo mueve su marcador.
+  commit(id) {
+    const before = this.pos;
+    let index = -1;
+    for (let i = 0; i < this.ids.length; i++) {
+      if (this.ids[i] === id && (index < 0 || Math.abs(i - before) < Math.abs(index - before))) index = i;
     }
-    this.touch();
+    if (index < 0) { this.startAt(id); return; }
+    // Al dar la vuelta con la reproducción aleatoria, se mezcla otra vez para que no se repita el mismo orden
+    if (Settings.values.shuffle && index < before && this.ids.length > 2) {
+      this.ids = [id, ...this.shuffled(this.ids.filter((x) => x !== id))];
+      index = 0;
+    }
+    this.pos = index;
+    this.changed();
   },
 
-  totalSeconds() {
-    const byId = new Map(Library.songs.map((song) => [song.id, song]));
-    return this.upcoming.reduce((sum, id) => sum + ((byId.get(id) && byId.get(id).duration) || 0), 0);
+  // Canción que sigue. auto = la canción terminó sola (con «No repetir» ahí se acaba la cola).
+  nextId(auto) {
+    const n = this.ids.length;
+    if (!n || this.pos < 0) return null;
+    const current = this.ids[this.pos];
+    if (auto && Settings.values.repeat === "one") return current;
+    for (let i = this.pos + 1; i < n; i++) if (this.playable(this.ids[i])) return this.ids[i];
+    if (auto && Settings.values.repeat === "off") return null;
+    for (let i = 0; i < this.pos; i++) if (this.playable(this.ids[i])) return this.ids[i];
+    // Solo queda la canción actual
+    if (auto) return null;
+    return this.playable(current) ? current : null;
   },
 
-  /* ---------- Acciones de la persona (todas repintan la pantalla de la cola) ---------- */
-
-  remove(id) {
-    const at = this.upcoming.indexOf(id);
-    if (at < 0) return false;
-    this.upcoming.splice(at, 1);
-    this.touch();
-    this.refresh();
-    UI.toast("Quitada de la cola.");
-    return true;
+  prevId() {
+    const n = this.ids.length;
+    if (!n || this.pos < 0) return null;
+    for (let i = this.pos - 1; i >= 0; i--) if (this.playable(this.ids[i])) return this.ids[i];
+    for (let i = n - 1; i > this.pos; i--) if (this.playable(this.ids[i])) return this.ids[i];
+    return this.playable(this.ids[this.pos]) ? this.ids[this.pos] : null;
   },
 
+  upcoming() { return this.pos < 0 ? this.ids.slice() : this.ids.slice(this.pos + 1); },
+  played() { return this.pos <= 0 ? [] : this.ids.slice(0, this.pos); },
+
+  /* ---------- Cambios que pide la pantalla Cola ---------- */
+
+  // Mueve una canción pendiente (índices absolutos de ids). La que suena no se mueve.
   move(from, to) {
-    const length = this.upcoming.length;
-    if (from === to || from < 0 || to < 0 || from >= length || to >= length) return false;
-    const [id] = this.upcoming.splice(from, 1);
-    this.upcoming.splice(to, 0, id);
-    this.touch();
-    this.refresh();
+    if (from === to || from <= this.pos || to <= this.pos) return false;
+    if (from < 0 || to < 0 || from >= this.ids.length || to >= this.ids.length) return false;
+    const [id] = this.ids.splice(from, 1);
+    this.ids.splice(to, 0, id);
+    this.changed();
     return true;
   },
 
-  moveToTop(id) {
-    const at = this.upcoming.indexOf(id);
-    if (at > 0) { this.move(at, 0); UI.toast("Sonará a continuación."); }
+  remove(index) {
+    if (index < 0 || index >= this.ids.length || index === this.pos) return false;
+    this.ids.splice(index, 1);
+    if (index < this.pos) this.pos--;
+    this.changed();
+    return true;
   },
 
-  moveToEnd(id) {
-    const at = this.upcoming.indexOf(id);
-    if (at >= 0 && at < this.upcoming.length - 1) { this.move(at, this.upcoming.length - 1); UI.toast("Movida al final de la cola."); }
+  // Quita una canción de TODA la cola (por ejemplo al borrarla de la biblioteca)
+  removeId(id) {
+    const current = this.currentId;
+    this.ids = this.ids.filter((x) => x !== id);
+    if (this.backup) this.backup = this.backup.filter((x) => x !== id);
+    this.pos = current === null || current === id ? Math.min(this.pos, this.ids.length - 1) : this.ids.indexOf(current);
+    if (!this.ids.length) this.pos = -1;
+    this.changed();
   },
 
-  // Modo aleatorio: al activarlo se mezclan los pendientes; al desactivarlo vuelven al orden de la biblioteca
-  setShuffle(on, announce) {
-    on = Boolean(on);
-    Settings.set("shuffle", on);
-    if (Player.currentId !== null) {
-      this.upcoming = on ? this.shuffled(this.upcoming) : this.sortByLibrary(this.upcoming, Player.currentId);
-      this.touch();
+  // where: "next" = justo después de la que suena · "end" = al final
+  add(id, where) {
+    if (!Library.byId(id)) return false;
+    if (!this.ids.length) { this.ids = [id]; this.pos = -1; }
+    else if (where === "next" && this.pos >= 0) this.ids.splice(this.pos + 1, 0, id);
+    else this.ids.push(id);
+    if (this.backup) this.backup.push(id);
+    this.changed();
+    return true;
+  },
+
+  // Mezcla solo lo que falta por sonar
+  shuffleUpcoming() {
+    if (this.upcoming().length < 2) return false;
+    const head = this.ids.slice(0, this.pos + 1);
+    this.ids = head.concat(this.shuffled(this.ids.slice(this.pos + 1)));
+    this.changed();
+    return true;
+  },
+
+  // Reproducción aleatoria: al activarla se mezclan las pendientes; al apagarla vuelve el orden original
+  setShuffle(on) {
+    if (on) {
+      if (!this.backup) this.backup = this.ids.slice();
+      const head = this.ids.slice(0, this.pos + 1);
+      this.ids = head.concat(this.shuffled(this.ids.slice(this.pos + 1)));
+    } else if (this.backup) {
+      const current = this.currentId;
+      const present = new Set(this.ids);
+      const original = this.backup.filter((id) => present.has(id));
+      const extra = this.ids.filter((id) => !this.backup.includes(id)); // añadidas mientras tanto
+      this.ids = original.concat(extra);
+      this.pos = current === null ? -1 : this.ids.indexOf(current);
+      this.backup = null;
     }
-    this.refresh();
-    if (announce) UI.toast(on ? "Reproducción aleatoria activada." : "Reproducción aleatoria desactivada.");
+    this.changed();
   },
 
-  needCurrent() {
-    if (Player.currentId !== null) return true;
-    UI.toast("Reproduce una canción para usar la cola.");
-    return false;
+  clearUpcoming() {
+    if (!this.upcoming().length) return false;
+    this.ids = this.pos < 0 ? [] : this.ids.slice(0, this.pos + 1);
+    if (this.backup) this.backup = this.backup.filter((id) => this.ids.includes(id));
+    this.changed();
+    return true;
   },
 
-  // Mezcla los pendientes una vez (sin cambiar el modo aleatorio)
-  mixNow() {
-    if (!this.needCurrent()) return;
-    this.upcoming = this.shuffled(this.upcoming);
-    this.touch();
-    this.refresh();
-    UI.toast("Cola mezclada.");
+  // Quita de la cola lo que ya no existe o dejó de estar disponible (menos la canción actual)
+  prune() {
+    const current = this.currentId;
+    this.ids = this.ids.filter((id) => id === current || this.playable(id));
+    this.pos = current === null ? -1 : this.ids.indexOf(current);
+    if (!this.ids.length) this.pos = -1;
+    this.changed();
   },
 
-  // Pendientes en el orden de la biblioteca (sin recuperar las que se quitaron)
-  restoreOrder() {
-    if (!this.needCurrent()) return;
-    this.upcoming = this.sortByLibrary(this.upcoming, Player.currentId);
-    this.touch();
-    this.refresh();
-    UI.toast("Orden de la biblioteca restaurado.");
+  clear(notify) {
+    this.ids = [];
+    this.pos = -1;
+    this.backup = null;
+    if (notify !== false) this.changed();
   },
 
-  // Vuelve a añadir toda la biblioteca (recupera las que se quitaron; respeta el modo aleatorio)
-  restoreAll() {
-    if (!this.needCurrent()) return;
-    this.build(Player.currentId);
-    this.refresh();
-    UI.toast("Biblioteca añadida a la cola.");
-  },
-
-  async clearAsk() {
-    if (!this.needCurrent()) return;
-    if (!this.upcoming.length) { UI.toast("La cola ya está vacía."); return; }
-    if (!(await UI.confirm("¿Vaciar la cola? Las canciones siguen en tu biblioteca.", "Vaciar", true))) return;
-    this.upcoming = [];
-    this.touch();
-    this.refresh();
-    UI.toast("Cola vaciada.");
-  },
-
-  // resetScroll = true cuando cambia la canción (la lista vuelve arriba)
-  refresh(resetScroll) {
-    QueueScreen.refresh(resetScroll);
-  }
-};
-
-/* =========================================================
-   PANTALLA DE COLA (v1.04) — pantalla completa e independiente
-   Canción actual arriba, pendientes debajo. Cada fila: arrastrar para reordenar, tocar para
-   reproducirla ya, ⋮ para más opciones y × para quitarla. Se repinta sola al cambiar la canción.
-   ========================================================= */
-const QueueScreen = {
-  LIMIT: 200,
-  drag: null,
-
-  init() {
-    this.list = $("queue-list");
-    this.nowBox = $("queue-now");
-    this.head = $("queue-head");
-    this.summary = $("queue-summary");
-    this.shuffleBtn = $("queue-shuffle-btn");
-
-    // Arrastrar: la asa de cada fila captura el puntero (funciona igual con dedo y con ratón)
-    this.list.addEventListener("pointerdown", (event) => {
-      const handle = event.target.closest && event.target.closest(".q-handle");
-      if (handle && (event.pointerType !== "mouse" || event.button === 0)) this.startDrag(event, handle);
+  // Segundos que faltan para terminar la cola (para el resumen de la pantalla Cola)
+  remainingSeconds() {
+    let total = 0;
+    this.upcoming().forEach((id) => {
+      const song = Library.byId(id);
+      if (song && song.duration) total += song.duration;
     });
-    this.list.addEventListener("pointermove", (event) => this.moveDrag(event));
-    this.list.addEventListener("pointerup", (event) => this.endDrag(event, false));
-    this.list.addEventListener("pointercancel", (event) => this.endDrag(event, true));
-    document.addEventListener("visibilitychange", () => { if (document.hidden) this.cancelDrag(); });
-  },
-
-  onShow() {
-    this.render(true);
-  },
-
-  refresh(resetScroll) {
-    if (!this.list) return;
-    this.syncControls();
-    if (Router.current === "queue") this.render(resetScroll);
-  },
-
-  // Botón y interruptor del modo aleatorio
-  syncControls() {
-    const on = Boolean(Settings.values.shuffle);
-    if (this.shuffleBtn) {
-      this.shuffleBtn.classList.toggle("active", on);
-      this.shuffleBtn.setAttribute("aria-pressed", String(on));
-    }
-  },
-
-  /* ---------- Dibujo ---------- */
-
-  row(song, mode) {
-    const id = song.id;
-    const duration = song.duration ? ` · ${UI.formatTime(song.duration)}` : "";
-    const queue = mode === "queue";
-    const handle = queue
-      ? `<button type="button" class="q-handle" data-drag aria-label="Arrastrar para reordenar">${Icons.grip}</button>`
-      : "";
-    const actions = queue
-      ? `<button type="button" class="q-btn" data-action="queue-row-menu" data-qid="${id}" aria-label="Más opciones">${Icons.more}</button>
-         <button type="button" class="q-btn" data-action="queue-remove" data-qid="${id}" aria-label="Quitar de la cola">${Icons.x}</button>`
-      : `<button type="button" class="q-btn" data-action="queue-row-menu" data-qid="${id}" data-ctx="library" aria-label="Más opciones">${Icons.more}</button>`;
-    return `
-      <div class="q-row${queue ? "" : " lib"}" data-qid="${id}" data-mode="${mode}">
-        ${handle}
-        <div class="song-cover">${UI.coverHTML(song)}</div>
-        <div class="song-details">
-          <strong>${UI.escapeHTML(song.name || "Sin título")}</strong>
-          <small>${UI.escapeHTML(song.artist)}${duration}</small>
-        </div>
-        ${actions}
-      </div>`;
-  },
-
-  nowHTML(song) {
-    return `
-      <p class="q-label"><span class="q-bars" aria-hidden="true"><i></i><i></i><i></i></span>Reproduciendo ahora</p>
-      <div class="q-now">
-        <div class="song-cover q-now-cover">${UI.coverHTML(song)}</div>
-        <div class="song-details">
-          <strong>${UI.escapeHTML(song.name || "Sin título")}</strong>
-          <small>${UI.escapeHTML(song.artist)}</small>
-        </div>
-        <button type="button" class="q-btn" data-action="queue-row-menu" data-qid="${song.id}" data-ctx="now" aria-label="Más opciones">${Icons.more}</button>
-        <button type="button" class="round-btn" data-action="toggle" aria-label="Reproducir o pausar"></button>
-      </div>`;
-  },
-
-  render(resetScroll) {
-    if (!this.list) return;
-    this.cancelDrag();
-    Queue.sanitize();
-    this.syncControls();
-
-    const top = resetScroll ? 0 : this.list.scrollTop;
-    const songs = Library.songs;
-    const current = Library.byId(Player.currentId);
-
-    if (!songs.length) {
-      this.nowBox.innerHTML = "";
-      this.head.innerHTML = "";
-      this.summary.textContent = "Sin canciones";
-      this.list.innerHTML = `
-        <div class="q-empty">
-          <div class="empty-icon">${Icons.note}</div>
-          <p>Importa música para armar tu cola.</p>
-          <button type="button" class="add-music" data-action="import">+ Importar música</button>
-        </div>`;
-      return;
-    }
-
-    // Sin canción sonando todavía: se ofrece la biblioteca para empezar (como en v1.03)
-    if (!current) {
-      this.nowBox.innerHTML = `<p class="q-label">Sin reproducción</p>`;
-      this.head.innerHTML = `<p class="q-label">Elige una canción para empezar · ${songs.length}</p>`;
-      this.summary.textContent = "Nada sonando";
-      this.list.innerHTML = songs.slice(0, this.LIMIT).map((song) => this.row(song, "library")).join("");
-      this.list.scrollTop = top;
-      return;
-    }
-
-    this.nowBox.innerHTML = this.nowHTML(current);
-
-    const byId = new Map(songs.map((song) => [song.id, song]));
-    const ids = Queue.upcoming;
-    const shown = ids.slice(0, this.LIMIT);
-    const count = ids.length;
-
-    this.summary.textContent = count
-      ? `${count} ${count === 1 ? "pendiente" : "pendientes"} · ${UI.formatLong(Queue.totalSeconds())}`
-      : "Sin canciones pendientes";
-
-    this.head.innerHTML = `<p class="q-label">A continuación · ${count}</p>` +
-      (count > 1 ? `<span class="q-hint">Arrastra para reordenar</span>` : "");
-
-    if (!count) {
-      const others = songs.length > 1;
-      this.list.innerHTML = `
-        <div class="q-empty">
-          <p>No hay más canciones en la cola.<br>Al terminar la actual vuelve a empezar con tu biblioteca.</p>
-          ${others ? `<button type="button" class="chip-btn" data-action="queue-restore">Añadir toda la biblioteca</button>` : ""}
-        </div>`;
-    } else {
-      this.list.innerHTML = shown.map((id) => this.row(byId.get(id), "queue")).join("") +
-        (count > shown.length ? `<p class="q-more">… y ${count - shown.length} más</p>` : "");
-    }
-    this.list.scrollTop = top;
-    UI.updatePlayState(); // el botón de reproducir/pausar de la tarjeta recién dibujada
-  },
-
-  // Tocar una fila: la canción suena ya. La de la cola sale de los pendientes; la de la biblioteca arma una cola nueva.
-  activate(id, mode) {
-    if (id === Player.currentId) { Player.toggle(); return; }
-    Player.play(id, mode === "library" ? "library" : "queue");
-  },
-
-  /* ---------- Reordenar arrastrando ---------- */
-
-  startDrag(event, handle) {
-    if (this.drag) return;
-    const row = handle.closest(".q-row");
-    const rows = Array.from(this.list.querySelectorAll(".q-row:not(.lib)"));
-    const from = rows.indexOf(row);
-    if (!row || from < 0) return;
-    event.preventDefault();
-    const pitch = rows.length > 1 ? rows[1].offsetTop - rows[0].offsetTop : row.offsetHeight + 8;
-    this.drag = {
-      id: Number(row.dataset.qid), row, rows, from, to: from, pitch,
-      startY: event.clientY, lastY: event.clientY, startScroll: this.list.scrollTop,
-      version: Queue.version, pointerId: event.pointerId, handle, raf: 0
-    };
-    try { handle.setPointerCapture(event.pointerId); } catch (error) { /* no crítico */ }
-    row.classList.add("dragging");
-    this.list.classList.add("is-dragging");
-    try { if (navigator.vibrate) navigator.vibrate(12); } catch (error) { /* sin vibración */ }
-    this.autoScroll();
-  },
-
-  moveDrag(event) {
-    const d = this.drag;
-    if (!d || event.pointerId !== d.pointerId) return;
-    d.lastY = event.clientY;
-    this.applyDrag();
-  },
-
-  // Coloca la fila bajo el dedo y abre hueco desplazando las demás
-  applyDrag() {
-    const d = this.drag;
-    if (!d) return;
-    const dy = (d.lastY - d.startY) + (this.list.scrollTop - d.startScroll);
-    d.row.style.transform = `translateY(${dy}px)`;
-    const to = Math.max(0, Math.min(d.rows.length - 1, Math.round(d.from + dy / d.pitch)));
-    if (to === d.to) return;
-    d.to = to;
-    d.rows.forEach((row, i) => {
-      if (row === d.row) return;
-      let shift = 0;
-      if (d.from < to && i > d.from && i <= to) shift = -d.pitch;
-      else if (d.from > to && i >= to && i < d.from) shift = d.pitch;
-      row.style.transform = shift ? `translateY(${shift}px)` : "";
-    });
-  },
-
-  // Cerca del borde de arriba o de abajo la lista se desplaza sola
-  autoScroll() {
-    const d = this.drag;
-    if (!d) return;
-    const rect = this.list.getBoundingClientRect();
-    const zone = 56;
-    let speed = 0;
-    if (d.lastY < rect.top + zone) speed = -Math.ceil((rect.top + zone - d.lastY) / 5);
-    else if (d.lastY > rect.bottom - zone) speed = Math.ceil((d.lastY - (rect.bottom - zone)) / 5);
-    speed = Math.max(-20, Math.min(20, speed));
-    if (speed) {
-      const before = this.list.scrollTop;
-      this.list.scrollTop = before + speed;
-      if (this.list.scrollTop !== before) this.applyDrag();
-    }
-    d.raf = requestAnimationFrame(() => this.autoScroll());
-  },
-
-  endDrag(event, cancelled) {
-    const d = this.drag;
-    if (!d || (event && event.pointerId !== d.pointerId)) return;
-    cancelAnimationFrame(d.raf);
-    this.drag = null;
-    try { d.handle.releasePointerCapture(d.pointerId); } catch (error) { /* ya liberado */ }
-    this.list.classList.remove("is-dragging");
-
-    const unchanged = cancelled || d.to === d.from;
-    const settle = () => {
-      d.rows.forEach((row) => { row.style.transform = ""; row.style.transition = ""; row.classList.remove("dragging"); });
-      // Solo se aplica si la cola no cambió mientras se arrastraba (otra canción, borrado…)
-      if (!unchanged && d.version === Queue.version && Queue.upcoming[d.from] === d.id) Queue.move(d.from, d.to);
-      else if (!unchanged) this.render();
-    };
-    if (unchanged) { settle(); return; }
-    // La fila se acomoda en su hueco y después se guarda el nuevo orden
-    d.row.style.transition = "transform 0.12s ease";
-    d.row.style.transform = `translateY(${(d.to - d.from) * d.pitch}px)`;
-    setTimeout(settle, 130);
-  },
-
-  cancelDrag() {
-    if (!this.drag) return;
-    const d = this.drag;
-    this.endDrag({ pointerId: d.pointerId }, true);
+    const audio = Player.currentId !== null ? Player.audio : null;
+    if (audio && Number.isFinite(audio.duration)) total += Math.max(0, audio.duration - audio.currentTime);
+    return total;
   }
 };
 
 /* =========================================================
-   HOJAS INFERIORES (v1.04) — opciones de una canción, información musical y opciones de mezcla
+   AUDIO GRAPH (v1.04) — Web Audio compartido
+   Dos reproductores <audio> (A y B) → una ganancia cada uno (para el crossfade) → 10 filtros del
+   ecualizador → preamp → limitador → mono → balance → volumen general → salida.
+   Solo se crea cuando hace falta (ecualizador, crossfade, mono o balance). Mientras no se use,
+   la reproducción es exactamente la de siempre: el <audio> suena directo.
+   Todo es procesamiento real del audio (BiquadFilterNode, GainNode…): nada está simulado.
    ========================================================= */
-const Sheets = {
-  closeAll() {
-    SongMenu.close();
-    SongInfo.close();
-    QueueOptions.close();
-  },
-  anyOpen() {
-    return SongMenu.isOpen() || SongInfo.isOpen() || QueueOptions.isOpen();
-  }
-};
+const AudioGraph = {
+  ctx: null,
+  sources: [],
+  gains: [],
+  eqIn: null,
+  filters: [],
+  preamp: null,
+  limiter: null,
+  mono: null,
+  panner: null,
+  master: null,
+  ready: false,
+  failed: false,
 
-const SongMenu = {
-  id: null,
-  ctx: "queue",
-
-  isOpen() {
-    const el = $("song-menu");
-    return Boolean(el) && !el.classList.contains("hidden");
+  supported() {
+    return Boolean(window.AudioContext || window.webkitAudioContext);
   },
 
-  // ctx: "queue" (pendiente), "now" (la que suena) o "library" (aún sin cola)
-  open(id, ctx) {
-    const song = Library.byId(id);
-    if (!song) return;
-    Sheets.closeAll();
-    this.id = id;
-    this.ctx = ctx || "queue";
-    $("sm-cover").innerHTML = UI.coverHTML(song);
-    $("sm-title").textContent = song.name || "Sin título";
-    $("sm-artist").textContent = song.artist;
-
-    const at = Queue.upcoming.indexOf(id);
-    const items = [];
-    if (this.ctx === "queue" || this.ctx === "library") items.push(["play", Icons.play, "Reproducir ahora"]);
-    if (this.ctx === "queue" && at > 0) items.push(["top", Icons.top, "Reproducir a continuación"]);
-    if (this.ctx === "queue" && at >= 0 && at < Queue.upcoming.length - 1) items.push(["end", Icons.bottom, "Mover al final de la cola"]);
-    items.push(["info", Icons.info, "Información de la canción"]);
-    if (this.ctx === "now") items.push(["edit", Icons.pencil, "Editar información"]);
-    if (this.ctx === "queue") items.push(["remove", Icons.x, "Quitar de la cola", true]);
-
-    $("sm-items").innerHTML = items.map(([key, icon, label, danger]) =>
-      `<button type="button" class="a-item${danger ? " danger" : ""}" data-action="songmenu" data-sm="${key}">
-         <span class="a-ic">${icon}</span><span class="a-tx"><strong>${label}</strong></span>
-       </button>`).join("");
-    $("song-menu").classList.remove("hidden");
+  // ¿Alguna función necesita el grafo ahora mismo?
+  needed() {
+    const v = Settings.values;
+    return Boolean((v.eq && v.eq.enabled) || v.crossfade || v.mono || Number(v.balance) !== 0);
   },
 
-  close() {
-    const el = $("song-menu");
-    if (el) el.classList.add("hidden");
-  },
+  ensure() {
+    if (this.ready) return true;
+    if (this.failed) return false;
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) throw new Error("Web Audio no disponible");
+      const ctx = new AudioCtx();
+      const sources = Player.decks.map((deck) => ctx.createMediaElementSource(deck.el));
+      const gains = sources.map((source) => {
+        const gain = ctx.createGain();
+        source.connect(gain);
+        return gain;
+      });
+      const eqIn = ctx.createGain();
+      gains.forEach((gain) => gain.connect(eqIn));
 
-  run(key) {
-    const id = this.id, ctx = this.ctx;
-    this.close();
-    if (id === null || !Library.byId(id)) return;
-    switch (key) {
-      case "play": QueueScreen.activate(id, ctx === "library" ? "library" : "queue"); break;
-      case "top": Queue.moveToTop(id); break;
-      case "end": Queue.moveToEnd(id); break;
-      case "info": SongInfo.open(id); break;
-      case "edit": Editor.open(id); break;
-      case "remove": Queue.remove(id); break;
+      const filters = EQ_FREQS.map((freq, i) => {
+        const filter = ctx.createBiquadFilter();
+        filter.type = i === 0 ? "lowshelf" : i === EQ_FREQS.length - 1 ? "highshelf" : "peaking";
+        filter.frequency.value = freq;
+        if (filter.type === "peaking") filter.Q.value = 1.1;
+        filter.gain.value = 0;
+        return filter;
+      });
+      const preamp = ctx.createGain();
+      const limiter = ctx.createDynamicsCompressor(); // protege de la saturación al subir graves
+      limiter.knee.value = 0;
+      limiter.attack.value = 0.003;
+      limiter.release.value = 0.12;
+      const mono = ctx.createGain(); // con channelCount = 1 mezcla izquierda y derecha
+      const panner = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+      const master = ctx.createGain();
+
+      let node = eqIn;
+      filters.forEach((filter) => { node.connect(filter); node = filter; });
+      node.connect(preamp);
+      preamp.connect(limiter);
+      limiter.connect(mono);
+      if (panner) { mono.connect(panner); panner.connect(master); } else mono.connect(master);
+      master.connect(ctx.destination);
+
+      ctx.onstatechange = () => {
+        if (ctx.state === "suspended" && Player.audio && !Player.audio.paused) ctx.resume().catch(() => {});
+      };
+      Object.assign(this, { ctx, sources, gains, eqIn, filters, preamp, limiter, mono, panner, master, ready: true });
+      this.applyFx();
+      return true;
+    } catch (error) {
+      console.error("No se pudo crear el audio avanzado:", error);
+      this.failed = true;
+      return false;
     }
-  }
-};
-
-const SongInfo = {
-  id: null,
-
-  isOpen() {
-    const el = $("song-info");
-    return Boolean(el) && !el.classList.contains("hidden");
   },
 
-  lyricsSummary(song) {
-    if (!song.lyrics || !song.lyrics.raw || !song.lyrics.raw.trim()) return "Sin letra";
-    const data = LyricsParser.parse(song.lyrics.raw);
-    if (!data.synced) return "Texto sin sincronizar";
-    return `${Lyrics.FORMAT_NAMES[data.format] || "LRC"} · ${data.wordLevel ? "palabra por palabra" : "línea por línea"}`;
+  resume() {
+    if (this.ctx && this.ctx.state !== "running") this.ctx.resume().catch(() => {});
   },
 
-  open(id) {
-    const song = Library.byId(id);
-    if (!song) return;
-    Sheets.closeAll();
-    this.id = id;
-    $("si-cover").innerHTML = UI.coverHTML(song);
-    $("si-title").textContent = song.name || "Sin título";
-    $("si-artist").textContent = song.artist;
-
-    const extension = (String(song.fileName || "").split(".").pop() || "").toUpperCase();
-    const added = song.addedAt ? new Date(song.addedAt).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" }) : "";
-    const at = Queue.upcoming.indexOf(id);
-    const place = id === Player.currentId ? "Reproduciendo ahora" : at >= 0 ? `Puesto ${at + 1} de ${Queue.upcoming.length}` : "No está pendiente";
-    const rows = [
-      ["Duración", song.duration ? UI.formatTime(song.duration) : "—"],
-      ["En la cola", place],
-      ["Letra", this.lyricsSummary(song)],
-      ["Archivo", song.fileName || "—"],
-      ["Formato", extension || song.mime || "—"],
-      ["Tamaño", song.size ? UI.formatBytes(song.size) : "—"],
-      ["Añadida", added || "—"]
-    ];
-    $("si-list").innerHTML = rows.map(([label, value]) =>
-      `<div class="info-row"><dt>${label}</dt><dd>${UI.escapeHTML(value)}</dd></div>`).join("");
-    $("song-info").classList.remove("hidden");
+  // Limitador, mono y balance (Ajustes → Audio)
+  applyFx() {
+    if (!this.ready) return;
+    const v = Settings.values;
+    const now = this.ctx.currentTime;
+    const limit = v.limiter !== false;
+    this.limiter.threshold.setValueAtTime(limit ? -2 : 0, now);
+    this.limiter.ratio.setValueAtTime(limit ? 20 : 1, now); // ratio 1 = no hace nada
+    const mono = Boolean(v.mono);
+    this.mono.channelCount = mono ? 1 : 2;
+    this.mono.channelCountMode = mono ? "explicit" : "max";
+    this.mono.channelInterpretation = "speakers";
+    if (this.panner) this.panner.pan.setTargetAtTime(Math.max(-1, Math.min(1, Number(v.balance) || 0)), now, 0.03);
   },
 
-  close() {
-    const el = $("song-info");
-    if (el) el.classList.add("hidden");
+  // Ganancia de cada reproductor (0 a 1)
+  setDeckGain(index, value) {
+    if (!this.ready || !this.gains[index]) return;
+    const param = this.gains[index].gain;
+    param.cancelScheduledValues(this.ctx.currentTime);
+    param.setValueAtTime(value, this.ctx.currentTime);
   },
 
-  edit() {
-    const id = this.id;
-    this.close();
-    if (id !== null) Editor.open(id);
-  }
-};
-
-const QueueOptions = {
-  isOpen() {
-    const el = $("queue-options");
-    return Boolean(el) && !el.classList.contains("hidden");
+  // Curva de potencia constante: la suma de los dos volúmenes se mantiene pareja a mitad del cruce.
+  // Las rampas las ejecuta el motor de audio, así que no se entrecortan aunque la pantalla esté apagada.
+  rampDeck(index, from, to, seconds) {
+    if (!this.ready || !this.gains[index]) return false;
+    const param = this.gains[index].gain;
+    const now = this.ctx.currentTime;
+    const steps = 48;
+    const curve = new Float32Array(steps);
+    for (let i = 0; i < steps; i++) {
+      const t = i / (steps - 1);
+      const level = from <= to ? Math.sin(t * Math.PI / 2) : Math.cos(t * Math.PI / 2);
+      curve[i] = from <= to ? from + (to - from) * level : to + (from - to) * level;
+    }
+    param.cancelScheduledValues(now);
+    param.setValueAtTime(from, now);
+    try { param.setValueCurveAtTime(curve, now, Math.max(0.1, seconds)); }
+    catch (error) { param.linearRampToValueAtTime(to, now + Math.max(0.1, seconds)); }
+    return true;
   },
 
-  open() {
-    Sheets.closeAll();
-    UI.refreshSettingsControls();
-    $("queue-options").classList.remove("hidden");
-  },
-
-  close() {
-    const el = $("queue-options");
-    if (el) el.classList.add("hidden");
+  // Volumen general (atenuación suave del temporizador y bajar el volumen en interrupciones)
+  rampMaster(to, seconds) {
+    if (!this.ready) return false;
+    const param = this.master.gain;
+    const now = this.ctx.currentTime;
+    param.cancelScheduledValues(now);
+    param.setValueAtTime(param.value, now);
+    param.linearRampToValueAtTime(to, now + Math.max(0.02, seconds));
+    return true;
   }
 };
 
 /* =========================================================
-   ECUALIZADOR — 10 bandas con Web Audio
+   ECUALIZADOR — 10 bandas con Web Audio (BiquadFilterNode: lowshelf + 8 peaking + highshelf)
    Solo se conecta al audio la primera vez que lo activas (así, mientras no lo uses,
    la reproducción es exactamente la de siempre). Al desactivarlo queda plano.
+   Es un ecualizador REAL: modifica el sonido que sale por el altavoz o los auriculares.
    ========================================================= */
 const EQ_FREQS = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 const EQ_LABELS = ["31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"];
 const EQ_MAX_DB = 12;
 const EQ_PRESETS = [
-  { id: "bass",   name: "Bajos",  gains: [7, 6, 5, 3, 1, 0, 0, 0, 0, 0] },
-  { id: "vocal",  name: "Voces",  gains: [-3, -2, -1, 1, 3, 4, 4, 2, 0, -1] },
-  { id: "treble", name: "Agudos", gains: [-1, -1, 0, 0, 0, 1, 3, 5, 6, 7] }
+  { id: "bass",       name: "Bajos",       gains: [7, 6, 5, 3, 1, 0, 0, 0, 0, 0] },
+  { id: "vocal",      name: "Voces",       gains: [-3, -2, -1, 1, 3, 4, 4, 2, 0, -1] },
+  { id: "treble",     name: "Agudos",      gains: [-1, -1, 0, 0, 0, 1, 3, 5, 6, 7] },
+  { id: "rock",       name: "Rock",        gains: [5, 4, 3, 1, -1, -1, 1, 3, 4, 5] },
+  { id: "pop",        name: "Pop",         gains: [-1, 1, 3, 4, 3, 1, -1, -1, 1, 2] },
+  { id: "classical",  name: "Clásica",     gains: [0, 0, 0, 0, 0, 0, -2, -3, -3, -4] },
+  { id: "electronic", name: "Electrónica", gains: [5, 4, 1, 0, -2, 2, 1, 2, 4, 5] },
+  { id: "jazz",       name: "Jazz",        gains: [3, 3, 1, 2, -2, -2, 0, 1, 2, 3] }
 ];
 const EQ_FLAT = { id: "flat", name: "Plano", gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] };
 
 const Equalizer = {
-  ctx: null,
-  source: null,
-  filters: [],
-  preamp: null,
-  limiter: null,
-  ready: false,
-  failed: false,
   applied: false,
   drag: null,
   saveTimer: 0,
   state: { enabled: false, preset: "flat", gains: new Array(10).fill(0) },
 
+  supported() { return AudioGraph.supported() && !AudioGraph.failed; },
+
   init() {
     this.buildBands();
-    Player.audio.addEventListener("play", () => this.resume());
+    Player.onActive("play", () => AudioGraph.resume());
     $("eq-enabled").addEventListener("change", (event) => this.setEnabled(event.target.checked));
     this.refreshUI();
   },
@@ -2188,73 +1877,26 @@ const Equalizer = {
     this.refreshUI();
   },
 
-  /* ---------- Audio ---------- */
-
-  ensureGraph() {
-    if (this.ready) return true;
-    if (this.failed) return false;
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) throw new Error("Web Audio no disponible");
-      const ctx = new AudioCtx();
-      const source = ctx.createMediaElementSource(Player.audio);
-      const filters = EQ_FREQS.map((freq, i) => {
-        const filter = ctx.createBiquadFilter();
-        filter.type = i === 0 ? "lowshelf" : i === EQ_FREQS.length - 1 ? "highshelf" : "peaking";
-        filter.frequency.value = freq;
-        if (filter.type === "peaking") filter.Q.value = 1.1;
-        filter.gain.value = 0;
-        return filter;
-      });
-      const preamp = ctx.createGain();
-      const limiter = ctx.createDynamicsCompressor(); // protege de la saturación al subir graves
-      limiter.threshold.value = -2;
-      limiter.knee.value = 0;
-      limiter.ratio.value = 20;
-      limiter.attack.value = 0.003;
-      limiter.release.value = 0.12;
-
-      let node = source;
-      filters.forEach((filter) => { node.connect(filter); node = filter; });
-      node.connect(preamp);
-      preamp.connect(limiter);
-      limiter.connect(ctx.destination);
-
-      ctx.onstatechange = () => {
-        if (ctx.state === "suspended" && !Player.audio.paused) ctx.resume().catch(() => {});
-      };
-      Object.assign(this, { ctx, source, filters, preamp, limiter, ready: true });
-      return true;
-    } catch (error) {
-      console.error("No se pudo crear el ecualizador:", error);
-      this.failed = true;
-      return false;
-    }
-  },
-
-  resume() {
-    if (this.ctx && this.ctx.state !== "running") this.ctx.resume().catch(() => {});
-  },
-
-  // Se llama al empezar cada canción: si el ecualizador estaba activado, se reconecta.
+  // Se llama al empezar cada canción: si el ecualizador (o el crossfade) estaba activado, se reconecta.
   onPlay() {
-    if (!this.state.enabled) return;
-    if (this.ensureGraph()) {
-      this.resume();
+    if (!AudioGraph.needed()) return;
+    if (AudioGraph.ensure()) {
+      AudioGraph.resume();
       this.apply();
-    } else {
+    } else if (this.state.enabled) {
       this.state.enabled = false;
       this.refreshUI();
     }
   },
 
   apply() {
-    if (!this.ready) return;
+    if (!AudioGraph.ready) return;
+    const ctx = AudioGraph.ctx;
     const on = this.state.enabled;
-    const now = this.ctx.currentTime;
+    const now = ctx.currentTime;
     const instant = !this.applied; // la primera vez, de golpe: así no suena plano al principio
     this.applied = true;
-    this.filters.forEach((filter, i) => {
+    AudioGraph.filters.forEach((filter, i) => {
       const target = on ? this.state.gains[i] : 0;
       if (instant) filter.gain.value = target;
       else filter.gain.setTargetAtTime(target, now, 0.02);
@@ -2262,21 +1904,21 @@ const Equalizer = {
     const boost = on ? Math.max(0, ...this.state.gains) : 0;
     // Baja un poco el volumen general según lo que se sube, para evitar distorsión.
     const level = Math.pow(10, -(boost * 0.7) / 20);
-    if (instant) this.preamp.gain.value = level;
-    else this.preamp.gain.setTargetAtTime(level, now, 0.03);
+    if (instant) AudioGraph.preamp.gain.value = level;
+    else AudioGraph.preamp.gain.setTargetAtTime(level, now, 0.03);
   },
 
   /* ---------- Cambios del usuario ---------- */
 
   setEnabled(on) {
     if (on) {
-      if (!this.ensureGraph()) {
+      if (!AudioGraph.ensure()) {
         this.state.enabled = false;
         this.refreshUI();
-        UI.toast("Este navegador no permite usar el ecualizador.");
+        UI.toast("Este dispositivo no permite usar el ecualizador.");
         return;
       }
-      this.resume();
+      AudioGraph.resume();
     }
     this.state.enabled = on;
     this.apply();
@@ -2294,7 +1936,7 @@ const Equalizer = {
     if (!preset) return;
     this.state.gains = preset.gains.slice();
     this.state.preset = id;
-    if (!this.state.enabled) this.setEnabled(true);
+    if (!this.state.enabled && id !== "flat") this.setEnabled(true);
     else { this.apply(); this.refreshUI(); this.saveSoon(); }
     this.refreshUI();
   },
@@ -2321,10 +1963,16 @@ const Equalizer = {
     }, 300);
   },
 
+  presetName() {
+    if (this.state.preset === "custom") return "Personalizado";
+    const found = [...EQ_PRESETS, EQ_FLAT].find((item) => item.id === this.state.preset);
+    return found ? found.name : "Plano";
+  },
+
   /* ---------- Interfaz ---------- */
 
   buildBands() {
-    $("eq-presets").innerHTML = EQ_PRESETS.map((preset) =>
+    $("eq-presets").innerHTML = [EQ_FLAT, ...EQ_PRESETS].map((preset) =>
       `<button type="button" class="eq-chip" data-preset="${preset.id}">${preset.name}</button>`
     ).join("");
 
@@ -2370,7 +2018,8 @@ const Equalizer = {
     if (!sheet) return;
     sheet.classList.toggle("off", !this.state.enabled);
     $("eq-enabled").checked = this.state.enabled;
-    $("tab-eq").classList.toggle("on", this.state.enabled);
+    const tab = $("tab-eq");
+    if (tab) tab.classList.toggle("on", this.state.enabled);
 
     this.state.gains.forEach((gain, i) => {
       const track = sheet.querySelector(`.eq-track[data-band="${i}"]`);
@@ -2389,6 +2038,16 @@ const Equalizer = {
       button.classList.toggle("active", button.dataset.preset === this.state.preset);
     });
     $("eq-custom").classList.toggle("hidden", this.state.preset !== "custom");
+    const status = $("eq-engine");
+    if (status) {
+      const bad = !AudioGraph.supported() || AudioGraph.failed;
+      status.textContent = bad
+        ? "Este dispositivo no admite el procesamiento de audio necesario para el ecualizador."
+        : "Motor: Web Audio · 10 bandas reales (filtros biquad). Funciona con todas las canciones, también las de carpetas.";
+      status.classList.toggle("warn", bad);
+    }
+    const summary = $("eq-summary");
+    if (summary) summary.textContent = (this.state.enabled ? "Activado · " : "Desactivado · ") + this.presetName();
   }
 };
 
@@ -2528,7 +2187,8 @@ const Covers = {
   urls: new Map(),
 
   get(song) {
-    if (!song || !song.cover) return null;
+    if (!song) return null;
+    if (!song.cover) return song.coverFile ? Native.coverUrl(song.coverFile) || null : null; // carátula incrustada leída por Android
     let url = this.urls.get(song.id);
     if (!url) {
       url = URL.createObjectURL(song.cover);
@@ -2575,6 +2235,11 @@ const Library = {
 
   indexOf(id) {
     return this.songs.findIndex((song) => song.id === id);
+  },
+
+  // Ids de las canciones que se pueden reproducir ahora (las de carpetas que ya no existen quedan fuera)
+  playableIds() {
+    return this.songs.filter((song) => !song.missing).map((song) => song.id);
   },
 
   isAudioFile(file) {
@@ -2667,7 +2332,6 @@ const Library = {
         const meta = this.buildMeta(file, duration);
         await Store.addSong(meta, file);
         this.songs.push(meta);
-        Queue.added(meta.id); // si hay música sonando, la nueva se suma a los pendientes
         added++;
       } catch (error) {
         console.error("Error al importar", file.name, error);
@@ -2699,14 +2363,23 @@ const Library = {
   async remove(id) {
     const song = this.byId(id);
     if (!song) return;
-    if (!(await UI.confirm(`¿Eliminar "${song.name}" de la biblioteca?`, "Eliminar", true))) return;
+    const fromFolder = Boolean(song.uri);
+    const question = fromFolder
+      ? `¿Quitar "${song.name}" de la biblioteca? El archivo no se borra y no volverá a añadirse al actualizar.`
+      : `¿Eliminar "${song.name}" de la biblioteca?`;
+    if (!(await UI.confirm(question, fromFolder ? "Quitar" : "Eliminar", true))) return;
     if (Player.currentId === id) Player.stop();
     try {
       await UI.animateOut(id);
       await Store.removeSong(id);
       this.songs = this.songs.filter((item) => item.id !== id);
       Covers.release(id);
-      Queue.forget(id); // y desaparece de la cola
+      Queue.removeId(id);
+      if (fromFolder && song.docKey) {
+        // Se recuerda para que «Actualizar biblioteca» no la vuelva a traer
+        const ignored = (Settings.values.ignoredKeys || []).concat(song.docKey);
+        await Settings.set("ignoredKeys", Array.from(new Set(ignored)));
+      }
       UI.renderAll();
     } catch (error) {
       console.error(error);
@@ -2719,12 +2392,13 @@ const Library = {
       UI.toast("La biblioteca ya está vacía.");
       return;
     }
-    if (!(await UI.confirm("¿Borrar toda la biblioteca? Esto no elimina tus archivos originales.", "Borrar", true))) return;
+    if (!(await UI.confirm("¿Borrar toda la biblioteca? Esto no elimina tus archivos originales. Las carpetas autorizadas se mantienen: puedes volver a cargarlas con «Actualizar biblioteca».", "Borrar", true))) return;
     Player.stop();
     try {
       await Store.clearAll();
       this.songs = [];
       Covers.releaseAll();
+      Queue.clear();
       UI.renderAll();
       UI.toast("Biblioteca borrada.");
     } catch (error) {
@@ -2735,182 +2409,510 @@ const Library = {
 };
 
 /* =========================================================
-   PLAYER — reproducción
+   PLAYER — reproducción (v1.04)
+   Dos reproductores <audio> ("decks"). Mientras suena uno, la siguiente canción se prepara en el otro:
+   así el cambio es inmediato (reproducción continua) y el crossfade mezcla las dos canciones sin cortes.
+   `Player.audio` siempre apunta al deck que suena (compatibilidad con letras, editor y ecualizador).
    ========================================================= */
+function makeDeck() {
+  const el = new Audio();
+  el.preload = "auto";
+  return { el, url: "", revoke: null, songId: null };
+}
+
 const Player = {
-  audio: new Audio(),
+  decks: [makeDeck(), makeDeck()],
+  activeIdx: 0,
   currentId: null,
-  objectUrl: null,
+  objectUrl: null,   // "hay algo cargado" (se conserva por compatibilidad con la v1.03)
   seeking: false,
   loadToken: 0,
   positionAt: 0,
+  fading: null,      // { from, to, timer } mientras dura un crossfade
+  preloaded: null,   // { songId, deckIdx }
+  preloadTimer: 0,
+  failStreak: 0,
+  startingFade: false,
+  userPaused: false,
+  interrupted: false, // pausada por otra app (llamada, otro reproductor…): se reanuda sola al volver el foco
+  duckLevel: 1,      // < 1 mientras otra app pide que bajemos el volumen
+  fadeLevel: 1,      // < 1 durante el fundido final del temporizador
 
-  init() {
-    const audio = this.audio;
-    audio.preload = "auto";
+  get audio() { return this.decks[this.activeIdx].el; },
+  get deck() { return this.decks[this.activeIdx]; },
+  get idle() { return this.decks[1 - this.activeIdx]; },
 
-    audio.addEventListener("play", () => UI.updatePlayState());
-    audio.addEventListener("pause", () => UI.updatePlayState());
-    audio.addEventListener("timeupdate", () => {
-      UI.updateProgress();
-      this.updatePositionState();
-      Lyrics.onTime(audio.currentTime);
+  isActive(deck) { return this.decks[this.activeIdx] === deck; },
+
+  // Para los módulos que escuchan eventos del audio (letras, ecualizador…): solo avisa si viene del deck que suena
+  onActive(eventName, handler) {
+    this.decks.forEach((deck) => {
+      deck.el.addEventListener(eventName, (event) => { if (this.isActive(deck)) handler(event); });
     });
-    audio.addEventListener("loadedmetadata", () => UI.setDuration(audio.duration));
-    audio.addEventListener("durationchange", () => UI.setDuration(audio.duration));
-    audio.addEventListener("ended", () => this.handleEnded());
-    audio.addEventListener("error", () => {
-      if (!this.objectUrl) return;
-      console.error("Error de audio:", audio.error);
-      UI.toast("No se pudo reproducir este archivo. Puede que su formato no sea compatible.");
-      UI.updatePlayState();
-    });
-
-    this.setupMediaSession();
   },
 
-  // mode = de dónde viene la orden, para que la cola lo anote bien (ver Queue.commit):
-  //   "library" (por defecto, elegida en la biblioteca) · "queue" (siguiente o elegida en la cola) · "prev" (Anterior)
-  async play(id, mode = "library") {
-    const song = Library.byId(id);
-    if (!song) return;
+  init() {
+    this.decks.forEach((deck, index) => {
+      const el = deck.el;
+      const active = () => this.isActive(deck);
+      el.addEventListener("play", () => { if (active()) { UI.updatePlayState(); MediaBridge.update(true); } });
+      el.addEventListener("pause", () => {
+        if (!active()) return;
+        UI.updatePlayState();
+        MediaBridge.update(true);
+      });
+      el.addEventListener("playing", () => { if (active()) this.failStreak = 0; });
+      el.addEventListener("timeupdate", () => {
+        if (!active()) return;
+        UI.updateProgress();
+        this.updatePositionState();
+        Lyrics.onTime(el.currentTime);
+        this.tick();
+      });
+      el.addEventListener("seeked", () => { if (active()) MediaBridge.update(true); });
+      el.addEventListener("loadedmetadata", () => { if (active()) UI.setDuration(el.duration); });
+      el.addEventListener("durationchange", () => {
+        if (active()) { UI.setDuration(el.duration); MediaBridge.update(); }
+      });
+      el.addEventListener("ended", () => { if (active()) this.handleEnded(); });
+      el.addEventListener("error", () => this.handleError(deck, index));
+    });
+    this.setupMediaSession();
+    this.applyLoopMode();
 
-    const token = ++this.loadToken;
-    let blob;
+    // Música en segundo plano apagada: al salir de la app, la música se pausa
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && Settings.values.bgPlayback === false && this.currentId !== null && !this.audio.paused) this.pause();
+    });
+    Settings.watch(["repeat"], () => { this.applyLoopMode(); this.invalidatePreload(); });
+    Settings.watch(["gapless", "crossfade", "crossfadeSecs"], (value, key) => {
+      if (key === "crossfade" && value) AudioGraph.ensure();
+      this.invalidatePreload();
+    });
+    Settings.watch(["limiter", "mono", "balance"], () => {
+      if (AudioGraph.needed()) AudioGraph.ensure();
+      AudioGraph.applyFx();
+    });
+  },
+
+  /* ---------- Cargar y reproducir ---------- */
+
+  // Devuelve { url, revoke } con la dirección desde la que se reproduce la canción.
+  async resolveSource(song) {
+    if (song.uri) { // canción de una carpeta autorizada: la sirve Android desde el mismo origen de la app
+      const url = Native.audioUrl(song.uri);
+      return url ? { url, revoke: null } : null;
+    }
+    let blob = null;
+    try { blob = await Store.getBlob(song.id); } catch (error) { console.error(error); }
+    if (!blob) return null;
+    const url = URL.createObjectURL(blob);
+    return { url, revoke: () => URL.revokeObjectURL(url) };
+  },
+
+  attach(deck, song, source) {
+    const previous = deck.revoke;
+    deck.el.src = source.url;
+    deck.url = source.url;
+    deck.revoke = source.revoke;
+    deck.songId = song.id;
+    if (previous) previous();
+  },
+
+  release(deck) {
     try {
-      blob = await Store.getBlob(id);
-    } catch (error) {
-      console.error(error);
+      deck.el.pause();
+      deck.el.removeAttribute("src");
+      deck.el.load();
+    } catch (error) { /* no crítico */ }
+    if (deck.revoke) deck.revoke();
+    deck.url = "";
+    deck.revoke = null;
+    deck.songId = null;
+    deck.el.loop = false;
+    deck.el.volume = 1;
+    const index = this.decks.indexOf(deck);
+    if (index >= 0) AudioGraph.setDeckGain(index, 1);
+  },
+
+  // opts.fromQueue: la cola ya apunta a esta canción (siguiente, anterior…); opts.context: lista de ids de la que viene
+  async play(id, opts = {}) {
+    const song = Library.byId(id);
+    if (!song) return false;
+    if (song.missing) {
+      UI.toast("Este archivo ya no está disponible. Actualiza la biblioteca en Ajustes.");
+      return false;
     }
-    if (token !== this.loadToken) return; // se pidió otra canción mientras cargaba
-    if (!blob) {
-      UI.toast("No se encontró el archivo de esta canción.");
-      return;
+    this.finishFade();
+    this.cancelPreloadTimer();
+    const token = ++this.loadToken;
+    // Lo preparado se guarda antes de mover la cola (mover la cola vuelve a calcular qué sigue)
+    const pre = this.preloaded;
+    this.preloaded = null;
+    if (!opts.fromQueue) Queue.startAt(id, opts.context);
+    else Queue.commit(id);
+    if (AudioGraph.needed()) AudioGraph.ensure(); // con el gesto del usuario, para que el audio avanzado arranque sin problemas
+
+    // ¿Ya está lista en el otro reproductor? Entonces el cambio es inmediato.
+    let deck = null;
+    if (pre && pre.songId === id && pre.deckIdx !== this.activeIdx && this.decks[pre.deckIdx].songId === id && this.decks[pre.deckIdx].url) {
+      deck = this.decks[pre.deckIdx];
+      const old = this.deck;
+      this.activeIdx = pre.deckIdx;
+      this.release(old);
+      try { deck.el.currentTime = 0; } catch (error) { /* aún sin metadatos */ }
+    } else {
+      const source = await this.resolveSource(song);
+      if (token !== this.loadToken) { if (source && source.revoke) source.revoke(); return false; } // se pidió otra canción mientras cargaba
+      if (!source) {
+        UI.toast(song.uri && !Native.available ? "Las carpetas solo se pueden reproducir en la app Android." : "No se encontró el archivo de esta canción.");
+        return false;
+      }
+      deck = this.deck;
+      this.release(this.idle);
+      deck.el.pause();
+      this.attach(deck, song, source);
     }
 
-    const previousUrl = this.objectUrl;
-    this.objectUrl = URL.createObjectURL(blob);
-    Queue.commit(id, mode, this.currentId); // la cola se actualiza justo cuando la canción empieza de verdad
+    this.objectUrl = deck.url;
     this.currentId = id;
-    this.audio.src = this.objectUrl;
-    if (previousUrl) URL.revokeObjectURL(previousUrl);
-
-    Lyrics.load(song);
-    UI.showNowPlaying(song);
-    Queue.refresh(true);
-    this.updateMediaMetadata(song);
+    AudioGraph.setDeckGain(this.activeIdx, 1);
+    this.applyLoopMode();
+    this.applyLevel();
+    this.userPaused = false;
+    this.interrupted = false;
+    this.afterTrackStart(song);
     Equalizer.onPlay();
 
     try {
-      await this.audio.play();
+      await deck.el.play();
     } catch (error) {
       if (error.name !== "AbortError") {
         console.error("No se pudo reproducir:", error);
         UI.toast("No se pudo iniciar la reproducción.");
       }
     }
+    if (token !== this.loadToken) return true;
     UI.updatePlayState();
+    this.schedulePreload();
+    return true;
   },
+
+  // Todo lo que cambia al empezar una canción (sea normal o por crossfade)
+  afterTrackStart(song) {
+    Lyrics.load(song);
+    UI.showNowPlaying(song);
+    UI.markPlaying();
+    this.updateMediaMetadata(song);
+    MediaBridge.update(true);
+    if (typeof SongInfo !== "undefined") SongInfo.onTrackChange();
+  },
+
+  /* ---------- Controles ---------- */
 
   toggle() {
     if (this.currentId === null) {
-      if (Library.songs.length) {
-        this.play(Library.songs[0].id);
-      } else {
-        UI.toast("Importa música para empezar.");
-      }
+      const first = Library.playableIds()[0];
+      if (first !== undefined) this.play(first, { context: Library.playableIds() });
+      else UI.toast("Importa música para empezar.");
       return;
     }
-    if (this.audio.paused) {
-      this.audio.play().catch((error) => {
-        if (error.name !== "AbortError") UI.toast("No se pudo reanudar la reproducción.");
-      });
-    } else {
-      this.audio.pause();
-    }
+    if (this.audio.paused) this.resume(); else this.pause();
   },
 
-  // v1.04: la siguiente sale de la cola (Queue.upcoming); si se acabó, vuelve a empezar con la biblioteca
-  next() {
-    if (!Library.songs.length) return;
-    if (this.currentId === null) {
-      this.play(Library.songs[0].id, "library");
-      return;
-    }
-    Queue.sanitize();
-    if (!Queue.upcoming.length) Queue.refill();
-    const nextId = Queue.upcoming[0];
-    if (nextId === undefined) { // la única canción de la biblioteca: empieza de nuevo
-      this.audio.currentTime = 0;
-      if (this.audio.paused) this.toggle();
-      return;
-    }
-    this.play(nextId, "queue");
+  resume() {
+    if (this.currentId === null) return;
+    this.userPaused = false;
+    this.interrupted = false;
+    AudioGraph.resume();
+    this.audio.play().catch((error) => {
+      if (error.name !== "AbortError") UI.toast("No se pudo reanudar la reproducción.");
+    });
   },
 
-  // Anterior: reinicia la canción si ya avanzó; si no, vuelve a la última reproducida (historial de la cola)
+  pause() {
+    this.userPaused = true;
+    this.finishFade();
+    this.audio.pause();
+  },
+
+  next(opts = {}) {
+    const id = Queue.nextId(false);
+    if (id === null) return;
+    this.play(id, { fromQueue: true, ...opts });
+  },
+
   previous() {
-    if (!Library.songs.length) return;
-    if (this.currentId !== null && this.audio.currentTime > 3) {
+    const restart = Settings.values.prevRestart !== false;
+    if (restart && this.currentId !== null && this.audio.currentTime > 3) {
+      this.finishFade();
       this.audio.currentTime = 0;
       return;
     }
-    Queue.sanitize();
-    if (Queue.history.length) {
-      this.play(Queue.history[Queue.history.length - 1], "prev");
-      return;
-    }
-    if (this.currentId !== null && Settings.values.shuffle) { // aleatorio y sin historial: reinicia
-      this.audio.currentTime = 0;
-      return;
-    }
-    let index = Library.indexOf(this.currentId) - 1; // sin historial: la anterior de la biblioteca, como antes
-    if (index < 0) index = Library.songs.length - 1;
-    this.play(Library.songs[index].id, "library");
+    const id = Queue.prevId();
+    if (id === null) return;
+    this.play(id, { fromQueue: true });
   },
 
-  handleEnded() {
-    if (Library.songs.length <= 1) {
-      this.audio.currentTime = 0;
-      UI.updatePlayState();
-      UI.updateProgress();
-    } else {
-      this.next();
-    }
+  // Saltar a una posición de la cola (pantalla Cola)
+  skipTo(index) {
+    const id = Queue.ids[index];
+    if (id === undefined) return;
+    if (index === Queue.pos) { this.toggle(); return; }
+    this.play(id, { fromQueue: true });
   },
 
   seekTo(fraction) {
     const duration = this.audio.duration;
     if (Number.isFinite(duration) && duration > 0) {
+      this.finishFade();
       this.audio.currentTime = fraction * duration;
     }
   },
 
   stop() {
     this.loadToken++;
-    const url = this.objectUrl;
+    this.finishFade();
+    this.cancelPreloadTimer();
+    this.preloaded = null;
+    this.decks.forEach((deck) => this.release(deck));
     this.objectUrl = null;
     this.currentId = null;
-    this.audio.pause();
-    this.audio.removeAttribute("src");
-    this.audio.load();
-    if (url) URL.revokeObjectURL(url);
+    this.userPaused = false;
+    this.interrupted = false;
+    Queue.clear(false);
     Lyrics.clear();
-    Queue.reset();
     UI.resetNowPlaying();
+    MediaBridge.update(true);
+    Queue.changed();
+    if (typeof SongInfo !== "undefined") SongInfo.onTrackChange();
   },
+
+  /* ---------- Fin de canción, continuidad y crossfade ---------- */
+
+  handleEnded() {
+    if (typeof SleepTimer !== "undefined" && SleepTimer.consumeTrackEnd()) return;
+    const next = Queue.nextId(true);
+    if (next === null) { this.endOfQueue(); return; }
+    this.play(next, { fromQueue: true });
+  },
+
+  // No hay más canciones (repetición desactivada, o una sola canción)
+  endOfQueue() {
+    this.audio.currentTime = 0;
+    UI.updatePlayState();
+    UI.updateProgress();
+    MediaBridge.update(true);
+  },
+
+  handleError(deck, index) {
+    if (!deck.url) return;
+    console.error("Error de audio:", deck.el.error);
+    if (!this.isActive(deck)) { // era la canción preparada: se descarta sin avisar
+      if (this.preloaded && this.preloaded.deckIdx === index) this.preloaded = null;
+      this.release(deck);
+      return;
+    }
+    UI.updatePlayState();
+    this.failStreak++;
+    if (this.failStreak <= 2 && Queue.ids.length > 1) {
+      UI.toast("No se pudo reproducir este archivo. Pasando a la siguiente…");
+      setTimeout(() => { if (this.audio.error) this.next(); }, 500);
+    } else {
+      UI.toast("No se pudo reproducir este archivo. Puede que su formato no sea compatible.");
+    }
+  },
+
+  // Con reproducción continua o crossfade, la siguiente canción se prepara en el otro reproductor
+  wantsPreload() {
+    return Settings.values.gapless !== false || Boolean(Settings.values.crossfade);
+  },
+
+  schedulePreload() {
+    this.cancelPreloadTimer();
+    if (!this.wantsPreload()) return;
+    this.preloadTimer = setTimeout(() => this.preload(), 1800);
+  },
+
+  cancelPreloadTimer() {
+    clearTimeout(this.preloadTimer);
+    this.preloadTimer = 0;
+  },
+
+  // La cola o los ajustes cambiaron: lo preparado puede ya no ser la siguiente canción
+  invalidatePreload() {
+    if (this.fading) return;
+    this.cancelPreloadTimer();
+    if (this.preloaded) {
+      const stale = this.preloaded.songId !== Queue.nextId(true);
+      if (stale || !this.wantsPreload()) {
+        this.preloaded = null;
+        if (this.currentId !== null) this.release(this.idle);
+      }
+    }
+    if (this.currentId !== null) this.schedulePreload();
+  },
+
+  async preload() {
+    if (this.currentId === null || this.fading) return null;
+    const nextId = Queue.nextId(true);
+    if (nextId === null || nextId === this.currentId) return null;
+    if (this.preloaded && this.preloaded.songId === nextId && this.idle.songId === nextId) return this.idle;
+    const song = Library.byId(nextId);
+    if (!song || song.missing) return null;
+    const token = this.loadToken;
+    const source = await this.resolveSource(song);
+    if (!source) return null;
+    // Mientras se leía el archivo pudo cambiar la canción o la cola
+    if (token !== this.loadToken || Queue.nextId(true) !== nextId || this.fading) {
+      if (source.revoke) source.revoke();
+      return null;
+    }
+    const deck = this.idle;
+    deck.el.pause();
+    this.attach(deck, song, source);
+    deck.el.load();
+    this.preloaded = { songId: nextId, deckIdx: 1 - this.activeIdx };
+    return deck;
+  },
+
+  fadeSeconds(duration) {
+    const wanted = Number(Settings.values.crossfadeSecs) || 4;
+    return Math.max(0.5, Math.min(wanted, duration / 2 - 0.3));
+  },
+
+  // Se llama en cada timeupdate: revisa el temporizador y arranca el crossfade cuando faltan los segundos configurados
+  tick() {
+    if (typeof SleepTimer !== "undefined") SleepTimer.check();
+    if (!Settings.values.crossfade || this.fading || this.startingFade) return;
+    const el = this.audio;
+    const duration = el.duration;
+    if (!Number.isFinite(duration) || duration < 4 || el.paused) return;
+    if (Settings.values.repeat === "one" || (typeof SleepTimer !== "undefined" && SleepTimer.mode === "track")) return;
+    const remaining = duration - el.currentTime;
+    if (remaining > this.fadeSeconds(duration) + 0.15) return;
+    const nextId = Queue.nextId(true);
+    if (nextId === null || nextId === this.currentId) return;
+    this.startCrossfade(nextId);
+  },
+
+  async startCrossfade(nextId) {
+    this.startingFade = true;
+    try {
+      const song = Library.byId(nextId);
+      if (!song || song.missing) return;
+      const token = this.loadToken;
+      const ready = await this.preload();
+      if (!ready || token !== this.loadToken || this.fading) return; // si no hubo tiempo, termina con el cambio normal
+      if (ready.el.readyState < 2) {
+        await new Promise((resolve) => {
+          const done = () => { ready.el.removeEventListener("canplay", done); resolve(); };
+          ready.el.addEventListener("canplay", done);
+          setTimeout(done, 1200);
+        });
+        if (token !== this.loadToken) return;
+      }
+      if (ready.el.readyState < 2 || this.audio.paused) return;
+
+      const from = this.deck;
+      const fromIdx = this.activeIdx;
+      const toIdx = 1 - this.activeIdx;
+      const canRamp = AudioGraph.ensure();
+      AudioGraph.resume();
+      this.preloaded = null;
+      this.loadToken++;
+      Queue.commit(nextId);
+      this.activeIdx = toIdx;
+      this.currentId = nextId;
+      this.objectUrl = ready.url;
+      this.userPaused = false;
+      this.applyLoopMode();
+      if (canRamp) AudioGraph.setDeckGain(toIdx, 0);
+      else ready.el.volume = 0;
+
+      try { await ready.el.play(); } catch (error) { console.warn("Crossfade:", error); }
+      // Lo que falta de la canción que termina (el play() pudo tardar unos milisegundos)
+      const left = Math.max(0.4, (from.el.duration || 8) - from.el.currentTime);
+      const seconds = Math.min(this.fadeSeconds(from.el.duration || 8), left);
+      if (canRamp) {
+        AudioGraph.rampDeck(fromIdx, 1, 0, seconds);
+        AudioGraph.rampDeck(toIdx, 0, 1, seconds);
+      } else {
+        this.softVolume(from.el, 1, 0, seconds);
+        this.softVolume(ready.el, 0, 1, seconds);
+      }
+      this.fading = { from, to: ready, timer: setTimeout(() => this.finishFade(), seconds * 1000 + 150) };
+      this.afterTrackStart(song);
+      Equalizer.onPlay();
+    } finally {
+      this.startingFade = false;
+    }
+  },
+
+  // Sin Web Audio: el volumen del propio <audio> sube o baja por pasos
+  softVolume(el, from, to, seconds) {
+    const t0 = performance.now();
+    el.volume = from;
+    clearInterval(el._ramp);
+    el._ramp = setInterval(() => {
+      const t = Math.min(1, (performance.now() - t0) / (seconds * 1000));
+      el.volume = Math.max(0, Math.min(1, from + (to - from) * t));
+      if (t >= 1) clearInterval(el._ramp);
+    }, 60);
+  },
+
+  // Termina el cruce de inmediato: la canción anterior se detiene y se libera
+  finishFade() {
+    const fade = this.fading;
+    if (!fade) return;
+    clearTimeout(fade.timer);
+    this.fading = null;
+    const fromIdx = this.decks.indexOf(fade.from);
+    clearInterval(fade.from.el._ramp);
+    clearInterval(fade.to.el._ramp);
+    this.release(fade.from);
+    fade.from.el.volume = 1;
+    fade.to.el.volume = 1;
+    if (fromIdx >= 0) AudioGraph.setDeckGain(fromIdx, 1);
+    AudioGraph.setDeckGain(this.decks.indexOf(fade.to), 1);
+    if (this.currentId !== null) this.schedulePreload(); // ahora sí: se prepara la canción que sigue
+  },
+
+  // Repetir una canción: el propio <audio> la repite sin cortes
+  applyLoopMode() {
+    this.decks.forEach((deck) => { deck.el.loop = this.isActive(deck) && Settings.values.repeat === "one"; });
+  },
+
+  /* ---------- Volumen general: interrupciones de audio y fundido del temporizador ---------- */
+
+  // Sin Web Audio el volumen se controla en el propio <audio>; con Web Audio, en la ganancia general
+  applyLevel(seconds) {
+    const level = Math.max(0, Math.min(1, this.duckLevel * this.fadeLevel));
+    if (AudioGraph.ready) {
+      AudioGraph.rampMaster(level, seconds === undefined ? 0.15 : seconds);
+    } else if (!this.fading) {
+      this.decks.forEach((deck) => { deck.el.volume = level; });
+    }
+  },
+
+  setDuck(on) {
+    this.duckLevel = on ? 0.25 : 1;
+    this.applyLevel(on ? 0.12 : 0.6);
+  },
+
+  /* ---------- Android / navegador: pantalla de bloqueo y notificación ---------- */
 
   setupMediaSession() {
     if (!("mediaSession" in navigator)) return;
     const set = (action, handler) => {
       try { navigator.mediaSession.setActionHandler(action, handler); } catch (error) { /* no soportado */ }
     };
-    set("play", () => this.toggle());
-    set("pause", () => this.audio.pause());
+    set("play", () => this.resume());
+    set("pause", () => this.pause());
     set("previoustrack", () => this.previous());
     set("nexttrack", () => this.next());
     set("seekto", (details) => {
-      if (details && typeof details.seekTime === "number") this.audio.currentTime = details.seekTime;
+      if (details && typeof details.seekTime === "number") { this.finishFade(); this.audio.currentTime = details.seekTime; }
     });
   },
 
@@ -2938,10 +2940,48 @@ const Player = {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: song.name,
         artist: song.artist,
-        album: "Pulsar RM",
+        album: song.album || "Pulsar RM",
         artwork: art ? [{ src: art, sizes: "512x512", type: "image/jpeg" }] : []
       });
     } catch (error) { /* no crítico */ }
+  },
+
+  // Órdenes que llegan de la notificación, los botones de los auriculares o el temporizador nativo
+  nativeAction(name, value) {
+    switch (name) {
+      case "play": this.resume(); break;
+      case "pause": this.pause(); break;
+      case "toggle": this.toggle(); break;
+      case "next": this.next(); break;
+      case "previous": this.previous(); break;
+      case "stop": this.pause(); break;
+      case "seek": if (Number.isFinite(Number(value))) { this.finishFade(); this.audio.currentTime = Number(value) / 1000; } break;
+      case "sleep": if (typeof SleepTimer !== "undefined") SleepTimer.fire(true); break;
+      case "interrupt": // auriculares desconectados: pausa (la persona decide cuándo seguir)
+        if (!this.audio.paused) { this.userPaused = true; this.audio.pause(); this.finishFade(); }
+        break;
+    }
+  },
+
+  // Foco de audio (llamadas, otras apps): lo avisa Android
+  focus(action) {
+    switch (action) {
+      case "duck": this.setDuck(true); break;
+      case "unduck": this.setDuck(false); break;
+      case "pause": // pérdida temporal: pausa y se reanuda sola cuando el foco vuelve
+        if (this.currentId !== null && !this.audio.paused) { this.interrupted = true; this.finishFade(); this.audio.pause(); }
+        break;
+      case "resume":
+        this.setDuck(false);
+        if (this.interrupted && !this.userPaused) this.resume();
+        this.interrupted = false;
+        break;
+      case "loss": // pérdida permanente (otro reproductor tomó el audio): pausa y no se reanuda sola
+        this.interrupted = false;
+        if (!this.audio.paused) { this.userPaused = true; this.finishFade(); this.audio.pause(); }
+        this.setDuck(false);
+        break;
+    }
   }
 };
 
@@ -2952,12 +2992,15 @@ const Player = {
    y el botón/gesto Atrás de Android sigue la ruta; en Inicio, Atrás sale de la app.
    ========================================================= */
 const Router = {
-  views: ["home", "library", "player", "eq", "lyrics", "queue", "settings"],
+  views: ["home", "library", "player", "lyrics", "queue", "timer", "info", "eq", "settings", "collection"],
   // Pantalla "padre": a dónde vuelve Atrás. Inicio es la raíz (Atrás en Inicio = salir).
-  // v1.04: Letras y Cola cuelgan del Reproductor, igual que el Ecualizador.
-  parents: { library: "home", settings: "home", player: "home", eq: "player", lyrics: "player", queue: "player" },
-  // Pantallas completas del reproductor: sin barra de arriba, sin barra de abajo y sin mini reproductor
-  immersiveViews: ["player", "eq", "lyrics", "queue"],
+  // Las pantallas del reproductor (letra, cola, temporizador, información, ecualizador) cuelgan de él;
+  // si se abren desde otra pantalla (Ajustes, Cola…) Atrás vuelve a ella (ver go(nombre, padre)).
+  parents: { library: "home", settings: "home", player: "home", lyrics: "player", queue: "player", timer: "player",
+             info: "player", eq: "player", collection: "library" },
+  // Pantallas "inmersivas": sin barra de arriba, barra inferior ni mini reproductor
+  IMMERSIVE: ["player", "lyrics", "queue", "timer", "info", "eq"],
+  override: null,   // padre temporal para la próxima navegación
   current: "home",
   lastBase: "home", // última pantalla de la barra inferior (Inicio o Biblioteca): a ella se vuelve al cerrar Reproductor o Ajustes
   stack: ["home"],  // ruta actual, igual que las entradas del historial: ["home"], ["home","player","eq"]…
@@ -2991,19 +3034,23 @@ const Router = {
     let view = name;
     while (view && !path.includes(view)) {
       path.unshift(view);
-      view = this.parents[view];
+      view = (this.override && this.override[view]) || this.parents[view];
     }
     if (path[0] !== "home") path.unshift("home");
     return path;
   },
 
-  go(name) {
+  // go("eq", "settings"): abre el ecualizador y Atrás vuelve a Ajustes (en vez de al reproductor)
+  go(name, parent) {
     if (!this.views.includes(name)) return;
     if (name === this.current) {
       window.scrollTo(0, 0);
       return;
     }
+    this.override = parent && this.views.includes(parent) ? { [name]: parent } : null;
+    // Si la pantalla de destino ya está en la ruta (por ejemplo Cola → Información → Cola), se vuelve con Atrás
     const target = this.pathTo(name);
+    this.override = null;
     let common = 0;
     while (common < this.stack.length && common < target.length && this.stack[common] === target[common]) common++;
     const pops = this.stack.length - common;   // entradas que sobran en el historial
@@ -3036,13 +3083,22 @@ const Router = {
     history.go(-steps);
   },
 
+  // Botón ‹ de las pantallas secundarias: un paso atrás en la ruta (o a Inicio si no hay historial propio)
+  up() {
+    if (this.stack.length > 1) this.back(1);
+    else this.go("home");
+  },
+
+  immersive(name) {
+    return this.IMMERSIVE.includes(name || this.current);
+  },
+
   // Cierra lo que esté abierto encima de la pantalla (menú ⋮, editores). Devuelve true si cerró algo.
   closeOverlay() {
     if (UI.dismissConfirm) { UI.dismissConfirm(); return true; }
+    if (UI.closeTopOverlay()) return true;
     if (LyricsEditor.isOpen()) { LyricsEditor.close(); return true; }
     if (Editor.isOpen()) { Editor.close(); return true; }
-    if (Sheets.anyOpen()) { Sheets.closeAll(); return true; }
-    if (LyricsScreen.isDrawerOpen()) { LyricsScreen.closeDrawer(); return true; }
     if (UI.el.playerMenu && !UI.el.playerMenu.classList.contains("hidden")) { UI.closeMenu(); return true; }
     return false;
   },
@@ -3077,11 +3133,9 @@ const Router = {
     if (name === "home" || name === "library") this.lastBase = name;
     Editor.discard();
     LyricsEditor.discard();
-    Sheets.closeAll();
-    LyricsScreen.closeDrawer();
     UI.closeMenu();
-    // Modo inmersivo: en el reproductor y sus pantallas (ecualizador, letras, cola) se ocultan la barra de arriba y la de abajo.
-    const immersive = this.immersiveViews.includes(name);
+    // Modo inmersivo: en el reproductor (y su ecualizador) se ocultan la barra de arriba y la de abajo.
+    const immersive = this.immersive(name);
     const root = document.documentElement;
     if (root.classList.contains("immersive") !== immersive) {
       root.classList.toggle("immersive", immersive);
@@ -3104,10 +3158,9 @@ const Router = {
     window.scrollTo(0, 0);
     UI.updateMiniPlayer();
     if (name === "eq") Equalizer.refreshUI();
-    if (name === "lyrics") LyricsScreen.onShow();
-    if (name === "queue") QueueScreen.onShow();
     Lyrics.refresh(true);
     if (name === "settings") { UI.renderSettings(); LyricsPreview.start(); }
+    if (typeof Features !== "undefined") Features.onRoute(name);
   }
 };
 
@@ -3143,6 +3196,9 @@ const UI = {
       coverFile: $("cover-file"),
       playerTitle: $("player-title"),
       playerArtist: $("player-artist"),
+      progress: $("progress"),
+      currentTime: $("current-time"),
+      duration: $("duration"),
       storageInfo: $("storage-info"),
       appVersion: $("app-version"),
       toast: $("toast")
@@ -3162,11 +3218,22 @@ const UI = {
       if (viewButton) {
         event.preventDefault();
         const wanted = viewButton.dataset.view;
+        // data-parent: desde dónde se abre (para que Atrás vuelva ahí). En Ajustes y en Cola se usa la pantalla actual.
+        const from = Router.current === "settings" || Router.current === "queue" ? Router.current : undefined;
         // El engranaje es un interruptor: abre Ajustes y, si ya estás en Ajustes, vuelve.
         if (wanted === "settings" && Router.current === "settings") Router.go(Router.lastBase);
-        else Router.go(wanted);
+        else Router.go(wanted, viewButton.dataset.parent || from);
         return;
       }
+
+      const libTab = target.closest("[data-lib-tab]");
+      if (libTab) { event.preventDefault(); LibraryBrowse.setTab(libTab.dataset.libTab); return; }
+
+      const jump = target.closest("[data-jump]");
+      if (jump) { event.preventDefault(); SettingsNav.jump(jump.dataset.jump); return; }
+
+      const hzButton = target.closest("[data-hz]");
+      if (hzButton) { event.preventDefault(); Performance.select(Number(hzButton.dataset.hz)); return; }
 
       const segButton = target.closest("[data-seg] [data-val]");
       if (segButton) {
@@ -3208,7 +3275,7 @@ const UI = {
       const actionButton = target.closest("[data-action]");
       if (actionButton) {
         event.preventDefault();
-        this.handleAction(actionButton.dataset.action, actionButton);
+        this.handleAction(actionButton.dataset.action);
         return;
       }
 
@@ -3219,27 +3286,18 @@ const UI = {
         return;
       }
 
-      // Pantalla de cola: tocar una fila la reproduce (el asa de arrastre no cuenta como toque)
-      const queueRow = target.closest(".q-row");
-      if (queueRow) {
-        if (!target.closest(".q-handle")) QueueScreen.activate(Number(queueRow.dataset.qid), queueRow.dataset.mode);
-        return;
-      }
-
       const songRow = target.closest("[data-song]");
       if (songRow) {
         const id = Number(songRow.dataset.song);
         if (id === Player.currentId) Player.toggle();
-        else Player.play(id);
+        else Player.play(id, { context: this.listIds(songRow) });
       }
     });
 
     // Interruptores de Ajustes (color de portada, barra de estado, duetos, desenfoque)
     document.addEventListener("change", (event) => {
       const input = event.target.closest && event.target.closest("[data-toggle]");
-      if (!input) return;
-      if (input.dataset.toggle === "shuffle") Queue.setShuffle(input.checked, true); // además de guardarse, reordena la cola
-      else Settings.set(input.dataset.toggle, input.checked);
+      if (input) Settings.set(input.dataset.toggle, input.checked);
     });
 
     const fontFile = $("lyric-font-file");
@@ -3277,24 +3335,42 @@ const UI = {
       this.renderLibrary();
     });
 
-    // v1.04: hay una barra de progreso en el reproductor y otra en la pantalla de letras; las dos funcionan igual
+    // La barra de progreso existe en el reproductor y en la pantalla de letras: todas se mueven juntas
     document.querySelectorAll("[data-progress]").forEach((progress) => {
       progress.addEventListener("input", () => {
         Player.seeking = true;
         const duration = Player.audio.duration;
         if (Number.isFinite(duration)) {
           const text = this.formatTime((progress.value / 1000) * duration);
-          document.querySelectorAll("[data-cur]").forEach((el) => { el.textContent = text; });
+          document.querySelectorAll('[data-time="current"]').forEach((el) => { el.textContent = text; });
         }
       });
       progress.addEventListener("change", () => {
         Player.seekTo(progress.value / 1000);
         Player.seeking = false;
+        this.updateProgress();
       });
+    });
+
+    // Barras deslizantes de Ajustes (duración del crossfade, balance…)
+    document.addEventListener("input", (event) => {
+      const range = event.target.closest && event.target.closest("[data-range]");
+      if (!range) return;
+      const scale = Number(range.dataset.scale) || 1;
+      Settings.set(range.dataset.range, Number(range.value) / scale);
     });
   },
 
-  handleAction(action, element) {
+  // Canciones de la lista desde la que se tocó una fila: la cola pasa a ser esa lista (como en la v1.03).
+  // «Recientes» (Inicio) usa toda la biblioteca.
+  listIds(row) {
+    const list = row.closest(".song-list");
+    if (!list || list.id === "recent-list") return Library.playableIds();
+    const ids = Array.from(list.querySelectorAll("[data-song]")).map((el) => Number(el.dataset.song));
+    return ids.filter((id) => Queue.playable(id));
+  },
+
+  handleAction(action) {
     switch (action) {
       case "import": this.el.fileInput.click(); break;
       case "toggle": Player.toggle(); break;
@@ -3303,32 +3379,18 @@ const UI = {
       case "clear": Library.clear(); break;
       case "close": Router.go(Router.lastBase); break;
       case "menu": this.toggleMenu(); break;
-      case "edit": this.closeMenu(); Editor.open(Player.currentId); break;
+      case "edit": this.closeMenu(); Editor.open(); break;
       case "edit-cancel": Editor.close(); break;
       case "edit-save": Editor.save(); break;
       case "edit-pick-image": this.el.coverFile.click(); break;
       case "edit-remove-image": Editor.removeCover(); break;
       case "edit-reset": Editor.resetFromFile(); break;
-      case "lyrics-open": Router.go("lyrics"); break;
-      case "queue-open": Router.go("queue"); break;
-      case "back-player": Router.go("player"); break;
-      case "lyrics-style": LyricsScreen.toggleDrawer(); break;
-      case "lyrics-style-close": LyricsScreen.closeDrawer(); break;
-      case "lyrics-follow": Lyrics.followNow(); break;
-      case "queue-shuffle": Queue.setShuffle(!Settings.values.shuffle, true); break;
-      case "queue-options": QueueOptions.open(); break;
-      case "queue-mix": QueueOptions.close(); Queue.mixNow(); break;
-      case "queue-sort": QueueOptions.close(); Queue.restoreOrder(); break;
-      case "queue-restore": QueueOptions.close(); Queue.restoreAll(); break;
-      case "queue-clear": QueueOptions.close(); Queue.clearAsk(); break;
-      case "queue-remove": Queue.remove(Number(element.dataset.qid)); break;
-      case "queue-row-menu": SongMenu.open(Number(element.dataset.qid), element.dataset.ctx || "queue"); break;
-      case "songmenu": SongMenu.run(element.dataset.sm); break;
-      case "songinfo-edit": SongInfo.edit(); break;
-      case "sheet-close": Sheets.closeAll(); break;
-      case "eq-open": Router.go("eq"); break;
-      case "eq-back": Router.go("player"); break;
+      case "back": Router.up(); break;
+      case "shuffle": Settings.set("shuffle", !Settings.values.shuffle); break;
+      case "repeat": Settings.set("repeat", { off: "all", all: "one", one: "off" }[Settings.values.repeat] || "all"); break;
       case "eq-reset": Equalizer.reset(); break;
+      case "open-lyrics-settings": Router.go("settings", "lyrics"); SettingsNav.jumpSoon("lyrics"); break;
+      case "open-audio-settings": Router.go("settings", "eq"); SettingsNav.jumpSoon("audio"); break;
       case "lyric-font-import": $("lyric-font-file").click(); break;
       case "lyric-font-remove": LyricsStyle.removeFont(); break;
       case "lyrics-edit": LyricsEditor.open(); break;
@@ -3341,13 +3403,14 @@ const UI = {
       case "lyrics-stamp-word": LyricsEditor.stampWord(); break;
       case "lyrics-earlier": Lyrics.adjustDelay(-1); break;
       case "lyrics-later": Lyrics.adjustDelay(1); break;
+      default: if (typeof Features !== "undefined") Features.handle(action); // temporizador, cola, información, carpetas…
     }
   },
 
   /* ---------- Dibujo ---------- */
 
   renderAll() {
-    Queue.refresh();
+    if (typeof QueueScreen !== "undefined") QueueScreen.refresh();
     this.el.songList.classList.add("animate");
     this.el.recentList.classList.add("animate");
     this.renderHome();
@@ -3360,9 +3423,9 @@ const UI = {
 
   songRow(song, index = 0) {
     const delay = Math.min(index, 10); // máximo 10 pasos para que nunca se sienta lento
-    const duration = song.duration ? ` · ${this.formatTime(song.duration)}` : "";
+    const duration = (song.duration ? ` · ${this.formatTime(song.duration)}` : "") + (song.missing ? " · no disponible" : "");
     return `
-      <div class="song-item" data-song="${song.id}" style="--i:${delay}">
+      <div class="song-item${song.missing ? " missing" : ""}" data-song="${song.id}" style="--i:${delay}">
         <div class="song-cover">${this.coverHTML(song)}</div>
         <div class="song-details">
           <strong>${this.escapeHTML(song.name || "Sin título")}</strong>
@@ -3399,6 +3462,7 @@ const UI = {
 
   renderLibrary() {
     const query = this.el.search.value.trim().toLowerCase();
+    if (typeof LibraryBrowse !== "undefined" && LibraryBrowse.render(query)) return; // álbumes, artistas o géneros
     const filtered = Library.songs.filter((song) =>
       !query || song.name.toLowerCase().includes(query) || song.artist.toLowerCase().includes(query)
     );
@@ -3433,8 +3497,13 @@ const UI = {
     document.querySelectorAll("[data-toggle]").forEach((input) => {
       input.checked = Boolean(values[input.dataset.toggle]);
     });
+    document.querySelectorAll("[data-range]").forEach((input) => {
+      const scale = Number(input.dataset.scale) || 1;
+      input.value = String(Math.round((Number(values[input.dataset.range]) || 0) * scale));
+    });
     const intensity = $("cover-intensity");
     if (intensity) intensity.classList.toggle("disabled", !values.coverColor);
+    if (typeof Features !== "undefined") Features.refreshControls();
     const hint = $("status-hint");
     if (hint) {
       hint.textContent = StatusBar.native()
@@ -3442,7 +3511,6 @@ const UI = {
         : "En el navegador usa la pantalla completa. En la app Android oculta la barra de estado.";
     }
     LyricsStyle.renderFonts();
-    QueueScreen.syncControls();
     const anim = LYRIC_ANIMS.find((item) => item.id === LyricsStyle.anim());
     const animHint = $("lyric-anim-hint");
     if (animHint && anim) animHint.textContent = anim.hint;
@@ -3461,20 +3529,16 @@ const UI = {
     } catch (error) { /* no crítico */ }
     const total = Library.songs.length;
     this.el.storageInfo.textContent = `${total} ${total === 1 ? "canción" : "canciones"}. ${text}`;
+    if (typeof Features !== "undefined") Features.renderSettings();
   },
 
   /* ---------- Reproductor ---------- */
 
-  // Pone todas las barras de progreso (reproductor y pantalla de letras) y sus tiempos
-  setProgressUI(value, current, duration) {
-    document.querySelectorAll("[data-progress]").forEach((el) => { el.value = value; });
-    document.querySelectorAll("[data-cur]").forEach((el) => { el.textContent = current; });
-    if (duration !== undefined) document.querySelectorAll("[data-dur]").forEach((el) => { el.textContent = duration; });
-  },
-
   showNowPlaying(song) {
     this.refreshNowPlayingInfo(song);
-    this.setProgressUI(0, "0:00", this.formatTime(song.duration));
+    this.setProgressValue(0);
+    this.setTimeText("current", "0:00");
+    this.setTimeText("duration", this.formatTime(song.duration));
     this.markPlaying();
     this.updatePlayState();
     this.updateMiniPlayer();
@@ -3488,9 +3552,10 @@ const UI = {
     this.swapText(this.el.miniTitle, "Sin reproducción");
     this.swapText(this.el.miniArtist, "Pulsar RM");
     CoverColor.update(null);
-    this.setProgressUI(0, "0:00", "0:00");
-    LyricsScreen.syncInfo();
-    LyricsScreen.syncBackdrop();
+    if (typeof LyricsScreen !== "undefined") LyricsScreen.onTrack(null);
+    this.setProgressValue(0);
+    this.setTimeText("current", "0:00");
+    this.setTimeText("duration", "0:00");
     this.markPlaying();
     this.updatePlayState();
     this.updateMiniPlayer();
@@ -3511,7 +3576,7 @@ const UI = {
       const isCurrent = Number(button.dataset.songPlay) === Player.currentId;
       button.innerHTML = isCurrent && playing ? Icons.pause : Icons.play;
     });
-    document.documentElement.dataset.playing = playing ? "1" : "0"; // la cola anima su indicador mientras suena
+    document.documentElement.classList.toggle("is-playing", playing);
     if ("mediaSession" in navigator) {
       navigator.mediaSession.playbackState = playing ? "playing" : "paused";
     }
@@ -3521,18 +3586,25 @@ const UI = {
     if (Player.seeking) return;
     const duration = Player.audio.duration;
     const hasDuration = Number.isFinite(duration) && duration > 0;
-    this.setProgressUI(hasDuration ? (Player.audio.currentTime / duration) * 1000 : 0, this.formatTime(Player.audio.currentTime));
+    this.setProgressValue(hasDuration ? (Player.audio.currentTime / duration) * 1000 : 0);
+    this.setTimeText("current", this.formatTime(Player.audio.currentTime));
+  },
+
+  // Las mismas barras y tiempos se repiten en el reproductor y en la pantalla de letras
+  setProgressValue(value) {
+    document.querySelectorAll("[data-progress]").forEach((input) => { input.value = value; });
+  },
+
+  setTimeText(kind, text) {
+    document.querySelectorAll(`[data-time="${kind}"]`).forEach((el) => { if (el.textContent !== text) el.textContent = text; });
   },
 
   setDuration(seconds) {
-    if (Number.isFinite(seconds) && seconds > 0) {
-      const text = this.formatTime(seconds);
-      document.querySelectorAll("[data-dur]").forEach((el) => { el.textContent = text; });
-    }
+    if (Number.isFinite(seconds) && seconds > 0) this.setTimeText("duration", this.formatTime(seconds));
   },
 
   updateMiniPlayer() {
-    const visible = Player.currentId !== null && !Router.immersiveViews.includes(Router.current);
+    const visible = Player.currentId !== null && !Router.immersive();
     this.el.miniPlayer.classList.toggle("hidden", !visible);
   },
 
@@ -3569,8 +3641,7 @@ const UI = {
     this.setCover(this.el.bigCover, url);
     this.setCover(this.el.miniCover, url);
     CoverColor.update(song);
-    LyricsScreen.syncInfo();     // título y artista de la pantalla de letras
-    LyricsScreen.syncBackdrop(); // fondo "Portada" de la pantalla de letras
+    if (typeof LyricsScreen !== "undefined") LyricsScreen.onTrack(song);
   },
 
   // Cambia un texto con un pequeño desvanecido (solo si de verdad cambió)
@@ -3596,8 +3667,43 @@ const UI = {
 
   /* ---------- Utilidades ---------- */
 
+  // Android pidió "reducir animaciones" o la persona las redujo en Ajustes → Rendimiento
   prefersReducedMotion() {
+    if (Settings.values.animations && Settings.values.animations !== "full") return true;
     return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  },
+
+  /* ---------- Hojas emergentes (se cierran con Atrás de Android) ---------- */
+  overlays: [],
+
+  // Abre una hoja inferior con `html` dentro. Devuelve { el, close }.
+  openSheet(html, onClose) {
+    const box = document.createElement("div");
+    box.className = "sheet sheet-open";
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-modal", "true");
+    box.innerHTML = `<div class="sheet-backdrop"></div><div class="sheet-panel">${html}</div>`;
+    const handle = { el: box, close: null };
+    const close = () => {
+      const i = this.overlays.indexOf(handle);
+      if (i >= 0) this.overlays.splice(i, 1);
+      box.remove();
+      if (!this.overlays.length) document.body.classList.remove("no-scroll");
+      if (onClose) onClose();
+    };
+    handle.close = close;
+    box.querySelector(".sheet-backdrop").addEventListener("click", close);
+    this.overlays.push(handle);
+    document.body.classList.add("no-scroll");
+    document.body.appendChild(box);
+    return handle;
+  },
+
+  closeTopOverlay() {
+    const top = this.overlays[this.overlays.length - 1];
+    if (!top) return false;
+    top.close();
+    return true;
   },
 
   // Desvanece la fila antes de borrarla (si el usuario no pidió reducir animaciones).
@@ -3669,14 +3775,6 @@ const UI = {
     return `${minutes}:${String(remaining).padStart(2, "0")}`;
   },
 
-  // "1 h 12 min" / "48 min" (duración total de la cola)
-  formatLong(seconds) {
-    const total = Math.max(0, Math.round((Number(seconds) || 0) / 60));
-    const hours = Math.floor(total / 60), minutes = total % 60;
-    if (hours) return `${hours} h ${minutes} min`;
-    return `${Math.max(total, 0)} min`;
-  },
-
   formatBytes(bytes) {
     if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
     if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -3709,9 +3807,9 @@ const Editor = {
     return Boolean(UI.el.editSheet) && !UI.el.editSheet.classList.contains("hidden");
   },
 
-  // v1.04: `id` permite editar cualquier canción (por ejemplo desde la cola); sin `id`, la que suena
+  // Sin id edita la canción que suena; con id (Información de la canción) edita esa
   open(id) {
-    const song = Library.byId(id === undefined ? Player.currentId : id);
+    const song = Library.byId(id !== undefined && id !== null ? id : Player.currentId);
     if (!song) {
       UI.toast("Reproduce una canción para editar su información.");
       return;
@@ -3803,10 +3901,12 @@ const Editor = {
     this.saving = true;
 
     const parsed = Library.parseFileName(song.fileName);
-    const previous = { name: song.name, artist: song.artist, cover: song.cover };
+    const previous = { name: song.name, artist: song.artist, cover: song.cover, edited: song.edited };
     song.name = UI.el.editName.value.trim() || parsed.title;
     song.artist = UI.el.editArtist.value.trim() || parsed.artist;
     if (this.coverChanged) song.cover = this.pendingCover;
+    // Canciones de carpetas: lo editado a mano no se sobrescribe al actualizar la biblioteca
+    if (song.uri && (song.name !== previous.name || song.artist !== previous.artist || this.coverChanged)) song.edited = true;
 
     try {
       await Store.updateSong(song);
@@ -3815,7 +3915,10 @@ const Editor = {
       if (Player.currentId === song.id) {
         UI.refreshNowPlayingInfo(song);
         Player.updateMediaMetadata(song);
+        MediaBridge.update(true);
       }
+      if (typeof SongInfo !== "undefined") SongInfo.refreshIfShowing(song.id);
+      if (typeof LibraryBrowse !== "undefined") LibraryBrowse.invalidate();
       this.close();
       UI.toast("Información guardada.");
     } catch (error) {
@@ -3823,6 +3926,7 @@ const Editor = {
       song.name = previous.name;
       song.artist = previous.artist;
       song.cover = previous.cover;
+      song.edited = previous.edited;
       UI.toast(error && error.name === "QuotaExceededError"
         ? "No hay espacio suficiente para guardar."
         : "No se pudieron guardar los cambios.");
@@ -3865,11 +3969,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   Player.init();
   Themes.init();
   Lyrics.init();
-  LyricsScreen.init();
-  QueueScreen.init();
   LyricsEditor.init();
   Stage.init();
   Equalizer.init();
+  Features.init();   // features.js: temporizador, pantallas Cola / Información / Letras, carpetas, rendimiento
   Router.init();
   UI.renderAll();
 
@@ -3877,6 +3980,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await Settings.load();
   Equalizer.loadSaved();
   await Library.load();
+  Features.afterLoad();
   UI.renderAll();
 
   if (!Store.available) {

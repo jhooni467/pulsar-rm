@@ -70,16 +70,15 @@ Development focuses on improving stability, refining the interface and expanding
 
 Current version
 
-v1.04 — Lyrics & Queue screens
+v1.04 — Screens, queue, library & performance update
 
-This version moves the lyrics and the playback queue out of the player into two independent full screens, and turns the queue into a real, editable one.
+This version adds independent Lyrics, Queue, Timer, Song info and Equalizer screens, gapless playback and crossfade, background playback with Android media controls, a folder-based library with manual updates, a Hz/FPS performance section and a reorganized Settings screen. See docs/NATIVE_API.md and docs/CHANGELOG-1.04.md.
 
 Upcoming — v2.00
 
 The next major update is planned to include:
 
 - Animated startup screen featuring the Pulsar RM logo.
-- Automatic audio scanning from a user-selected folder.
 - Minimum audio duration filter, configurable from 30 to 45 seconds.
 
 «These features are planned and are not presented as currently available.»
@@ -89,18 +88,17 @@ The next major update is planned to include:
 📚 Version History
 
 <details>
-<summary><strong>v1.04 — Lyrics & Queue screens</strong></summary>Improvements and corrections
+<summary><strong>v1.04 — Screens, queue, library & performance update</strong></summary>
 
-- Lyrics screen: a full screen only for lyrics, opened with the "Letra" button of the player. Synced (line by line or word by word) and plain lyrics, automatic scrolling, and the three v1.03 animations unchanged.
-- Customization: the Aa button opens a panel where every change is visible live: animation, font (including your own), size (now with "Enorme"), alignment (left or centered), view (synced or text only), background (theme, blurred cover or glow), automatic scrolling, duets and blur. The same options are in Settings.
-- "Seguir la letra" button when you scroll away from the current line, and the progress bar and controls without leaving the screen.
-- Queue screen: a full screen with the current song and the upcoming ones. Drag to reorder, remove one by one, tap a song to play it now.
-- Real queue: Next, Previous and the end of a song follow the queue you arranged. Skipped songs move to the end of the queue, never disappear, and nothing is duplicated.
-- Shuffle: a shuffle mode plus mix options (mix now, library order, add the whole library back, clear the queue).
-- Song information: details of any song of the queue (duration, file, format, size, lyrics, position) with direct access to edit it.
-- Navigation: Lyrics and Queue hang from the player like the equalizer; the Android back button/gesture closes panels first and then goes back one screen.
+- Independent screens: Lyrics (synced and plain text, customization), Queue (reorder, remove, shuffle, mix options, timer, song info), Sleep timer, Song info, Equalizer.
+- Real playback engine: two audio decks for gapless playback and configurable crossfade; 10-band equalizer, limiter, mono and balance through Web Audio.
+- Android: foreground service, media notification, lock-screen / Bluetooth controls, audio focus and headphone-unplug handling, background playback (needs the v1.04 APK).
+- Library: choose folders (persistent permission), manual "Update library" with a clear result (new, updated, missing, duplicates), embedded covers and tags, albums / artists / genres views.
+- Settings reorganized into 6 categories with a quick-jump bar; new "Performance & display" with Hz profiles (only those the device supports) and an FPS cap.
+- See docs/CHANGELOG-1.04.md for files, limitations and pending items.
+</details>
 
-</details><details>
+<details>
 <summary><strong>v1.03 — Cover color & lyrics update</strong></summary>Improvements and corrections
 
 - Cover color: the whole app can take its colors from the album cover of the song that is playing, in real time, with Low, Medium and Strong intensity (Settings).

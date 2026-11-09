@@ -13,8 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # La versión se escribe UNA sola vez: const APP_VERSION = "1.03" en script.js.
-      # De ahí salen el versionName, el versionCode (1.03 -> 103), el nombre del APK y el release.
+      # La versión se escribe UNA sola vez: const APP_VERSION = "1.04" en script.js.
+      # De ahí salen el versionName, el versionCode (1.04 -> 104), el nombre del APK y el release.
       - name: Leer la versión desde script.js
         run: |
           VER=$(grep -oP 'const APP_VERSION = "\K[0-9]+\.[0-9]+' script.js | head -1)
@@ -29,7 +29,7 @@ jobs:
           echo "VERSION_CODE=$CODE" >> "$GITHUB_ENV"
           echo "Version detectada: $VER (versionCode $CODE)"
 
-      # Llave de firma FIJA (la misma de la 1.01): por eso la 1.03 se instala encima sin desinstalar.
+      # Llave de firma FIJA (la misma de la 1.01): por eso la 1.04 se instala encima sin desinstalar.
       # Si algun dia falta pulsar-debug.keystore en el repo, se crea una vez y se guarda.
       - name: Llave de firma estable
         run: |
@@ -61,7 +61,7 @@ jobs:
       - name: Preparar la web (carpeta www)
         run: |
           mkdir www
-          cp index.html script.js style.css manifest.json www/
+          cp index.html script.js native.js features.js style.css manifest.json sw.js www/
           cp icon-*.png www/
           cp apple-touch-icon.png www/ 2>/dev/null || true
 
@@ -128,162 +128,49 @@ jobs:
           xml = xml.replace("</application>", alias)
           open(path, "w", encoding="utf-8").write(xml)
 
-          # ---------- 2) MainActivity con el puente "PulsarNative" ----------
-          #   setPendingIcon(variant)        -> icono Light/Dark (se aplica al cerrar la app)
-          #   setBars(estado, nav, oscuros)  -> color de la barra de estado y de navegacion
-          #   setStatusBarHidden(oculta)     -> oculta o muestra la barra de estado (v1.03)
-          #   getVersion()                   -> versionName real del APK instalado
-          java = '''package %s;
+          # ---------- 2) Codigo nativo (carpeta android-native/java del repositorio) ----------
+          #   MainActivity            -> icono, barras, segundo plano
+          #   PulsarBridge            -> window.PulsarNative (ver docs/NATIVE_API.md)
+          #   PulsarMediaService      -> notificacion multimedia, MediaSession, foco de audio, wake lock, alarma del temporizador
+          #   LibraryScanner          -> lectura de carpetas (SAF) y etiquetas
+          #   MediaWebClient          -> sirve canciones de carpetas (Range) y portadas
+          #   PulsarEvents            -> avisos Android -> web
+          import shutil
+          dest = glob.glob(MAIN + "/java/**/MainActivity.java", recursive=True)
+          assert len(dest) == 1, dest
+          pkg_dir = os.path.dirname(dest[0])
+          for f in glob.glob("android-native/java/*.java"):
+              shutil.copy(f, pkg_dir)
+          # Si Capacitor genero otro paquete, se ajusta la primera linea
+          for f in glob.glob(pkg_dir + "/*.java"):
+              t = open(f, encoding="utf-8").read()
+              t = re.sub(r"^package [\w.]+;", "package " + APP_ID + ";", t, count=1)
+              open(f, "w", encoding="utf-8").write(t)
 
-          import android.content.ComponentName;
-          import android.content.SharedPreferences;
-          import android.content.pm.PackageManager;
-          import android.graphics.Color;
-          import android.os.Bundle;
-          import android.os.Build;
-          import android.view.Window;
-          import android.view.WindowManager;
-          import android.webkit.JavascriptInterface;
-          import androidx.core.view.WindowCompat;
-          import androidx.core.view.WindowInsetsCompat;
-          import androidx.core.view.WindowInsetsControllerCompat;
-          import com.getcapacitor.BridgeActivity;
+          # Servicio + permisos en el manifest
+          xml = open(path, encoding="utf-8").read()
+          perms = (
+              '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n'
+              '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />\n'
+              '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n'
+              '    <uses-permission android:name="android.permission.WAKE_LOCK" />\n')
+          assert "<application" in xml
+          xml = xml.replace("<application", perms + "\n    <application", 1)
+          service = (
+              '        <service android:name=".PulsarMediaService" android:exported="false"\n'
+              '            android:foregroundServiceType="mediaPlayback" />\n\n    </application>')
+          assert xml.count("</application>") == 1
+          xml = xml.replace("</application>", service)
+          open(path, "w", encoding="utf-8").write(xml)
 
-          public class MainActivity extends BridgeActivity {
-
-              @Override
-              public void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  getBridge().getWebView().addJavascriptInterface(new IconBridge(), "PulsarNative");
-                  // Al abrir, ya se usan los colores guardados (sin franja negra ni destello)
-                  SharedPreferences p = prefs();
-                  applyBars(p.getString("barStatus", "#080B16"),
-                            p.getString("barNav", "#0D1321"),
-                            p.getBoolean("barDarkIcons", false));
-                  applyStatusHidden(p.getBoolean("statusHidden", false));
-              }
-
-              /** v1.03: oculta o muestra la barra de estado (se vuelve a ver al deslizar desde arriba). */
-              private void applyStatusHidden(boolean hidden) {
-                  try {
-                      Window w = getWindow();
-                      if (Build.VERSION.SDK_INT >= 28) {
-                          // Sin esto, en teléfonos con notch queda una franja negra arriba
-                          WindowManager.LayoutParams lp = w.getAttributes();
-                          lp.layoutInDisplayCutoutMode = hidden
-                              ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-                              : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
-                          w.setAttributes(lp);
-                      }
-                      WindowInsetsControllerCompat c = WindowCompat.getInsetsController(w, w.getDecorView());
-                      c.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-                      if (hidden) c.hide(WindowInsetsCompat.Type.statusBars());
-                      else c.show(WindowInsetsCompat.Type.statusBars());
-                  } catch (Exception ignored) {
-                      // no debe cerrar la app
-                  }
-              }
-
-              /** Al volver a la app (por ejemplo tras deslizar la barra) se mantiene el ajuste elegido. */
-              @Override
-              public void onWindowFocusChanged(boolean hasFocus) {
-                  super.onWindowFocusChanged(hasFocus);
-                  if (hasFocus) applyStatusHidden(prefs().getBoolean("statusHidden", false));
-              }
-
-              private SharedPreferences prefs() {
-                  return getSharedPreferences("pulsar", MODE_PRIVATE);
-              }
-
-              private void applyBars(String statusHex, String navHex, boolean darkIcons) {
-                  try {
-                      int status = Color.parseColor(statusHex);
-                      int nav = Color.parseColor(navHex);
-                      Window w = getWindow();
-                      w.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-                      w.setStatusBarColor(status);
-                      w.setNavigationBarColor(nav);
-                      WindowInsetsControllerCompat c = WindowCompat.getInsetsController(w, w.getDecorView());
-                      c.setAppearanceLightStatusBars(darkIcons);
-                      c.setAppearanceLightNavigationBars(darkIcons);
-                      getBridge().getWebView().setBackgroundColor(status);
-                  } catch (Exception ignored) {
-                      // un color invalido no debe cerrar la app
-                  }
-              }
-
-              private class IconBridge {
-                  /** La web llama a PulsarNative.setPendingIcon("light" | "dark"). Solo guarda la eleccion. */
-                  @JavascriptInterface
-                  public void setPendingIcon(String variant) {
-                      prefs().edit().putString("icon", "light".equals(variant) ? "light" : "dark").apply();
-                  }
-
-                  /** La web llama a PulsarNative.setBars("#RRGGBB", "#RRGGBB", iconosOscuros). */
-                  @JavascriptInterface
-                  public void setBars(final String statusHex, final String navHex, final boolean darkIcons) {
-                      prefs().edit()
-                          .putString("barStatus", statusHex)
-                          .putString("barNav", navHex)
-                          .putBoolean("barDarkIcons", darkIcons)
-                          .apply();
-                      runOnUiThread(new Runnable() {
-                          @Override
-                          public void run() {
-                              applyBars(statusHex, navHex, darkIcons);
-                          }
-                      });
-                  }
-
-                  /** v1.03: la web llama a PulsarNative.setStatusBarHidden(true | false). */
-                  @JavascriptInterface
-                  public void setStatusBarHidden(final boolean hidden) {
-                      prefs().edit().putBoolean("statusHidden", hidden).apply();
-                      runOnUiThread(new Runnable() {
-                          @Override
-                          public void run() {
-                              applyStatusHidden(hidden);
-                          }
-                      });
-                  }
-
-                  /** Version real instalada (versionName del APK). */
-                  @JavascriptInterface
-                  public String getVersion() {
-                      try {
-                          return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-                      } catch (Exception e) {
-                          return "";
-                      }
-                  }
-              }
-
-              /** El icono se cambia al salir/cerrar la app. */
-              @Override
-              public void onStop() {
-                  super.onStop();
-                  boolean light = "light".equals(prefs().getString("icon", "dark"));
-                  if (light) {
-                      setAlias("IconLight", true);
-                      setAlias("IconDark", false);
-                  } else {
-                      setAlias("IconDark", true);
-                      setAlias("IconLight", false);
-                  }
-              }
-
-              private void setAlias(String name, boolean enabled) {
-                  getPackageManager().setComponentEnabledSetting(
-                      new ComponentName(getPackageName(), "%s." + name),
-                      enabled ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                              : PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                      PackageManager.DONT_KILL_APP);
-              }
-          }
-          ''' % (APP_ID, APP_ID)
-          files = glob.glob(MAIN + "/java/**/MainActivity.java", recursive=True)
-          assert len(files) == 1, files
-          open(files[0], "w", encoding="utf-8").write(java)
+          # Icono pequeno de la notificacion (silueta de nota)
+          os.makedirs(RES + "/drawable", exist_ok=True)
+          open(RES + "/drawable/ic_stat_pulsar.xml", "w").write(
+              '<?xml version="1.0" encoding="utf-8"?>\n'
+              '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" '
+              'android:viewportWidth="24" android:viewportHeight="24">\n'
+              '    <path android:fillColor="#FFFFFFFF" android:pathData="M12,2.5c0.9,5.6 3.9,8.6 9.5,9.5c-5.6,0.9 -8.6,3.9 -9.5,9.5c-0.9,-5.6 -3.9,-8.6 -9.5,-9.5C8.1,11.1 11.1,8.1 12,2.5z"/>\n'
+              '</vector>\n')
 
           # ---------- 3) Iconos del launcher (adaptativos + clasicos) ----------
           variants = {"light": ("icon-light-512.png", "white"), "dark": ("icon-dark-512.png", "black")}

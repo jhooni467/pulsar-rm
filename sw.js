@@ -10,14 +10,16 @@
 // v4 (app v1.02): iconos nuevos, barra inferior fija y sin rebote; renueva la copia guardada.
 // v5: se quita equalizer.js (código viejo que ya no se usa; el ecualizador vive en script.js).
 // v6 (app v1.03): colores animados, letras estilo Apple Music y ajustes nuevos; renueva la copia guardada.
-// v7 (app v1.04): pantallas completas de Letras y Cola de reproducción; renueva la copia guardada.
+// v7 (app v1.04): native.js y features.js, pantallas nuevas y ajustes reorganizados; renueva la copia guardada.
 const CACHE_NAME = "pulsar-rm-shell-v7";
 
 const APP_SHELL = [
   "./",
   "index.html",
   "style.css",
+  "native.js",
   "script.js",
+  "features.js",
   "manifest.json",
   "icon-192.png",
   "icon-512.png",

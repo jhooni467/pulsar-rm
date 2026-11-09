@@ -1,6 +1,6 @@
 {
   "name": "pulsar-rm",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "private": true,
   "dependencies": {
     "@capacitor/android": "^6.2.0",
