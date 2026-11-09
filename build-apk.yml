@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # La versión se escribe UNA sola vez: const APP_VERSION = "1.04" en script.js.
-      # De ahí salen el versionName, el versionCode (1.04 -> 104), el nombre del APK y el release.
+      # De ahí salen el versionName, el versionCode (1.04 -> 104000 + numero de ejecucion, asi cada APK nuevo se instala encima), el nombre del APK y el release.
       - name: Leer la versión desde script.js
         run: |
           VER=$(grep -oP 'const APP_VERSION = "\K[0-9]+\.[0-9]+' script.js | head -1)
@@ -24,7 +24,7 @@ jobs:
           fi
           MAJOR=${VER%%.*}
           MINOR=${VER#*.}
-          CODE=$((10#$MAJOR * 100 + 10#$MINOR))
+          CODE=$(( (10#$MAJOR * 100 + 10#$MINOR) * 1000 + ${{ github.run_number }} ))
           echo "VERSION=$VER" >> "$GITHUB_ENV"
           echo "VERSION_CODE=$CODE" >> "$GITHUB_ENV"
           echo "Version detectada: $VER (versionCode $CODE)"
@@ -61,7 +61,7 @@ jobs:
       - name: Preparar la web (carpeta www)
         run: |
           mkdir www
-          cp index.html script.js native.js features.js style.css manifest.json sw.js www/
+          cp index.html script.js native.js features.js style.css manifest.json www/
           cp icon-*.png www/
           cp apple-touch-icon.png www/ 2>/dev/null || true
 

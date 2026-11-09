@@ -120,8 +120,11 @@ public class PulsarMediaService extends Service {
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent != null ? intent.getAction() : null;
         if (action == null || ACTION_UPDATE.equals(action)) {
+            // Android exige llamar a startForeground() pocos segundos después de startForegroundService():
+            // se hace SIEMPRE primero (aunque la canción esté en pausa), si no la app se cierra.
+            ensureForeground();
             if (intent != null && intent.hasExtra("json")) apply(intent.getStringExtra("json"));
-            else if (!foreground) { stopSelf(); } // reinicio sin datos: no hay nada que mostrar
+            else { shutdown(); } // reinicio sin datos: no hay nada que mostrar
         } else if (ACTION_STOP_ALL.equals(action)) {
             shutdown();
         } else if (ACTION_PLAY.equals(action)) { PulsarBridge.action("play", null); }
@@ -202,19 +205,24 @@ public class PulsarMediaService extends Service {
         Notification n = buildNotification();
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (playing) {
-            if (!foreground) {
-                try {
-                    if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
-                    else startForeground(NOTIF_ID, n);
-                    foreground = true;
-                } catch (Exception e) {
-                    // Android no permitió el primer plano (sin permiso de notificaciones, por ejemplo): la música sigue en la app
-                    nm.notify(NOTIF_ID, n);
-                }
-            } else nm.notify(NOTIF_ID, n);
+            ensureForeground();
+            nm.notify(NOTIF_ID, n);
         } else {
             if (foreground) { stopForeground(false); foreground = false; } // pausada: la notificación se puede descartar
             nm.notify(NOTIF_ID, n);
+        }
+    }
+
+    /** Pone el servicio en primer plano con la notificación actual. Nunca lanza: si Android no lo permite, la música sigue en la app. */
+    private void ensureForeground() {
+        if (foreground) return;
+        try {
+            Notification n = buildNotification();
+            if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+            else startForeground(NOTIF_ID, n);
+            foreground = true;
+        } catch (Exception e) {
+            foreground = false;
         }
     }
 

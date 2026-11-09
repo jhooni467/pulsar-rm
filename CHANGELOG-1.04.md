@@ -24,3 +24,11 @@
 
 ## Pendiente
 - Pruebas en dispositivos reales (90/120 Hz, Bluetooth, llamadas), letras incrustadas, escaneo de miles de archivos medido.
+
+## Corrección posterior (v1.04, 2.ª entrega)
+Informe: en el teléfono los botones dejaban de responder y no abría el reproductor grande.
+- **Servicio de notificación**: se iniciaba con `startForegroundService()` pero, si la canción estaba en pausa, no llamaba a `startForeground()`; Android cierra la app a los ~5 s. Ahora se llama siempre primero.
+- **Arranque a prueba de fallos**: cada módulo (letras, cola, temporizador, carpetas, rendimiento…) arranca por separado; si uno falla, el resto de la app, la navegación y los botones siguen funcionando.
+- **Diagnóstico** (Ajustes → Acerca de): registra los últimos errores (incluidos los de arranque) con botón «Copiar».
+- El workflow ya **no copia `sw.js`** a la app Android (la v1.03 tampoco lo hacía; un service worker podía interferir con el audio de carpetas).
+- `versionCode` = versión × 1000 + número de ejecución: cada APK nuevo se instala encima del anterior.

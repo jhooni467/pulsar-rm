@@ -9,6 +9,57 @@
    ========================================================= */
 "use strict";
 
+
+/* =========================================================
+   DIAGNÓSTICO (v1.04.1)
+   Guarda los últimos errores de la app (aunque ocurran al arrancar) para verlos en Ajustes → Acerca de.
+   ========================================================= */
+const Diagnostics = {
+  KEY: "pulsar-diag",
+  items: [],
+
+  load() {
+    try { this.items = JSON.parse(localStorage.getItem(this.KEY) || "[]").slice(-25); } catch (error) { this.items = []; }
+  },
+
+  log(kind, message, where) {
+    const text = String(message || "").slice(0, 300);
+    const last = this.items[this.items.length - 1];
+    if (last && last.m === text && last.k === kind) { last.n = (last.n || 1) + 1; }
+    else this.items.push({ t: Date.now(), k: kind, m: text, w: String(where || "").slice(0, 120) });
+    this.items = this.items.slice(-25);
+    try { localStorage.setItem(this.KEY, JSON.stringify(this.items)); } catch (error) { /* sin espacio: no crítico */ }
+    this.render();
+  },
+
+  text() {
+    const info = (typeof Native !== "undefined" && Native.info && Native.info()) || {};
+    const head = `Pulsar RM · Android API ${info.sdk || "—"} · ${navigator.userAgent}`;
+    if (!this.items.length) return head + "\nSin errores registrados.";
+    return head + "\n" + this.items.map((e) => `${new Date(e.t).toLocaleTimeString("es")} [${e.k}] ${e.m}${e.n > 1 ? " ×" + e.n : ""}${e.w ? " @ " + e.w : ""}`).join("\n");
+  },
+
+  render() {
+    const box = document.getElementById("diag-log");
+    if (box) box.textContent = this.text();
+  },
+
+  clear() { this.items = []; try { localStorage.removeItem(this.KEY); } catch (error) { /* nada */ } this.render(); },
+
+  async copy() {
+    try { await navigator.clipboard.writeText(this.text()); return true; } catch (error) { return false; }
+  }
+};
+Diagnostics.load();
+window.addEventListener("error", (event) => {
+  const where = event.filename ? event.filename.split("/").pop() + ":" + event.lineno : "";
+  Diagnostics.log("error", event.message || (event.error && event.error.message), where);
+});
+window.addEventListener("unhandledrejection", (event) => {
+  const reason = event.reason;
+  Diagnostics.log("promesa", reason && reason.message ? reason.message : reason);
+});
+
 const Native = {
   listeners: {},
   _info: undefined,

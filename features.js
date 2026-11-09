@@ -1723,17 +1723,29 @@ const SettingsNav = {
    y el estado de los controles. Aquí no hay lógica propia de reproducción ni de biblioteca.
    ========================================================= */
 const Features = {
-  init() {
-    LyricsScreen.init();
-    SleepTimer.init();
-    QueueScreen.init();
-    SongInfo.init();
-    LibraryBrowse.init();
-    LibraryScan.init();
-    Performance.init();
-    SettingsNav.init();
-    this.wireNative();
+  // Un módulo que falle no debe dejar sin botones al resto de la app: cada uno arranca por separado y el error se registra.
+  safe(name, fn) {
+    try { return fn(); } catch (error) {
+      console.error("Pulsar RM:", name, error);
+      if (typeof Diagnostics !== "undefined") Diagnostics.log("módulo " + name, error && error.message ? error.message : error, error && error.stack ? String(error.stack).split("\n")[1] : "");
+    }
+    return undefined;
+  },
 
+  init() {
+    this.safe("letras", () => LyricsScreen.init());
+    this.safe("temporizador", () => SleepTimer.init());
+    this.safe("cola", () => QueueScreen.init());
+    this.safe("información", () => SongInfo.init());
+    this.safe("explorar", () => LibraryBrowse.init());
+    this.safe("carpetas", () => LibraryScan.init());
+    this.safe("rendimiento", () => Performance.init());
+    this.safe("ajustes", () => SettingsNav.init());
+    this.safe("android", () => this.wireNative());
+    this.safe("opciones", () => this.initWatchers());
+  },
+
+  initWatchers() {
     // Reproducción aleatoria: avisa a la cola (al cargar los ajustes la cola aún está vacía, no hace falta)
     Settings.watch(["shuffle"], (value, key, initial) => { if (!initial) Queue.setShuffle(Boolean(value)); this.refreshControls(); });
     // Opciones que Android necesita conocer (servicio, foco de audio, auriculares)
@@ -1746,21 +1758,23 @@ const Features = {
   },
 
   afterLoad() {
-    Performance.afterLoad();
-    LibraryBrowse.syncTabs();
-    LibraryScan.renderFolders();
-    LibraryScan.renderLast();
-    SleepTimer.refresh();
-    this.sendAudioOptions();
-    this.refreshControls();
+    this.safe("rendimiento", () => Performance.afterLoad());
+    this.safe("pestañas", () => LibraryBrowse.syncTabs());
+    this.safe("carpetas", () => { LibraryScan.renderFolders(); LibraryScan.renderLast(); });
+    this.safe("temporizador", () => SleepTimer.refresh());
+    this.safe("audio nativo", () => this.sendAudioOptions());
+    this.safe("controles", () => this.refreshControls());
+    this.safe("diagnóstico", () => Diagnostics.render());
     // Un APK nuevo puede haber perdido permisos de carpeta: se comprueba en silencio (no se lee ningún archivo)
-    if (LibraryScan.supported() && Native.has("getPersistedFolders")) {
-      const persisted = Native.json("getPersistedFolders");
-      if (persisted && Array.isArray(persisted.folders)) {
-        const lost = (Settings.values.folders || []).filter((f) => !persisted.folders.includes(f.uri));
-        if (lost.length) UI.toast(`Falta el permiso de ${lost.length === 1 ? "la carpeta «" + lost[0].name + "»" : lost.length + " carpetas"}. Revísalo en Ajustes → Biblioteca musical.`);
+    this.safe("permisos", () => {
+      if (LibraryScan.supported() && Native.has("getPersistedFolders")) {
+        const persisted = Native.json("getPersistedFolders");
+        if (persisted && Array.isArray(persisted.folders)) {
+          const lost = (Settings.values.folders || []).filter((f) => !persisted.folders.includes(f.uri));
+          if (lost.length) UI.toast(`Falta el permiso de ${lost.length === 1 ? "la carpeta «" + lost[0].name + "»" : lost.length + " carpetas"}. Revísalo en Ajustes → Biblioteca musical.`);
+        }
       }
-    }
+    });
   },
 
   sendAudioOptions() {
@@ -1778,14 +1792,16 @@ const Features = {
 
   // Cada vez que se abre una pantalla
   onRoute(name) {
-    LyricsScreen.onRoute(name);
-    if (name === "queue") QueueScreen.onRoute();
-    else if (name === "timer") SleepTimer.refresh();
-    else if (name === "info") SongInfo.onRoute();
-    else if (name === "collection") LibraryBrowse.onRoute();
-    else if (name === "library") { LibraryBrowse.syncTabs(); UI.renderLibrary(); }
-    else if (name === "settings") { Performance.measure(); this.renderSettings(); }
-    this.refreshControls();
+    this.safe("pantalla " + name, () => {
+      LyricsScreen.onRoute(name);
+      if (name === "queue") QueueScreen.onRoute();
+      else if (name === "timer") SleepTimer.refresh();
+      else if (name === "info") SongInfo.onRoute();
+      else if (name === "collection") LibraryBrowse.onRoute();
+      else if (name === "library") { LibraryBrowse.syncTabs(); UI.renderLibrary(); }
+      else if (name === "settings") { Performance.measure(); this.renderSettings(); }
+      this.refreshControls();
+    });
   },
 
   // Acciones de los botones con data-action que el núcleo no conoce
@@ -1823,6 +1839,9 @@ const Features = {
       case "scan-cancel": LibraryScan.cancel(); break;
       case "restore-ignored": LibraryScan.restoreIgnored(); break;
       case "prune-missing": LibraryScan.pruneMissing(); break;
+      // Diagnóstico
+      case "diag-copy": Diagnostics.copy().then((ok) => UI.toast(ok ? "Errores copiados." : "No se pudo copiar. Mantén pulsado el texto para seleccionarlo.")); break;
+      case "diag-clear": Diagnostics.clear(); UI.toast("Registro borrado."); break;
     }
   },
 

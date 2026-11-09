@@ -3956,8 +3956,17 @@ const Editor = {
    después se carga la biblioteca guardada (asíncrono).
    ========================================================= */
 document.addEventListener("DOMContentLoaded", async () => {
-  UI.cache();
-  UI.bindEvents();
+  // Cada parte arranca por separado: si una falla, el error queda registrado (Ajustes → Diagnóstico)
+  // y la navegación y los botones siguen funcionando.
+  const step = (name, fn) => {
+    try { return fn(); } catch (error) {
+      console.error("Pulsar RM:", name, error);
+      if (typeof Diagnostics !== "undefined") Diagnostics.log("arranque " + name, error && error.message ? error.message : error, error && error.stack ? String(error.stack).split("\n")[1] : "");
+    }
+    return undefined;
+  };
+  step("cache", () => UI.cache());
+  step("eventos", () => UI.bindEvents());
 
   // Sin menú ni selección al mantener presionado (se siente como app, no como navegador).
   // Solo se permite en campos de texto: editor de información, editor de letras y buscador.
@@ -3966,22 +3975,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     event.preventDefault();
   });
 
-  Player.init();
-  Themes.init();
-  Lyrics.init();
-  LyricsEditor.init();
-  Stage.init();
-  Equalizer.init();
-  Features.init();   // features.js: temporizador, pantallas Cola / Información / Letras, carpetas, rendimiento
-  Router.init();
-  UI.renderAll();
+  step("reproductor", () => Player.init());
+  step("temas", () => Themes.init());
+  step("letras", () => Lyrics.init());
+  step("editor de letras", () => LyricsEditor.init());
+  step("portada", () => Stage.init());
+  step("ecualizador", () => Equalizer.init());
+  step("módulos", () => Features.init());   // features.js: temporizador, pantallas Cola / Información / Letras, carpetas, rendimiento
+  step("navegación", () => Router.init());
+  step("pantalla", () => UI.renderAll());
 
   await Store.open();
-  await Settings.load();
-  Equalizer.loadSaved();
-  await Library.load();
-  Features.afterLoad();
-  UI.renderAll();
+  try { await Settings.load(); } catch (error) { step("ajustes", () => { throw error; }); }
+  step("ecualizador guardado", () => Equalizer.loadSaved());
+  try { await Library.load(); } catch (error) { step("biblioteca", () => { throw error; }); }
+  step("módulos (después)", () => Features.afterLoad());
+  step("pantalla", () => UI.renderAll());
 
   if (!Store.available) {
     UI.toast("Este navegador no permite guardar la biblioteca; se perderá al cerrar.");
