@@ -168,7 +168,14 @@ jobs:
           dest = glob.glob(MAIN + "/java/**/MainActivity.java", recursive=True)
           assert len(dest) == 1, dest
           pkg_dir = os.path.dirname(dest[0])
-          for f in glob.glob("android-native/java/*.java"):
+          # Acepta la carpeta android-native/java/ o, si subiste los .java sueltos, los de la raiz del repositorio
+          srcs = glob.glob("android-native/java/*.java") or glob.glob("*.java")
+          names = sorted(os.path.basename(s) for s in srcs)
+          needed = ["LibraryScanner.java", "MainActivity.java", "MediaWebClient.java", "PulsarBridge.java", "PulsarEvents.java", "PulsarMediaService.java"]
+          missing = [n for n in needed if n not in names]
+          # Sin estos archivos el APK saldria SIN las funciones de Android (carpetas, notificacion...): mejor que falle y lo diga
+          assert not missing, "Faltan archivos Java del puente nativo en el repositorio: " + ", ".join(missing) + " (van en android-native/java/ o sueltos en la raiz)"
+          for f in srcs:
               shutil.copy(f, pkg_dir)
           # Si Capacitor genero otro paquete, se ajusta la primera linea
           for f in glob.glob(pkg_dir + "/*.java"):
