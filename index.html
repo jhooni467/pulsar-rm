@@ -28,6 +28,7 @@
 
 <title>Pulsar RM</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="nova.css">
 </head>
 <body>
 
@@ -774,6 +775,11 @@
 <script src="native.js"></script>
 <script src="script.js"></script>
 <script src="features.js"></script>
+<!-- Nova Intelligence (etapa 1): el núcleo primero; las demás piezas se enganchan a él. Si alguno falla, la app sigue igual. -->
+<script src="nova-core.js"></script>
+<script src="nova-store.js"></script>
+<script src="nova-net.js"></script>
+<script src="nova-ui.js"></script>
 
 <!-- Service worker (necesario para instalar como app y usar sin conexión) -->
 <script>

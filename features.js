@@ -1785,6 +1785,7 @@ const Features = {
     this.safe("ajustes", () => SettingsNav.init());
     this.safe("android", () => this.wireNative());
     this.safe("opciones", () => this.initWatchers());
+    this.safe("nova", () => { if (typeof Nova !== "undefined") Nova.init(); });   // Nova Intelligence (etapa 1): solo prepara, no usa la red
   },
 
   initWatchers() {
@@ -1808,6 +1809,7 @@ const Features = {
     this.safe("controles", () => this.refreshControls());
     this.safe("diagnóstico", () => Diagnostics.render());
     this.safe("abrir con", () => ExternalOpen.check());   // audio con el que Android abrió la app
+    this.safe("nova", () => { if (typeof Nova !== "undefined") Nova.afterLoad(); });
     // Un APK nuevo puede haber perdido permisos de carpeta: se comprueba en silencio (no se lee ningún archivo)
     this.safe("permisos", () => {
       if (LibraryScan.supported() && Native.has("getPersistedFolders")) {

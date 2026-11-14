@@ -1,0 +1,41 @@
+/* =========================================================
+   NOVA INTELLIGENCE — ESTILOS BASE (etapa 1)
+   Todo lleva el prefijo nova- / --nova-: ninguna regla toca elementos de Pulsar RM.
+   Los colores se toman de los de la app (tema, modo y color de portada), con respaldo propio.
+   La identidad visual definitiva de Nova llegará en una etapa posterior.
+   ========================================================= */
+
+:root {
+  --nova-ready: 1;   /* marca: nova.css está cargado (lo comprueba nova-ui.js) */
+  --nova-accent: var(--accent, #A18AFF);
+  --nova-on-accent: var(--on-accent, #080B16);
+  --nova-surface: var(--surface, #111827);
+  --nova-text: var(--text, #F5F5FA);
+  --nova-muted: var(--muted, #8993A8);
+  --nova-border: var(--border-soft, rgba(255, 255, 255, 0.08));
+  --nova-radius: 14px;
+}
+
+#nova-root[hidden] { display: none !important; }
+
+/* Bases que usarán las pantallas de Nova más adelante (hoy no las usa nada) */
+.nova-card {
+  background: var(--nova-surface);
+  color: var(--nova-text);
+  border: 1px solid var(--nova-border);
+  border-radius: var(--nova-radius);
+  padding: 14px 16px;
+}
+
+.nova-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--nova-accent);
+  color: var(--nova-on-accent);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.nova-muted { color: var(--nova-muted); }
