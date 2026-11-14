@@ -2437,7 +2437,7 @@ img {
 
 /* ---- Indicador de espera de Pulsar RM (v1.05): estrellas de cuatro puntas ----
    Se enciende en la introducción, en las partes instrumentales y en las pausas largas. Las tres estrellas
-   se van iluminando según avanza la pausa (--s0 / --s1 / --s2, de 0 a 1) y titilan despacio. Solo se animan
+   se van iluminando una tras otra según avanza la pausa (--s0 / --s1 / --s2, de 0 a 1) y se quedan encendidas. Solo se animan
    transform y opacity (baratas para Android); la animación solo corre mientras las estrellas están visibles. */
 .lyric-line.gap:not(.plain) {
   display: flex;
@@ -2459,29 +2459,32 @@ img {
   height: 100%;
   color: var(--accent);
 }
+/* Tres estrellas grandes y bold, todas del mismo tamaño y alineadas (no cambian de posición).
+   Cada una tiene su turno: --p vale 0 → 1 mientras le toca (la primera, luego la segunda y al final la tercera).
+   Con --p = 0 es pequeña y casi transparente; con --p = 1 alcanza su escala y opacidad máximas y las conserva. */
 .lyric-line.gap .st {
+  --p: 0;
   display: block;
-  opacity: calc(0.22 + var(--s0, 0) * 0.78);
-  transform: scale(calc(0.72 + var(--s0, 0) * 0.28));
+  width: 1.05em;
+  height: 1.05em;
+  margin: 0;
+  opacity: calc(0.12 + var(--p) * 0.88);
+  transform: scale(calc(0.3 + var(--p) * 0.7));
+  transform-origin: 50% 50%;
+  transition: opacity 0.45s ease-out, transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform, opacity;
 }
-.lyric-line.gap .st:nth-child(1) { width: 0.62em; height: 0.62em; margin-top: 0.3em; }
-.lyric-line.gap .st:nth-child(2) { width: 0.84em; height: 0.84em; margin-top: -0.22em; opacity: calc(0.22 + var(--s1, 0) * 0.78); transform: scale(calc(0.72 + var(--s1, 0) * 0.28)); }
-.lyric-line.gap .st:nth-child(3) { width: 0.5em; height: 0.5em; margin-top: 0.34em; opacity: calc(0.22 + var(--s2, 0) * 0.78); transform: scale(calc(0.72 + var(--s2, 0) * 0.28)); }
+.lyric-line.gap .st:nth-child(1) { --p: var(--s0, 0); }
+.lyric-line.gap .st:nth-child(2) { --p: var(--s1, 0); }
+.lyric-line.gap .st:nth-child(3) { --p: var(--s2, 0); }
 .lyric-line.gap .st svg {
   display: block;
   width: 100%;
   height: 100%;
   fill: currentColor;
-}
-.lyric-line.gap.active .st svg {
-  animation: lyric-twinkle 2.8s ease-in-out infinite;
-}
-.lyric-line.gap.active .st:nth-child(2) svg { animation-duration: 3.4s; animation-delay: -1s; }
-.lyric-line.gap.active .st:nth-child(3) svg { animation-duration: 3s; animation-delay: -1.9s; }
-.lyrics.is-paused .lyric-line.gap .st svg { animation-play-state: paused; }
-@keyframes lyric-twinkle {
-  0%, 100% { transform: scale(0.8) rotate(0deg); opacity: 0.6; }
-  50% { transform: scale(1.1) rotate(14deg); opacity: 1; }
+  stroke: currentColor;       /* el trazo engorda la estrella: aspecto bold */
+  stroke-width: 2.6;
+  stroke-linejoin: round;
 }
 @supports (color: color-mix(in srgb, red 50%, blue)) {
   .lyric-line.gap.active .stars {
@@ -2489,9 +2492,9 @@ img {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .lyric-line.gap .st svg { animation: none !important; }
+  .lyric-line.gap .st { transition: none; }
 }
-html[data-anim="reduced"] .lyric-line.gap .st svg { animation: none !important; }
+html[data-anim="reduced"] .lyric-line.gap .st { transition: none; }
 html[data-fx="off"] .lyric-line.gap .stars { filter: none !important; }
 
 /* Barra de navegación de abajo */
