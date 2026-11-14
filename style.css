@@ -1566,6 +1566,25 @@ html .lyrics .lyric-line.sec.tight:not(.plain) { margin-top: -10px; margin-botto
   opacity: 0.95;
 }
 
+/* v1.06 — Grupos de versos. Un grupo que ya terminó de cantarse pero sigue encendido (porque aún no acaba su último
+   mini verso, o por su permanencia mínima) cede el protagonismo en cuanto empieza el siguiente: sigue legible, solo más tenue. */
+.lyrics .lyric-line.active.trail {
+  opacity: 0.62;
+  transform: scale(0.97);
+}
+.lyrics .lyric-line.sec.active.trail {
+  opacity: 0.55;
+  transform: none;
+}
+/* El navegador no debe reajustar el scroll por su cuenta: de eso se encarga el resorte de la app */
+.lyrics {
+  overflow-anchor: none;
+}
+/* Canciones rápidas (rap): los mini versos aparecen más ágiles para no llegar tarde a su palabra */
+.lyrics[data-pace="fast"] .lyric-line.sec.active {
+  transition: color 0.3s ease, transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.22s ease;
+}
+
 .lyric-line.past {
   color: var(--lyric-past);
 }

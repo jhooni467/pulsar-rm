@@ -120,6 +120,9 @@ The next major update is planned to include:
 - Lyrics · simultaneous verses: every line keeps its own start and end time, so overlapping verses (backing vocals, choirs, echoes) are shown together and each one fades out on its own end time. Lyrics without end times behave exactly as before.
 - Lyrics · background vocals: `[bg:text]` annotations (also `[bg:<mm:ss.xx>word<mm:ss.xx>]`, `[mm:ss.xx][bg:text]` and a trailing `[bg:text]` on a verse) are shown smaller and dimmer under the main verse, with their own soft enter/exit.
 - Lyrics · look: smoother depth between the active verse and the previous/next ones (size, opacity and optional blur by distance).
+- Lyrics · verse groups: a main verse and its background vocals now light up and fade out together. The main verse stays fully lit until its last background vocal finishes, and background vocals are never cut short at the end of their verse. Word timing is untouched: only how long a finished line stays lit changes.
+- Lyrics · smooth scrolling: the screen only moves when the group of verses changes (never because a background vocal switches on or off), driven by one damped spring that blends consecutive moves instead of restarting them, so there is no more up-and-down shaking.
+- Lyrics · fast songs: the pace of each song (slow / normal / fast) is measured from its timing; very short consecutive background fragments of the same verse are merged into one compact line (each word keeps its own time) and every fragment stays visible for a minimum readable time, without delaying the audio sync.
 </details>
 
 <details>

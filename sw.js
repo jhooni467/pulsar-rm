@@ -14,7 +14,8 @@
 // v8 (revisión v1.04): las rutas /_pulsar_* de Android no pasan por el service worker.
 // v9 (app v1.05): pantalla completa real, Atrás con ruta Reproductor → Biblioteca → Inicio; renueva la copia guardada.
 // v10 (app v1.05): letras — estrellas de espera, versos superpuestos y voces de fondo [bg:]; renueva la copia guardada.
-const CACHE_NAME = "pulsar-rm-shell-v11";
+// v12 (app v1.05): letras — grupos de versos (el principal no se apaga antes que sus mini versos), desplazamiento con resorte y fragmentos rápidos compactos; renueva la copia guardada.
+const CACHE_NAME = "pulsar-rm-shell-v12";
 
 const APP_SHELL = [
   "./",
