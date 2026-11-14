@@ -269,7 +269,15 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          set -o pipefail
+          # Si falla, se imprimen al final SOLO las lineas del error de compilacion (para no buscarlas en el registro)
+          ./gradlew assembleRelease --no-daemon --console=plain 2>&1 | tee ../build.log || {
+            echo ""
+            echo "=================== ERRORES DE COMPILACION ==================="
+            grep -E "error:|\.java:[0-9]+|What went wrong" -A4 ../build.log | head -80
+            echo "=============================================================="
+            exit 1
+          }
 
       # Se firma con pulsar-debug.keystore (la misma llave de la 1.01) para poder actualizar encima.
       - name: Alinear y firmar el APK
