@@ -675,9 +675,13 @@ const LyricsParser = {
   finalize(info, lines) {
     lines.sort((a, b) => (a.t - b.t) || (a.order - b.order));
     const EPS = 0.005;
+    // Una voz de fondo entre paréntesis "(…)" es una segunda capa: no corta el verso principal que está sonando (v1.05)
+    const isParen = (line) => /^[(（].*[)）]$/.test(line.text || "");
     const nextMain = (i) => {
+      const skipParen = !lines[i].sec && !isParen(lines[i]);
       for (let j = i + 1; j < lines.length; j++) {
-        if (!lines[j].sec && lines[j].t > lines[i].t + EPS) return lines[j];
+        if (lines[j].sec || (skipParen && isParen(lines[j]))) continue;
+        if (lines[j].t > lines[i].t + EPS) return lines[j];
       }
       return null;
     };
@@ -1100,10 +1104,10 @@ const CoverColor = {
   }
 };
 
-/* Indicador de espera de Pulsar RM (v1.05): tres estrellas de cuatro puntas que brillan poco a poco.
+/* Indicador de espera de Pulsar RM (v1.05): cinco estrellas gruesas de cuatro puntas que suben despacio y brillan poco a poco.
    Se usa en la introducción, en las partes instrumentales y en las pausas largas entre versos. */
-const LYRIC_STAR = '<i class="st"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 1.5C12.9 7.7 16.3 11.1 22.5 12C16.3 12.9 12.9 16.3 12 22.5C11.1 16.3 7.7 12.9 1.5 12C7.7 11.1 11.1 7.7 12 1.5Z"/></svg></i>';
-const LYRIC_STARS = '<span class="stars">' + LYRIC_STAR + LYRIC_STAR + LYRIC_STAR + '</span>';
+const LYRIC_STAR = '<i class="st"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2.5C13.9 7.6 16.4 10.1 21.5 12C16.4 13.9 13.9 16.4 12 21.5C10.1 16.4 7.6 13.9 2.5 12C7.6 10.1 10.1 7.6 12 2.5Z"/></svg></i>';
+const LYRIC_STARS = '<span class="stars">' + LYRIC_STAR.repeat(5) + '</span>';
 
 /* =========================================================
    LYRICS — letra de la canción actual (resaltado de línea y de palabra, desplazamiento automático)
@@ -1362,7 +1366,12 @@ const Lyrics = {
   // Cambia el conjunto de líneas encendidas: clases, distancia (profundidad), desplazamiento y qué dibujar cada fotograma
   apply(act, hold, time, force) {
     const lines = this.data.lines;
-    const lit = hold >= 0 ? [hold] : act.slice();
+    let lit = hold >= 0 ? [hold] : act.slice();
+    if (hold >= 0 && lines[hold].bg) { // voz de fondo retenida: el verso principal que acompaña no se apaga
+      let main = hold - 1;
+      while (main >= 0 && (lines[main].bg || lines[main].gap)) main--;
+      if (main >= 0) lit = [main, hold];
+    }
     this.lit = lit;
     this.hold = hold;
     this.active = lit.length ? lit[0] : -1;
@@ -1390,7 +1399,7 @@ const Lyrics = {
     this.center(force);
   },
 
-  // Las estrellas se van encendiendo una a una según avanza la pausa: se nota cuánto falta para la siguiente voz
+  // Las estrellas se van encendiendo una a una (cada una con su propia opacidad) según avanza la pausa: se nota cuánto falta para la siguiente voz
   paintGap(time) {
     const line = this.gapLine, el = this.gapEl;
     const span = Math.max(0.1, line.end - line.t);
@@ -1398,7 +1407,7 @@ const Lyrics = {
     const key = g.toFixed(2);
     if (el._g === key) return;
     el._g = key;
-    for (let k = 0; k < 3; k++) el.style.setProperty("--s" + k, Math.min(1, Math.max(0, g * 3 - k)).toFixed(2));
+    for (let k = 0; k < 5; k++) el.style.setProperty("--s" + k, Math.min(1, Math.max(0, g * 3 - k * 0.5)).toFixed(2));
   },
 
   // Centra el grupo de líneas encendidas. Si son varias y caben, se centra el bloque; si no, se prioriza la primera.
