@@ -1554,63 +1554,17 @@ html .lyrics .lyric-line.sec.tight:not(.plain) { margin-top: -10px; margin-botto
 .lyric-line.plain.sec {
   transform: none;
 }
+/* Voz de fondo apagada = oculta (su hueco se conserva para que nada se mueva). Se apaga a la vez que su verso principal. */
 .lyrics .lyric-line.sec:not(.active):not(.plain) {
-  opacity: 1;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
   filter: none;
+  transition: color 0.4s ease, transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.35s ease, visibility 0s linear 0.35s;
 }
 .lyrics .lyric-line.sec.active {
   opacity: 0.95;
 }
-
-/* Letras secundarias (v1.05, revisado): segunda capa que convive con el verso principal.
-   - Antes de su momento no se ven (ni texto ni fondo), pero ocupan su sitio: nada salta al aparecer.
-   - Cuando les toca, su fondo se despliega de arriba hacia abajo y un instante después entra el texto,
-     que recibe su resaltado normal con la sincronización de siempre.
-   - El fondo es un poco más tenue que el texto principal. Solo se animan transform, opacity y color. */
-.lyrics .lyric-line.bg:not(.plain) {
-  position: relative;
-  isolation: isolate;
-}
-.lyrics .lyric-line.bg:not(.plain)::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: -0.2em -0.55em;
-  border-radius: 0.55em;
-  background: var(--surface2);
-  opacity: 0.7;
-  transform: scaleY(0);
-  transform-origin: top center;
-  transition: transform 0.25s ease-in, opacity 0.35s ease;
-  pointer-events: none;
-}
-.lyrics .lyric-line.bg.active:not(.plain)::before {
-  transform: scaleY(1);
-  transition: transform 0.55s cubic-bezier(0.22, 0.8, 0.24, 1), opacity 0.35s ease;
-}
-.lyrics .lyric-line.bg.past:not(.plain)::before {
-  transform: scaleY(1);
-  opacity: 0;
-}
-.lyrics .lyric-line.bg:not(.plain):not(.active):not(.past) {
-  color: transparent;
-}
-.lyrics .lyric-line.bg.active:not(.plain) {
-  transition: color 0.4s ease 0.18s, transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1), filter 0.5s ease, opacity 0.5s ease;
-}
-@supports (color: color-mix(in srgb, red 50%, blue)) {
-  .lyrics .lyric-line.bg:not(.plain)::before {
-    background: color-mix(in srgb, var(--accent) 17%, transparent);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .lyrics .lyric-line.bg:not(.plain)::before,
-  .lyrics .lyric-line.bg.past:not(.plain)::before { transform: none; opacity: 0; transition: opacity 0.3s ease; }
-  .lyrics .lyric-line.bg.active:not(.plain)::before { transform: none; opacity: 0.7; }
-}
-html[data-anim="reduced"] .lyrics .lyric-line.bg:not(.plain)::before,
-html[data-anim="reduced"] .lyrics .lyric-line.bg.past:not(.plain)::before { transform: none; opacity: 0; transition: opacity 0.3s ease; }
-html[data-anim="reduced"] .lyrics .lyric-line.bg.active:not(.plain)::before { transform: none; opacity: 0.7; }
 
 .lyric-line.past {
   color: var(--lyric-past);
@@ -2462,17 +2416,16 @@ img {
   margin: 0 auto;
 }
 
-/* ---- Indicador de espera de Pulsar RM (v1.05, revisado): estrellas grandes que suben despacio ----
-   Se enciende en la introducción, en las partes instrumentales y en las pausas largas. Son cinco estrellas gruesas de
-   cuatro puntas; cada una tiene su tamaño, su recorrido y su opacidad máxima (--m). Su opacidad crece sola, una a una,
-   según avanza la pausa (--s0 … --s4, de 0 a 1), así que ninguna aparece con toda la intensidad desde el principio.
-   Solo se animan transform y opacity (baratas para Android) y únicamente mientras las estrellas están visibles. */
+/* ---- Indicador de espera de Pulsar RM (v1.05): estrellas de cuatro puntas ----
+   Se enciende en la introducción, en las partes instrumentales y en las pausas largas. Las tres estrellas
+   se van iluminando según avanza la pausa (--s0 / --s1 / --s2, de 0 a 1) y titilan despacio. Solo se animan
+   transform y opacity (baratas para Android); la animación solo corre mientras las estrellas están visibles. */
 .lyric-line.gap:not(.plain) {
   display: flex;
-  align-items: flex-end;
-  height: calc(var(--lyric-size, 24px) * 3);
+  align-items: center;
+  height: calc(var(--lyric-size, 24px) * 1.25);
   opacity: 0;
-  transform: scale(0.85);
+  transform: scale(0.7);
   cursor: default;
   pointer-events: none;
 }
@@ -2481,50 +2434,46 @@ img {
   transform: scale(1);
 }
 .lyric-line.gap .stars {
-  position: relative;
-  display: block;
-  width: 7.4em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.46em;
   height: 100%;
   color: var(--accent);
 }
 .lyric-line.gap .st {
-  position: absolute;
   display: block;
-  left: var(--x, 0);
-  bottom: var(--y, 0);
-  width: var(--w, 1em);
-  height: var(--w, 1em);
-  opacity: calc(var(--m, 1) * var(--s, 0));
-  transform: translateY(calc(var(--r, 1em) * -0.6)) scale(0.95);
+  opacity: calc(0.22 + var(--s0, 0) * 0.78);
+  transform: scale(calc(0.72 + var(--s0, 0) * 0.28));
 }
-.lyric-line.gap .st:nth-child(1) { --x: 0em;   --y: 0.1em;  --w: 1em;    --m: 0.6;  --r: 1.3em; --dur: 9s;   --dl: 0s;    --s: var(--s0, 0); }
-.lyric-line.gap .st:nth-child(2) { --x: 1.5em; --y: 0.5em;  --w: 1.5em;  --m: 1;    --r: 1.1em; --dur: 10s;  --dl: 0.4s;  --s: var(--s1, 0); }
-.lyric-line.gap .st:nth-child(3) { --x: 3.4em; --y: 0.05em; --w: 1.15em; --m: 0.75; --r: 1.4em; --dur: 8.5s; --dl: 0.8s;  --s: var(--s2, 0); }
-.lyric-line.gap .st:nth-child(4) { --x: 4.9em; --y: 0.45em; --w: 1.35em; --m: 0.9;  --r: 1.2em; --dur: 9.5s; --dl: 1.2s;  --s: var(--s3, 0); }
-.lyric-line.gap .st:nth-child(5) { --x: 6.5em; --y: 0.1em;  --w: 0.85em; --m: 0.5;  --r: 1.5em; --dur: 8s;   --dl: 1.6s;  --s: var(--s4, 0); }
+.lyric-line.gap .st:nth-child(1) { width: 0.62em; height: 0.62em; margin-top: 0.3em; }
+.lyric-line.gap .st:nth-child(2) { width: 0.84em; height: 0.84em; margin-top: -0.22em; opacity: calc(0.22 + var(--s1, 0) * 0.78); transform: scale(calc(0.72 + var(--s1, 0) * 0.28)); }
+.lyric-line.gap .st:nth-child(3) { width: 0.5em; height: 0.5em; margin-top: 0.34em; opacity: calc(0.22 + var(--s2, 0) * 0.78); transform: scale(calc(0.72 + var(--s2, 0) * 0.28)); }
 .lyric-line.gap .st svg {
   display: block;
   width: 100%;
   height: 100%;
-  overflow: visible;
   fill: currentColor;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linejoin: round;
 }
-.lyric-line.gap.active .st {
-  will-change: transform, opacity;
-  animation: lyric-rise var(--dur, 9s) cubic-bezier(0.3, 0.5, 0.4, 1) var(--dl, 0s) both;
+.lyric-line.gap.active .st svg {
+  animation: lyric-twinkle 2.8s ease-in-out infinite;
 }
-.lyrics.is-paused .lyric-line.gap .st { animation-play-state: paused; }
-@keyframes lyric-rise {
-  from { transform: translateY(0) rotate(-10deg) scale(0.8); }
-  to   { transform: translateY(calc(var(--r, 1em) * -1)) rotate(10deg) scale(1); }
+.lyric-line.gap.active .st:nth-child(2) svg { animation-duration: 3.4s; animation-delay: -1s; }
+.lyric-line.gap.active .st:nth-child(3) svg { animation-duration: 3s; animation-delay: -1.9s; }
+.lyrics.is-paused .lyric-line.gap .st svg { animation-play-state: paused; }
+@keyframes lyric-twinkle {
+  0%, 100% { transform: scale(0.8) rotate(0deg); opacity: 0.6; }
+  50% { transform: scale(1.1) rotate(14deg); opacity: 1; }
+}
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .lyric-line.gap.active .stars {
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 50%, transparent));
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .lyric-line.gap .st { animation: none !important; will-change: auto; }
+  .lyric-line.gap .st svg { animation: none !important; }
 }
-html[data-anim="reduced"] .lyric-line.gap .st { animation: none !important; will-change: auto; }
+html[data-anim="reduced"] .lyric-line.gap .st svg { animation: none !important; }
+html[data-fx="off"] .lyric-line.gap .stars { filter: none !important; }
 
 /* Barra de navegación de abajo */
 .nav-icon {

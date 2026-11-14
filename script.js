@@ -675,13 +675,9 @@ const LyricsParser = {
   finalize(info, lines) {
     lines.sort((a, b) => (a.t - b.t) || (a.order - b.order));
     const EPS = 0.005;
-    // Una voz de fondo entre paréntesis "(…)" es una segunda capa: no corta el verso principal que está sonando (v1.05)
-    const isParen = (line) => /^[(（].*[)）]$/.test(line.text || "");
     const nextMain = (i) => {
-      const skipParen = !lines[i].sec && !isParen(lines[i]);
       for (let j = i + 1; j < lines.length; j++) {
-        if (lines[j].sec || (skipParen && isParen(lines[j]))) continue;
-        if (lines[j].t > lines[i].t + EPS) return lines[j];
+        if (!lines[j].sec && lines[j].t > lines[i].t + EPS) return lines[j];
       }
       return null;
     };
@@ -696,9 +692,16 @@ const LyricsParser = {
     });
     lines.forEach((line, i) => {
       if (!line.sec) return;
+      const parent = line.parent;
+      // Una voz de fondo acompaña a su verso: si empieza dentro de él, nunca dura más que él.
+      // (Antes podía seguir encendida cuando ya sonaba el verso siguiente.)
+      const bound = parent && parent.end > line.t ? parent.end : null;
+      if (parent && bound === null) line.parent = null; // empieza cuando su verso ya acabó: se comporta como línea propia
       if (line.end === null || line.end === undefined || line.end <= line.t) {
-        const parent = line.parent, next = nextMain(i);
-        line.end = parent && parent.end > line.t ? parent.end : next ? Math.max(next.t, line.t + 0.1) : line.t + 5;
+        const next = nextMain(i);
+        line.end = bound !== null ? bound : next ? Math.max(next.t, line.t + 0.1) : line.t + 5;
+      } else if (bound !== null && line.end > bound) {
+        line.end = Math.max(bound, line.t + 0.1);
       }
     });
     // Líneas vacías ([mm:ss.xx] sin texto) = pausa marcada por quien escribió la letra; si es muy corta, no se dibuja
@@ -732,6 +735,10 @@ const LyricsParser = {
     let far = -Infinity;
     out.forEach((line, i) => { if (line.end > far) far = line.end; reachAt[i] = far; });
 
+    // Posición de cada línea y de su verso principal (pidx): la pantalla enciende una voz de fondo solo mientras suena su verso
+    out.forEach((line, i) => { line.idx = i; });
+    out.forEach((line) => { line.pidx = line.sec && line.parent && line.parent.idx !== undefined ? line.parent.idx : -1; });
+
     const duet = this.assignSides(out);
     return { ...info, lines: out, reach: reachAt, duet, wordLevel: out.some((line) => line.words) };
   },
@@ -761,7 +768,7 @@ const LyricsParser = {
     let hold = -1;
     if (!out.length) {
       hold = idx;
-      while (hold >= 0 && lines[hold].gap) hold--;
+      while (hold >= 0 && (lines[hold].gap || lines[hold].sec)) hold--;
     }
     return hold;
   },
@@ -1104,10 +1111,10 @@ const CoverColor = {
   }
 };
 
-/* Indicador de espera de Pulsar RM (v1.05): cinco estrellas gruesas de cuatro puntas que suben despacio y brillan poco a poco.
+/* Indicador de espera de Pulsar RM (v1.05): tres estrellas de cuatro puntas que brillan poco a poco.
    Se usa en la introducción, en las partes instrumentales y en las pausas largas entre versos. */
-const LYRIC_STAR = '<i class="st"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2.5C13.9 7.6 16.4 10.1 21.5 12C16.4 13.9 13.9 16.4 12 21.5C10.1 16.4 7.6 13.9 2.5 12C7.6 10.1 10.1 7.6 12 2.5Z"/></svg></i>';
-const LYRIC_STARS = '<span class="stars">' + LYRIC_STAR.repeat(5) + '</span>';
+const LYRIC_STAR = '<i class="st"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 1.5C12.9 7.7 16.3 11.1 22.5 12C16.3 12.9 12.9 16.3 12 22.5C11.1 16.3 7.7 12.9 1.5 12C7.7 11.1 11.1 7.7 12 1.5Z"/></svg></i>';
+const LYRIC_STARS = '<span class="stars">' + LYRIC_STAR + LYRIC_STAR + LYRIC_STAR + '</span>';
 
 /* =========================================================
    LYRICS — letra de la canción actual (resaltado de línea y de palabra, desplazamiento automático)
@@ -1119,6 +1126,9 @@ const Lyrics = {
   delay: 0,
   active: -1,        // primera línea encendida (o la que se queda encendida en una pausa corta)
   lit: [],           // índices de TODAS las líneas encendidas (pueden ser varias a la vez)
+  raw: [],           // líneas que suenan según el tiempo (antes de acoplar las voces de fondo a su verso)
+  goal: null,        // último destino de desplazamiento pedido (evita reiniciar la animación hacia el mismo sitio)
+  goalAt: 0,
   hold: -1,
   scratch: [],       // se reutiliza en cada fotograma
   paints: [],        // líneas encendidas con palabra por palabra: { els, units }
@@ -1141,6 +1151,7 @@ const Lyrics = {
     const pause = (event) => {
       if (event.target.closest && event.target.closest("button")) return; // tocar un botón no es desplazar
       this.userScrollUntil = Date.now() + 3500;
+      this.goal = null; // al terminar la pausa hay que volver a centrar aunque el destino sea el mismo
     };
     ["touchstart", "wheel", "pointerdown"].forEach((name) => this.el.addEventListener(name, pause, { passive: true }));
 
@@ -1177,7 +1188,12 @@ const Lyrics = {
   resetState() {
     this.active = -1;
     this.lit = [];
+    this.raw = [];
     this.hold = -1;
+    this.goal = null;
+    this.needsCenter = false;
+    this.userScrollUntil = 0;
+    this.paused = null;
     this.paints = [];
     this.gapEl = null;
     this.gapLine = null;
@@ -1209,7 +1225,7 @@ const Lyrics = {
 
   refresh(force) {
     if (!this.el) return;
-    this.update(force);
+    this.update(force, force); // al cargar canción o entrar en la pantalla se coloca de golpe; lo demás, con suavidad
     if (this.shouldRun()) this.startLoop();
   },
 
@@ -1271,6 +1287,7 @@ const Lyrics = {
     }).join("");
     this.lineEls = Array.from(this.el.querySelectorAll(".lyric-line"));
     this.el.scrollTop = 0;
+    this.goal = null;
   },
 
   /* Palabra por palabra: cada palabra es un bloque que no se parte al cambiar de renglón;
@@ -1335,7 +1352,7 @@ const Lyrics = {
 
   /* Cada fotograma solo se calcula QUÉ líneas suenan (búsqueda binaria + un recorrido corto hacia atrás).
      Las clases, el desplazamiento y las listas de palabras se tocan únicamente cuando ese conjunto cambia. */
-  update(force) {
+  update(force, snap) {
     const data = this.data;
     if (!data || !this.live() || !this.visible()) return;
 
@@ -1345,10 +1362,11 @@ const Lyrics = {
 
     let changed = force || hold !== this.hold;
     if (!changed && hold < 0) { // sin línea retenida: se comparan los índices de las líneas que suenan
-      if (act.length !== this.lit.length) changed = true;
-      else for (let k = 0; k < act.length; k++) if (act[k] !== this.lit[k]) { changed = true; break; }
+      const prev = this.raw; // se compara con lo que suena, no con lo dibujado (las voces de fondo se filtran al dibujar)
+      if (act.length !== prev.length) changed = true;
+      else for (let k = 0; k < act.length; k++) if (act[k] !== prev[k]) { changed = true; break; }
     }
-    if (changed) this.apply(act, hold, time, force);
+    if (changed) this.apply(act, hold, time, force, snap);
 
     // Las estrellas se animan solas (CSS); en pausa se detienen
     const paused = Player.audio.paused;
@@ -1364,14 +1382,15 @@ const Lyrics = {
   },
 
   // Cambia el conjunto de líneas encendidas: clases, distancia (profundidad), desplazamiento y qué dibujar cada fotograma
-  apply(act, hold, time, force) {
+  apply(act, hold, time, force, snap) {
     const lines = this.data.lines;
-    let lit = hold >= 0 ? [hold] : act.slice();
-    if (hold >= 0 && lines[hold].bg) { // voz de fondo retenida: el verso principal que acompaña no se apaga
-      let main = hold - 1;
-      while (main >= 0 && (lines[main].bg || lines[main].gap)) main--;
-      if (main >= 0) lit = [main, hold];
-    }
+    this.raw = act.slice();
+    // Una voz de fondo solo se enciende mientras está encendido el verso al que acompaña:
+    // al apagarse el principal, se apagan juntos (y una línea retenida en pausa nunca arrastra voces de fondo)
+    const lit = hold >= 0 ? [hold] : act.filter((i) => {
+      const line = lines[i];
+      return !(line.sec && line.pidx >= 0) || act.indexOf(line.pidx) >= 0;
+    });
     this.lit = lit;
     this.hold = hold;
     this.active = lit.length ? lit[0] : -1;
@@ -1396,10 +1415,10 @@ const Lyrics = {
       if (line.gap) { this.gapEl = el; this.gapLine = line; el._g = null; }
       else if (line.words) this.paints.push({ els: Array.from(el.querySelectorAll(".lw")), units: LyricsParser.units(line) });
     });
-    this.center(force);
+    this.center(Boolean(snap), Boolean(force));
   },
 
-  // Las estrellas se van encendiendo una a una (cada una con su propia opacidad) según avanza la pausa: se nota cuánto falta para la siguiente voz
+  // Las estrellas se van encendiendo una a una según avanza la pausa: se nota cuánto falta para la siguiente voz
   paintGap(time) {
     const line = this.gapLine, el = this.gapEl;
     const span = Math.max(0.1, line.end - line.t);
@@ -1407,10 +1426,13 @@ const Lyrics = {
     const key = g.toFixed(2);
     if (el._g === key) return;
     el._g = key;
-    for (let k = 0; k < 5; k++) el.style.setProperty("--s" + k, Math.min(1, Math.max(0, g * 3 - k * 0.5)).toFixed(2));
+    for (let k = 0; k < 3; k++) el.style.setProperty("--s" + k, Math.min(1, Math.max(0, g * 3 - k)).toFixed(2));
   },
 
-  // Centra el grupo de líneas encendidas. Si son varias y caben, se centra el bloque; si no, se prioriza la primera.
+  /* Centra el verso que suena. El destino depende SOLO del verso principal (más el hueco que ya tienen reservado
+     sus voces de fondo), nunca de qué voces de fondo estén encendidas en ese instante: así aparecer o desaparecer
+     una voz pequeña no mueve la pantalla. Además no se vuelve a pedir un desplazamiento hacia un destino ya pedido,
+     porque reiniciar la animación suave a mitad de camino es lo que hacía "temblar" la pantalla. */
   center(instant, manual) {
     if (!this.lit.length) return;
     // Desplazamiento automático apagado: solo se centra cuando la persona lo pide (botón «Centrar»)
@@ -1420,23 +1442,41 @@ const Lyrics = {
       return;
     }
     this.needsCenter = false;
+    const lines = this.data.lines;
     let top = Infinity, bottom = 0;
-    for (let k = 0; k < this.lit.length; k++) {
-      const el = this.lineEls[this.lit[k]];
-      if (!el) continue;
+    const grow = (el) => {
+      if (!el) return;
       if (el.offsetTop < top) top = el.offsetTop;
       if (el.offsetTop + el.offsetHeight > bottom) bottom = el.offsetTop + el.offsetHeight;
+    };
+    for (let k = 0; k < this.lit.length; k++) {
+      const index = this.lit[k], line = lines[index];
+      grow(this.lineEls[index]);
+      // El espacio de las voces de fondo que siguen a este verso cuenta siempre, estén encendidas o no
+      if (line && !line.sec) {
+        for (let j = index + 1; j < lines.length && lines[j].sec && lines[j].pidx === index; j++) grow(this.lineEls[j]);
+      }
     }
     if (top === Infinity) return;
     const height = this.el.clientHeight, span = bottom - top;
     const target = span > height * 0.7 ? top - height * 0.28 : top - (height - span) / 2;
+    const goal = Math.max(0, Math.round(target));
     const smooth = !instant && !UI.prefersReducedMotion();
-    this.el.scrollTo({ top: Math.max(0, target), behavior: smooth ? "smooth" : "auto" });
+    if (smooth) {
+      const now = Date.now();
+      // Mismo destino que ya se pidió (y la animación sigue en marcha), o ya estamos ahí: no hay nada que hacer
+      if (this.goal === goal && (now - this.goalAt < 900 || Math.abs(this.el.scrollTop - goal) < 3)) return;
+      if (Math.abs(this.el.scrollTop - goal) < 3) { this.goal = goal; this.goalAt = now; return; }
+      this.goalAt = now;
+    }
+    this.goal = goal;
+    this.el.scrollTo({ top: goal, behavior: smooth ? "smooth" : "auto" });
   },
 
   // Botón «Centrar»: vuelve a la línea que suena aunque el desplazamiento automático esté apagado
   recenter() {
     this.userScrollUntil = 0;
+    this.goal = null;
     if (this.lit.length) this.center(false, true);
   },
 
@@ -1445,6 +1485,7 @@ const Lyrics = {
     if (!line || Player.currentId === null || !this.live()) return;
     Player.audio.currentTime = Math.max(0, line.t + this.shift());
     this.userScrollUntil = 0;
+    this.goal = null;
     this.update(true);
     if (Player.audio.paused) Player.toggle();
     else this.refresh(false);
@@ -1458,6 +1499,7 @@ const Lyrics = {
     this.song.lyrics.delay = this.delay;
     this.updateBar();
     this.userScrollUntil = 0;
+    this.goal = null;
     this.update(true);
     clearTimeout(this.saveTimer);
     const song = this.song;
@@ -1560,7 +1602,7 @@ const LyricsStyle = {
     if (signature !== this.last) {
       this.last = signature;
       Lyrics.render();
-      Lyrics.update(true);
+      Lyrics.update(true, true);
       LyricsPreview.build();
     }
   },
