@@ -324,6 +324,10 @@ public class PulsarMediaService extends MediaBrowserService {
     /* ---------- Foco de audio, CPU y auriculares ---------- */
 
     private void acquireFocus() {
+        // v1.04.3: el audio suena dentro del WebView, que ya pide y gestiona su propio foco de audio (pausa en llamadas,
+        // la reanuda, etc.). Si el servicio pidiera otro foco, Android se lo quitaría al WebView (o al revés) y la
+        // canción se pausaba sola justo al empezar. Por eso el servicio no pide foco.
+        if (true) return;
         if (hasFocus) return;
         int result;
         if (Build.VERSION.SDK_INT >= 26) {
