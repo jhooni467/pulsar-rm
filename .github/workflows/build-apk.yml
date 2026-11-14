@@ -61,6 +61,7 @@ jobs:
         run: |
           mkdir www
           cp index.html script.js native.js features.js style.css manifest.json www/
+          cp nova-*.js nova.css www/   # Nova Intelligence (etapa 1)
           cp icon-*.png www/
           cp apple-touch-icon.png www/ 2>/dev/null || true
 
