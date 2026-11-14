@@ -14,6 +14,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.DocumentsContract;
+import android.util.Base64;
 import android.view.Display;
 import android.view.Window;
 import android.view.WindowManager;
@@ -23,6 +24,7 @@ import android.webkit.WebView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeSet;
@@ -252,6 +254,32 @@ final class PulsarBridge {
             lp.preferredRefreshRate = best == 0 ? (float) hz : 0f;
         }
         w.setAttributes(lp);
+    }
+
+    /** Respaldo de reproducción: lee un trozo (máx. 1 MB) de una canción de carpeta y lo devuelve en base64. "" = fin o error. */
+    @JavascriptInterface public String readChunk(String uri, String offset, String length) {
+        InputStream in = null;
+        try {
+            long off = Long.parseLong(offset);
+            int len = Math.max(1, Math.min(Integer.parseInt(length), 1024 * 1024));
+            in = activity.getContentResolver().openInputStream(Uri.parse(uri));
+            if (in == null) return "";
+            long skipped = 0;
+            while (skipped < off) {
+                long n = in.skip(off - skipped);
+                if (n <= 0) break;
+                skipped += n;
+            }
+            if (skipped < off) return "";
+            byte[] buf = new byte[len];
+            int total = 0, r;
+            while (total < len && (r = in.read(buf, total, len - total)) > 0) total += r;
+            return total <= 0 ? "" : Base64.encodeToString(buf, 0, total, Base64.NO_WRAP);
+        } catch (Exception e) {
+            return "";
+        } finally {
+            if (in != null) { try { in.close(); } catch (Exception ignored) { /* ya cerrado */ } }
+        }
     }
 
     /* ----- Carpetas y biblioteca ----- */

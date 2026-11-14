@@ -4,8 +4,10 @@ import android.content.Context;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.net.Uri;
+import android.database.Cursor;
 import android.net.http.SslError;
 import android.os.Message;
+import android.provider.OpenableColumns;
 import android.util.Base64;
 import android.view.KeyEvent;
 import android.webkit.ClientCertRequest;
@@ -95,6 +97,7 @@ final class MediaWebClient extends WebViewClient {
         }
         if (afd == null) return error(404, "Not Found");
         long total = afd.getLength();
+        if (total < 0) total = querySize(uri); // algunos proveedores no informan el tamaño en el descriptor
         String mime = context.getContentResolver().getType(uri);
         if (mime == null || mime.isEmpty() || "application/octet-stream".equals(mime)) mime = guessMime(uriText);
 
@@ -117,8 +120,14 @@ final class MediaWebClient extends WebViewClient {
         }
         long length = total > 0 ? end - start + 1 : -1;
 
-        FileInputStream in = afd.createInputStream();
-        if (start > 0) in.getChannel().position(afd.getStartOffset() + start);
+        FileInputStream in;
+        try {
+            in = afd.createInputStream();
+            if (start > 0) in.getChannel().position(afd.getStartOffset() + start);
+        } catch (IOException | RuntimeException e) {
+            try { afd.close(); } catch (IOException ignored) {}
+            return error(500, "Error");
+        }
         InputStream body = length >= 0 ? new Limited(in, length, afd) : in;
 
         Map<String, String> h = noCache();
@@ -129,6 +138,17 @@ final class MediaWebClient extends WebViewClient {
             return new WebResourceResponse(mime, null, 206, "Partial Content", h, body);
         }
         return new WebResourceResponse(mime, null, 200, "OK", h, body);
+    }
+
+    /** Tamaño del archivo preguntándoselo al proveedor (cuando el descriptor no lo trae). -1 si no se sabe. */
+    private long querySize(Uri uri) {
+        Cursor c = null;
+        try {
+            c = context.getContentResolver().query(uri, new String[]{OpenableColumns.SIZE}, null, null, null);
+            if (c != null && c.moveToFirst() && !c.isNull(0)) return c.getLong(0);
+        } catch (Exception ignored) { /* se sirve sin tamaño */ }
+        finally { if (c != null) c.close(); }
+        return -1;
     }
 
     private static String headerIgnoreCase(Map<String, String> headers, String name) {

@@ -2414,10 +2414,22 @@ const Library = {
    así el cambio es inmediato (reproducción continua) y el crossfade mezcla las dos canciones sin cortes.
    `Player.audio` siempre apunta al deck que suena (compatibilidad con letras, editor y ecualizador).
    ========================================================= */
+// Registro en Ajustes → Acerca de → Diagnóstico (nunca lanza error)
+function diag(kind, message) {
+  try { if (typeof Diagnostics !== "undefined") Diagnostics.log(kind, message); } catch (error) { /* no crítico */ }
+}
+
+// Texto claro para un MediaError del <audio>
+function mediaErrorText(error) {
+  if (!error) return "sin detalle";
+  const names = { 1: "carga cancelada", 2: "error al leer el archivo", 3: "no se pudo decodificar", 4: "origen o formato no admitido" };
+  return `código ${error.code} (${names[error.code] || "desconocido"})${error.message ? " · " + error.message : ""}`;
+}
+
 function makeDeck() {
   const el = new Audio();
   el.preload = "auto";
-  return { el, url: "", revoke: null, songId: null };
+  return { el, url: "", revoke: null, songId: null, tried: false };
 }
 
 const Player = {
@@ -2432,6 +2444,7 @@ const Player = {
   preloaded: null,   // { songId, deckIdx }
   preloadTimer: 0,
   failStreak: 0,
+  quietUntil: 0,     // hasta esta hora, una pausa del audio es esperada (cambio de canción)
   startingFade: false,
   userPaused: false,
   interrupted: false, // pausada por otra app (llamada, otro reproductor…): se reanuda sola al volver el foco
@@ -2458,6 +2471,7 @@ const Player = {
       el.addEventListener("play", () => { if (active()) { UI.updatePlayState(); MediaBridge.update(true); } });
       el.addEventListener("pause", () => {
         if (!active()) return;
+        if (!this.userPaused && !this.interrupted && !el.ended && this.currentId !== null && !this.fading && Date.now() > this.quietUntil) diag("audio", "Pausa inesperada del audio (nadie la pidió)");
         UI.updatePlayState();
         MediaBridge.update(true);
       });
@@ -2501,11 +2515,12 @@ const Player = {
   async resolveSource(song) {
     if (song.uri) { // canción de una carpeta autorizada: la sirve Android desde el mismo origen de la app
       const url = Native.audioUrl(song.uri);
+      if (!url) diag("audio", "Canción de carpeta sin puente nativo (Native.available=" + Native.available + ")");
       return url ? { url, revoke: null } : null;
     }
     let blob = null;
-    try { blob = await Store.getBlob(song.id); } catch (error) { console.error(error); }
-    if (!blob) return null;
+    try { blob = await Store.getBlob(song.id); } catch (error) { console.error(error); diag("audio", "No se pudo leer el archivo guardado: " + (error && error.message ? error.message : error)); }
+    if (!blob) { diag("audio", "La canción importada no tiene archivo guardado (id " + song.id + ")"); return null; }
     const url = URL.createObjectURL(blob);
     return { url, revoke: () => URL.revokeObjectURL(url) };
   },
@@ -2516,6 +2531,7 @@ const Player = {
     deck.url = source.url;
     deck.revoke = source.revoke;
     deck.songId = song.id;
+    deck.tried = false;
     if (previous) previous();
   },
 
@@ -2569,6 +2585,7 @@ const Player = {
         return false;
       }
       deck = this.deck;
+      this.quietUntil = Date.now() + 1500;
       this.release(this.idle);
       deck.el.pause();
       this.attach(deck, song, source);
@@ -2584,12 +2601,14 @@ const Player = {
     this.afterTrackStart(song);
     Equalizer.onPlay();
 
+    AudioGraph.resume(); // si el audio avanzado quedó suspendido, sin esto no se oye nada aunque "suene"
     try {
       await deck.el.play();
     } catch (error) {
       if (error.name !== "AbortError") {
         console.error("No se pudo reproducir:", error);
-        UI.toast("No se pudo iniciar la reproducción.");
+        diag("audio", `play() rechazado: ${error.name} ${error.message || ""}`);
+        if (!deck.tried) UI.toast("No se pudo iniciar la reproducción."); // si hay respaldo en curso, no se avisa todavía
       }
     }
     if (token !== this.loadToken) return true;
@@ -2708,11 +2727,13 @@ const Player = {
   handleError(deck, index) {
     if (!deck.url) return;
     console.error("Error de audio:", deck.el.error);
+    diag("audio", `${this.isActive(deck) ? "Error" : "Error (precarga)"}: ${mediaErrorText(deck.el.error)} · ${deck.url.startsWith("blob:") ? "archivo importado" : "carpeta"}`);
     if (!this.isActive(deck)) { // era la canción preparada: se descarta sin avisar
       if (this.preloaded && this.preloaded.deckIdx === index) this.preloaded = null;
       this.release(deck);
       return;
     }
+    if (this.tryBridgeFallback(deck)) return;
     UI.updatePlayState();
     this.failStreak++;
     if (this.failStreak <= 2 && Queue.ids.length > 1) {
@@ -2720,6 +2741,52 @@ const Player = {
       setTimeout(() => { if (this.audio.error) this.next(); }, 500);
     } else {
       UI.toast("No se pudo reproducir este archivo. Puede que su formato no sea compatible.");
+    }
+  },
+
+  // Respaldo para canciones de carpeta: si la ruta /_pulsar_media falla, Android entrega el archivo por trozos
+  // (PulsarNative.readChunk) y se reproduce desde memoria.
+  tryBridgeFallback(deck) {
+    const song = Library.byId(deck.songId);
+    if (deck.tried || !song || !song.uri || !Native.has("readChunk") || !deck.url || deck.url.startsWith("blob:")) return false;
+    deck.tried = true;
+    this.loadViaBridge(deck, song);
+    return true;
+  },
+
+  async loadViaBridge(deck, song) {
+    const token = this.loadToken;
+    UI.toast("Preparando la canción…", true);
+    diag("audio", "Ruta normal falló; probando lectura directa de Android");
+    try {
+      const parts = [];
+      let offset = 0;
+      for (let guard = 0; guard < 600; guard++) { // hasta ~600 MB
+        const b64 = Native.call("readChunk", song.uri, String(offset), String(1024 * 1024));
+        if (typeof b64 !== "string" || !b64) break;
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        parts.push(bytes);
+        offset += bytes.length;
+        await new Promise((resolve) => setTimeout(resolve, 0)); // deja respirar a la pantalla
+        if (token !== this.loadToken || deck.songId !== song.id) return; // se pidió otra canción
+      }
+      if (!offset) throw new Error("Android no pudo leer el archivo");
+      const ext = (song.fileName || "").split(".").pop().toLowerCase();
+      const types = { mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", flac: "audio/flac", ogg: "audio/ogg", oga: "audio/ogg", opus: "audio/ogg", wav: "audio/wav", weba: "audio/webm" };
+      const url = URL.createObjectURL(new Blob(parts, { type: song.mime || types[ext] || "audio/mpeg" }));
+      const previous = deck.revoke;
+      deck.el.src = url;
+      deck.url = url;
+      deck.revoke = () => URL.revokeObjectURL(url);
+      if (previous) previous();
+      this.objectUrl = url;
+      if (this.isActive(deck) && !this.userPaused) await deck.el.play();
+      diag("audio", "Lectura directa de Android: correcta (" + Math.round(offset / 1024) + " KB)");
+    } catch (error) {
+      diag("audio", "Lectura directa de Android falló: " + (error && error.message ? error.message : error));
+      if (this.isActive(deck)) UI.toast("No se pudo reproducir este archivo. Puede que su formato no sea compatible.");
     }
   },
 
@@ -2948,6 +3015,7 @@ const Player = {
 
   // Órdenes que llegan de la notificación, los botones de los auriculares o el temporizador nativo
   nativeAction(name, value) {
+    if (name !== "seek") diag("android", "orden: " + name);
     switch (name) {
       case "play": this.resume(); break;
       case "pause": this.pause(); break;
@@ -2965,6 +3033,7 @@ const Player = {
 
   // Foco de audio (llamadas, otras apps): lo avisa Android
   focus(action) {
+    diag("android", "foco de audio: " + action);
     switch (action) {
       case "duck": this.setDuck(true); break;
       case "unduck": this.setDuck(false); break;
