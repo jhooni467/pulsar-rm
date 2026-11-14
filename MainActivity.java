@@ -64,7 +64,7 @@ public class MainActivity extends BridgeActivity {
 
     // Capacitor llama a onNewIntent(getIntent()) durante super.onCreate(): por eso handleIncoming no depende de nada más.
     @Override
-    protected void onNewIntent(Intent intent) {
+    public void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
         handleIncoming(intent);
@@ -125,7 +125,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onDestroy() {
+    public void onDestroy() {
         PulsarEvents.attach(null);
         super.onDestroy();
     }
@@ -133,7 +133,7 @@ public class MainActivity extends BridgeActivity {
     /* ---------- Resultados de pantallas del sistema ---------- */
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (bridge != null) bridge.onActivityResult(requestCode, resultCode, data);
     }
