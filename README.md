@@ -116,6 +116,10 @@ The next major update is planned to include:
 - Screen: removed the gray strip above the top tabs. The Android window is now truly edge-to-edge and the WebView sits exactly inside the safe areas (status bar when visible, camera cutout, navigation bar, keyboard). Hiding the status bar keeps working.
 - Back button / gesture: Player → Library → Home → leave the app. The Android Back is now handled by the app itself, so it no longer exits from the full-screen player.
 - Settings → Diagnostics now also shows the safe-area values to help with display issues.
+- Lyrics · waiting indicator: a Pulsar RM signature of three softly twinkling four-point stars replaces dots/notes during intros, instrumental parts and long pauses between verses. The stars light up one by one as the pause goes by.
+- Lyrics · simultaneous verses: every line keeps its own start and end time, so overlapping verses (backing vocals, choirs, echoes) are shown together and each one fades out on its own end time. Lyrics without end times behave exactly as before.
+- Lyrics · background vocals: `[bg:text]` annotations (also `[bg:<mm:ss.xx>word<mm:ss.xx>]`, `[mm:ss.xx][bg:text]` and a trailing `[bg:text]` on a verse) are shown smaller and dimmer under the main verse, with their own soft enter/exit.
+- Lyrics · look: smoother depth between the active verse and the previous/next ones (size, opacity and optional blur by distance).
 </details>
 
 <details>

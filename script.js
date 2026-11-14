@@ -372,6 +372,15 @@ const LyricsParser = {
   INLINE_SRC: "<(?:(\\d{1,2}):)?(\\d{1,3}):(\\d{2})(?:[.,:](\\d{1,3}))?>",
   CUE_TIME: "((?:\\d{1,2}:)?\\d{1,3}:\\d{2}[.,]\\d{1,3})",
 
+  // v1.05 — pausas con estrellas y superposición de versos
+  INTRO_MIN: 2,      // s: una introducción más larga que esto muestra las estrellas
+  GAP_MIN: 3.5,      // s: una pausa entre versos más larga que esto muestra las estrellas
+  MARKER_MIN: 1,     // s: una línea vacía [mm:ss.xx] más corta que esto no se dibuja
+  OVERLAP_TOL: 0.2,  // s: si un verso acaba hasta 0.2 s después de que empiece el siguiente, no es superposición
+  // Voces de fondo / anotaciones: [bg:texto]  ·  [mm:ss.xx][bg:<mm:ss.xx>texto<mm:ss.xx>]  ·  Verso principal [bg:texto]
+  BG_INLINE: /\[\s*bg\s*:([^\]]*)\]/gi,
+  BG_TEST: /\[\s*bg\s*:/i,
+
   toSeconds(h, m, s, f) {
     return Number(h || 0) * 3600 + Number(m) * 60 + Number(s) + (f ? parseFloat("0." + f) : 0);
   },
@@ -414,7 +423,7 @@ const LyricsParser = {
       }
       line.side = side;
       // Voces de fondo, como en Apple Music: toda la línea entre paréntesis
-      line.bg = /^[(（].*[)）]$/.test(line.text || "");
+      line.bg = Boolean(line.bg) || /^[(（].*[)）]$/.test(line.text || "");
     });
     return lines.some((line) => line.side !== "l");
   },
@@ -477,7 +486,10 @@ const LyricsParser = {
       if (this.SPEAKER_ONLY.test(row)) { sticky = (row.match(this.SPEAKER_ONLY)[1] || row.match(this.SPEAKER_ONLY)[2]).toLowerCase(); return; }
       const sp = this.takeSpeaker(row);
       if (sp) sticky = sp.id;
-      lines.push({ t: null, text: sp ? sp.rest.trim() : row, words: null, spk: sticky });
+      let text = sp ? sp.rest.trim() : row, bg = false;
+      const tagged = text.match(/^\[\s*bg\s*:([^\]]*)\]$/i); // texto sin tiempos: [bg:texto] = voz de fondo
+      if (tagged) { text = tagged[1].trim(); bg = true; }
+      lines.push({ t: null, text, words: null, spk: sticky, bg });
     });
     const duet = this.assignSides(lines);
     return { format: "txt", synced: false, wordLevel: false, duet, metaOffset: 0, meta: {}, lines };
@@ -509,9 +521,52 @@ const LyricsParser = {
     return { text: clean.map((word) => word.text).join("").trim(), words: clean, end };
   },
 
+  // ¿El texto entero está entre paréntesis que se cierran al final? "(oh yeah)" sí · "(oh) yeah (hey)" no
+  wrapped(text) {
+    if (!/^[(（]/.test(text) || !/[)）]$/.test(text)) return false;
+    let depth = 0;
+    const chars = Array.from(text);
+    for (let i = 0; i < chars.length; i++) {
+      if (/[(（]/.test(chars[i])) depth++;
+      else if (/[)）]/.test(chars[i])) { depth--; if (depth === 0 && i < chars.length - 1) return false; }
+    }
+    return depth === 0;
+  },
+
+  /* Voz de fondo [bg:…]: se guarda como línea propia (secundaria), con su propio inicio y fin.
+     base = tiempo de la línea (o null si la etiqueta va sola); parent = verso principal al que acompaña. */
+  makeBg(inner, base, delta, parent, spk, order) {
+    const body = String(inner || "").trim();
+    if (!body) return null;
+    const first = body.match(new RegExp(this.INLINE_SRC));
+    let start = base;
+    if (start === null) start = first ? this.toSeconds(first[1], first[2], first[3], first[4]) + delta : parent ? parent.t : null;
+    if (start === null) return null; // no hay forma de saber cuándo suena: se ignora
+    const parsed = this.parseInline(body, start - delta);
+    if (!parsed.text && !parsed.words) return null;
+    // Dentro de [bg:] los paréntesis sobran: la etiqueta ya dice que es una voz de fondo
+    if (this.wrapped(parsed.text)) {
+      parsed.text = parsed.text.slice(1, -1).trim();
+      if (parsed.words) {
+        parsed.words[0].text = parsed.words[0].text.replace(/^[(（]\s*/, "");
+        const last = parsed.words[parsed.words.length - 1];
+        last.text = last.text.replace(/\s*[)）]$/, "");
+        parsed.words = parsed.words.filter((word) => word.text !== "");
+        if (!parsed.words.length) parsed.words = null;
+      }
+      if (!parsed.text) return null;
+    }
+    return {
+      t: start, order, spk: parent ? parent.spk : spk, bg: true, sec: true, parent: parent || null,
+      text: parsed.text,
+      words: parsed.words ? parsed.words.map((word) => ({ t: word.t + delta, text: word.text })) : null,
+      end: parsed.end === null ? null : parsed.end + delta
+    };
+  },
+
   parseLRC(text) {
     const lines = [], meta = {};
-    let offset = 0, order = 0, sticky = null;
+    let offset = 0, order = 0, sticky = null, lastMain = null;
     text.split("\n").forEach((rawLine) => {
       let row = rawLine.trim();
       if (!row) return;
@@ -520,8 +575,9 @@ const LyricsParser = {
       const only = row.match(this.SPEAKER_ONLY);
       if (only) { sticky = (only[1] || only[2]).toLowerCase(); return; }
 
+      // [bg:…] se parece a una etiqueta de datos ([ar:], [ti:]…), pero es una voz de fondo: no va a meta
       const tag = row.match(/^\[([A-Za-z#]+):(.*)\]$/);
-      if (tag) {
+      if (tag && tag[1].toLowerCase() !== "bg") {
         const key = tag[1].toLowerCase();
         meta[key] = tag[2].trim();
         if (key === "offset") offset = parseInt(tag[2], 10) || 0;
@@ -534,21 +590,46 @@ const LyricsParser = {
         stamps.push(this.toSeconds(0, match[1], match[2], match[3]));
         row = row.slice(match[0].length);
       }
-      if (!stamps.length) return; // línea sin tiempo: no se muestra (sigue en el texto editable)
+
+      if (!stamps.length) {
+        // Voz de fondo sin tiempo de línea: "[bg:texto]" o "[bg:<mm:ss.xx>texto<mm:ss.xx>]"
+        if (!this.BG_TEST.test(row)) return; // línea sin tiempo: no se muestra (sigue en el texto editable)
+        row.replace(this.BG_INLINE, (all, inner) => {
+          const bg = this.makeBg(inner, null, 0, lastMain, sticky, order);
+          if (bg) { lines.push(bg); order++; }
+          return "";
+        });
+        return;
+      }
 
       const sp = this.takeSpeaker(row.trim());
       if (sp) sticky = sp.id;
-      const parsed = this.parseInline(sp ? sp.rest.trim() : row.trim(), stamps[0]);
-      if (sp && !parsed.text && !parsed.words) return; // "[00:30.00]V2:" sin letra: solo cambia de cantante
+      let body = sp ? sp.rest.trim() : row.trim();
+      const bgBodies = [];
+      body = body.replace(this.BG_INLINE, (all, inner) => { bgBodies.push(inner); return " "; }).trim();
+      const parsed = body ? this.parseInline(body, stamps[0]) : { text: "", words: null, end: null };
+      const empty = !parsed.text && !parsed.words;
+      if (sp && empty && !bgBodies.length) return; // "[00:30.00]V2:" sin letra: solo cambia de cantante
+
       stamps.forEach((stamp) => {
         const delta = stamp - stamps[0];
-        lines.push({
-          t: stamp,
-          spk: sticky,
-          order: order++,
-          text: parsed.text,
-          words: parsed.words ? parsed.words.map((word) => ({ t: word.t + delta, text: word.text })) : null,
-          end: parsed.end === null ? null : parsed.end + delta
+        let parent = lastMain;
+        if (!(empty && bgBodies.length)) { // si solo hay [bg:], no hay verso principal en esta línea
+          const main = {
+            t: stamp,
+            spk: sticky,
+            order: order++,
+            text: parsed.text,
+            words: parsed.words ? parsed.words.map((word) => ({ t: word.t + delta, text: word.text })) : null,
+            end: parsed.end === null ? null : parsed.end + delta
+          };
+          lines.push(main);
+          parent = main;
+          if (!empty) lastMain = main;
+        }
+        bgBodies.forEach((inner) => {
+          const bg = this.makeBg(inner, empty ? stamp : null, delta, parent, sticky, order);
+          if (bg) { lines.push(bg); order++; }
         });
       });
     });
@@ -586,13 +667,42 @@ const LyricsParser = {
     return this.finalize({ format: kind, synced: true, metaOffset: 0, meta: {} }, lines);
   },
 
+  /* Cada línea conserva su propio inicio y fin (line.t / line.end), así dos versos pueden sonar a la vez.
+     - Sin tiempo final explícito, una línea termina cuando empieza la siguiente línea principal (como siempre).
+     - Las voces de fondo [bg:] (line.sec) no cortan a las principales: terminan con su verso o en su propio final.
+     - Pausas largas sin letra (y la introducción) se rellenan con una línea especial `gap` (las estrellas).
+     - reach[i] = el final más lejano entre las líneas 0..i; permite hallar las líneas activas sin recorrerlas todas. */
   finalize(info, lines) {
     lines.sort((a, b) => (a.t - b.t) || (a.order - b.order));
+    const EPS = 0.005;
+    const nextMain = (i) => {
+      for (let j = i + 1; j < lines.length; j++) {
+        if (!lines[j].sec && lines[j].t > lines[i].t + EPS) return lines[j];
+      }
+      return null;
+    };
     lines.forEach((line, i) => {
-      const next = lines[i + 1];
+      if (line.sec) return;
+      const next = nextMain(i);
       if (line.end === null || line.end === undefined || line.end <= line.t) {
         line.end = next ? Math.max(next.t, line.t + 0.1) : line.t + 5;
+      } else if (next && line.end > next.t && line.end - next.t <= this.OVERLAP_TOL) {
+        line.end = Math.max(next.t, line.t + 0.1); // décimas de diferencia entre finales e inicios no son una superposición
       }
+    });
+    lines.forEach((line, i) => {
+      if (!line.sec) return;
+      if (line.end === null || line.end === undefined || line.end <= line.t) {
+        const parent = line.parent, next = nextMain(i);
+        line.end = parent && parent.end > line.t ? parent.end : next ? Math.max(next.t, line.t + 0.1) : line.t + 5;
+      }
+    });
+    // Líneas vacías ([mm:ss.xx] sin texto) = pausa marcada por quien escribió la letra; si es muy corta, no se dibuja
+    lines.forEach((line) => { line.gap = !line.text && !line.words; });
+    lines = lines.filter((line) => !line.gap || line.end - line.t >= this.MARKER_MIN);
+    while (lines.length && lines[lines.length - 1].gap) lines.pop(); // la marca vacía del final solo cierra el último verso
+
+    lines.forEach((line) => {
       if (line.words) {
         line.words.forEach((word, j) => {
           const following = line.words[j + 1];
@@ -601,8 +711,55 @@ const LyricsParser = {
         });
       }
     });
-    const duet = this.assignSides(lines);
-    return { ...info, lines, duet, wordLevel: lines.some((line) => line.words) };
+
+    // Estrellas: introducción y pausas largas que no tienen ya una línea vacía propia
+    const out = [];
+    let reach = 0;
+    lines.forEach((line) => {
+      const hole = line.t - reach;
+      if (hole >= (out.length ? this.GAP_MIN : this.INTRO_MIN)) {
+        if (line.gap) line.t = reach; // la pausa marcada empieza en cuanto acaba el verso anterior
+        else out.push({ t: reach, end: line.t, text: "", words: null, spk: null, gap: true, auto: true, order: -1 });
+      }
+      out.push(line);
+      if (line.end > reach) reach = line.end;
+    });
+    const reachAt = new Float64Array(out.length);
+    let far = -Infinity;
+    out.forEach((line, i) => { if (line.end > far) far = line.end; reachAt[i] = far; });
+
+    const duet = this.assignSides(out);
+    return { ...info, lines: out, reach: reachAt, duet, wordLevel: out.some((line) => line.words) };
+  },
+
+  // Última línea que ya empezó en `time` (búsqueda binaria), o -1
+  find(lines, time) {
+    let lo = 0, hi = lines.length - 1, found = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (lines[mid].t <= time) { found = mid; lo = mid + 1; } else hi = mid - 1;
+    }
+    return found;
+  },
+
+  /* Líneas que suenan en `time`: las que cumplen t <= time < end (pueden ser varias).
+     Se escriben en `out` (se reutiliza, sin crear arrays en cada fotograma), de menor a mayor.
+     Devuelve `hold`: si no suena ninguna, la última línea con letra, que se queda encendida
+     (una pausa corta entre versos no apaga la letra; las pausas largas las llenan las estrellas). */
+  scan(data, time, out) {
+    const lines = data.lines, reach = data.reach;
+    out.length = 0;
+    const idx = this.find(lines, time);
+    for (let j = idx; j >= 0 && reach[j] > time; j--) {
+      if (lines[j].end > time) out.push(j);
+    }
+    out.reverse();
+    let hold = -1;
+    if (!out.length) {
+      hold = idx;
+      while (hold >= 0 && lines[hold].gap) hold--;
+    }
+    return hold;
   },
 
   // Decodifica el archivo de letras: UTF-8, UTF-16 o Windows-1252 (archivos antiguos).
@@ -943,6 +1100,11 @@ const CoverColor = {
   }
 };
 
+/* Indicador de espera de Pulsar RM (v1.05): tres estrellas de cuatro puntas que brillan poco a poco.
+   Se usa en la introducción, en las partes instrumentales y en las pausas largas entre versos. */
+const LYRIC_STAR = '<i class="st"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 1.5C12.9 7.7 16.3 11.1 22.5 12C16.3 12.9 12.9 16.3 12 22.5C11.1 16.3 7.7 12.9 1.5 12C7.7 11.1 11.1 7.7 12 1.5Z"/></svg></i>';
+const LYRIC_STARS = '<span class="stars">' + LYRIC_STAR + LYRIC_STAR + LYRIC_STAR + '</span>';
+
 /* =========================================================
    LYRICS — letra de la canción actual (resaltado de línea y de palabra, desplazamiento automático)
    La letra se guarda tal cual (texto) en song.lyrics = { raw, delay, updatedAt }.
@@ -951,10 +1113,15 @@ const Lyrics = {
   song: null,
   data: null,
   delay: 0,
-  active: -1,
+  active: -1,        // primera línea encendida (o la que se queda encendida en una pausa corta)
+  lit: [],           // índices de TODAS las líneas encendidas (pueden ser varias a la vez)
+  hold: -1,
+  scratch: [],       // se reutiliza en cada fotograma
+  paints: [],        // líneas encendidas con palabra por palabra: { els, units }
+  gapEl: null,       // estrellas encendidas (si las hay) y su línea
+  gapLine: null,
+  paused: null,
   lineEls: [],
-  unitEls: [],
-  units: [],
   raf: 0,
   userScrollUntil: 0,
   needsCenter: false,
@@ -988,7 +1155,7 @@ const Lyrics = {
     const lyrics = song && song.lyrics;
     this.delay = (lyrics && lyrics.delay) || 0;
     this.data = lyrics && lyrics.raw && lyrics.raw.trim() ? LyricsParser.parse(lyrics.raw) : null;
-    this.active = -1;
+    this.resetState();
     this.render();
     this.refresh(true);
     // Canciones de carpetas: la letra puede estar en un .lrc junto al archivo o dentro de él (Android la lee ahora)
@@ -999,8 +1166,17 @@ const Lyrics = {
     this.song = null;
     this.data = null;
     this.delay = 0;
-    this.active = -1;
+    this.resetState();
     this.render();
+  },
+
+  resetState() {
+    this.active = -1;
+    this.lit = [];
+    this.hold = -1;
+    this.paints = [];
+    this.gapEl = null;
+    this.gapLine = null;
   },
 
   shift() {
@@ -1052,8 +1228,8 @@ const Lyrics = {
     if (!this.el) return;
     const data = this.data;
     this.lineEls = [];
-    this.unitEls = [];
-    this.units = [];
+    this.paints = [];
+    this.gapEl = null;
 
     const live = this.live();
     this.el.classList.toggle("is-empty", !data);
@@ -1077,19 +1253,19 @@ const Lyrics = {
 
     this.el.innerHTML = data.lines.map((line, i) => {
       const seek = live ? ` data-i="${i}"` : "";
-      const side = ` s${line.side || "l"}${line.bg ? " bg" : ""}${line.words ? "" : " nw"}`;
-      if (!line.text && !line.words) {
-        return live
-          ? `<p class="lyric-line gap${side}"${seek}>${Icons.note}</p>`
-          : `<p class="lyric-line plain gap">&nbsp;</p>`;
+      // .bg = voz de fondo (más pequeña) · .sec = anotación [bg:] que acompaña a un verso · .tight = pegada al verso de arriba
+      const prev = data.lines[i - 1];
+      const side = ` s${line.side || "l"}${line.bg ? " bg" : ""}${line.sec ? " sec" : ""}${line.sec && prev && !prev.gap ? " tight" : ""}${line.words ? "" : " nw"}`;
+      if (line.gap || (!line.text && !line.words)) {
+        // Pausas: en la vista sincronizada son las estrellas; como texto normal, solo un espacio (las automáticas no se dibujan)
+        if (live) return `<p class="lyric-line gap${side}"${seek} aria-hidden="true">${LYRIC_STARS}</p>`;
+        return line.auto ? "" : `<p class="lyric-line plain gap">&nbsp;</p>`;
       }
       // Como texto normal no se necesita el dibujo palabra por palabra
       const inner = line.words && live ? this.wordsHTML(line) : UI.escapeHTML(line.text);
       return `<p class="lyric-line${live ? "" : " plain"}${side}"${seek}>${inner}</p>`;
     }).join("");
     this.lineEls = Array.from(this.el.querySelectorAll(".lyric-line"));
-    this.unitEls = [];
-    this.units = [];
     this.el.scrollTop = 0;
   },
 
@@ -1153,44 +1329,81 @@ const Lyrics = {
 
   /* ---------- Sincronía ---------- */
 
-  find(time) {
-    const lines = this.data.lines;
-    let lo = 0, hi = lines.length - 1, found = -1;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (lines[mid].t <= time) { found = mid; lo = mid + 1; } else hi = mid - 1;
-    }
-    return found;
-  },
-
+  /* Cada fotograma solo se calcula QUÉ líneas suenan (búsqueda binaria + un recorrido corto hacia atrás).
+     Las clases, el desplazamiento y las listas de palabras se tocan únicamente cuando ese conjunto cambia. */
   update(force) {
     const data = this.data;
     if (!data || !this.live() || !this.visible()) return;
 
     const time = Player.audio.currentTime - this.shift();
-    const index = this.find(time);
+    const act = this.scratch;
+    const hold = LyricsParser.scan(data, time, act);
 
-    if (index !== this.active || force) {
-      this.active = index;
-      this.lineEls.forEach((el, i) => {
-        el.classList.toggle("active", i === index);
-        el.classList.toggle("past", i < index);
-        el.style.setProperty("--d", Math.min(5, Math.abs(i - index))); // distancia a la línea activa (desenfoque)
-      });
-      this.unitEls = index >= 0 && this.lineEls[index]
-        ? Array.from(this.lineEls[index].querySelectorAll(".lw"))
-        : [];
-      this.units = index >= 0 && data.lines[index].words ? LyricsParser.units(data.lines[index]) : [];
-      this.center(index, force);
+    let changed = force || hold !== this.hold;
+    if (!changed && hold < 0) { // sin línea retenida: se comparan los índices de las líneas que suenan
+      if (act.length !== this.lit.length) changed = true;
+      else for (let k = 0; k < act.length; k++) if (act[k] !== this.lit[k]) { changed = true; break; }
     }
+    if (changed) this.apply(act, hold, time, force);
 
-    if (this.needsCenter && Date.now() >= this.userScrollUntil) this.center(this.active, false);
+    // Las estrellas se animan solas (CSS); en pausa se detienen
+    const paused = Player.audio.paused;
+    if (paused !== this.paused) { this.paused = paused; this.el.classList.toggle("is-paused", paused); }
 
-    if (index >= 0 && this.units.length) this.paint(this.unitEls, this.units, time, LyricsStyle.anim() === "letters");
+    if (this.needsCenter && Date.now() >= this.userScrollUntil) this.center(false);
+
+    if (this.paints.length) {
+      const letters = LyricsStyle.anim() === "letters";
+      for (let k = 0; k < this.paints.length; k++) this.paint(this.paints[k].els, this.paints[k].units, time, letters);
+    }
+    if (this.gapEl) this.paintGap(time);
   },
 
-  center(index, instant, manual) {
-    if (index < 0 || !this.lineEls[index]) return;
+  // Cambia el conjunto de líneas encendidas: clases, distancia (profundidad), desplazamiento y qué dibujar cada fotograma
+  apply(act, hold, time, force) {
+    const lines = this.data.lines;
+    const lit = hold >= 0 ? [hold] : act.slice();
+    this.lit = lit;
+    this.hold = hold;
+    this.active = lit.length ? lit[0] : -1;
+    const first = lit.length ? lit[0] : -1;
+    const last = lit.length ? lit[lit.length - 1] : -1;
+
+    this.lineEls.forEach((el, i) => {
+      const on = lit.indexOf(i) >= 0;
+      el.classList.toggle("active", on);
+      el.classList.toggle("past", !on && lines[i].end <= time);
+      // distancia al grupo de líneas encendidas (profundidad: opacidad, tamaño y desenfoque)
+      const d = on ? 0 : first < 0 ? Math.min(5, i + 1) : Math.min(5, Math.max(1, i < first ? first - i : i > last ? i - last : 1));
+      if (el._d !== d) { el._d = d; el.style.setProperty("--d", d); }
+    });
+
+    this.paints = [];
+    this.gapEl = null;
+    this.gapLine = null;
+    lit.forEach((i) => {
+      const line = lines[i], el = this.lineEls[i];
+      if (!el) return;
+      if (line.gap) { this.gapEl = el; this.gapLine = line; el._g = null; }
+      else if (line.words) this.paints.push({ els: Array.from(el.querySelectorAll(".lw")), units: LyricsParser.units(line) });
+    });
+    this.center(force);
+  },
+
+  // Las estrellas se van encendiendo una a una según avanza la pausa: se nota cuánto falta para la siguiente voz
+  paintGap(time) {
+    const line = this.gapLine, el = this.gapEl;
+    const span = Math.max(0.1, line.end - line.t);
+    const g = Math.min(1, Math.max(0, (time - line.t) / span));
+    const key = g.toFixed(2);
+    if (el._g === key) return;
+    el._g = key;
+    for (let k = 0; k < 3; k++) el.style.setProperty("--s" + k, Math.min(1, Math.max(0, g * 3 - k)).toFixed(2));
+  },
+
+  // Centra el grupo de líneas encendidas. Si son varias y caben, se centra el bloque; si no, se prioriza la primera.
+  center(instant, manual) {
+    if (!this.lit.length) return;
     // Desplazamiento automático apagado: solo se centra cuando la persona lo pide (botón «Centrar»)
     if (!instant && !manual && Settings.values.lyricsAutoScroll === false) return;
     if (!instant && Date.now() < this.userScrollUntil) {
@@ -1198,16 +1411,24 @@ const Lyrics = {
       return;
     }
     this.needsCenter = false;
-    const line = this.lineEls[index];
-    const top = line.offsetTop - (this.el.clientHeight - line.offsetHeight) / 2;
+    let top = Infinity, bottom = 0;
+    for (let k = 0; k < this.lit.length; k++) {
+      const el = this.lineEls[this.lit[k]];
+      if (!el) continue;
+      if (el.offsetTop < top) top = el.offsetTop;
+      if (el.offsetTop + el.offsetHeight > bottom) bottom = el.offsetTop + el.offsetHeight;
+    }
+    if (top === Infinity) return;
+    const height = this.el.clientHeight, span = bottom - top;
+    const target = span > height * 0.7 ? top - height * 0.28 : top - (height - span) / 2;
     const smooth = !instant && !UI.prefersReducedMotion();
-    this.el.scrollTo({ top: Math.max(0, top), behavior: smooth ? "smooth" : "auto" });
+    this.el.scrollTo({ top: Math.max(0, target), behavior: smooth ? "smooth" : "auto" });
   },
 
   // Botón «Centrar»: vuelve a la línea que suena aunque el desplazamiento automático esté apagado
   recenter() {
     this.userScrollUntil = 0;
-    if (this.active >= 0) this.center(this.active, false, true);
+    if (this.lit.length) this.center(false, true);
   },
 
   seekToLine(index) {

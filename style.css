@@ -1511,9 +1511,10 @@ body.no-scroll .toast {
   text-align: left;
   color: var(--lyric-dim);
   cursor: pointer;
-  transform: scale(0.88);
+  /* v1.05: cuanto más lejos de la línea que suena (--d), un poco más pequeña y más tenue */
+  transform: scale(calc(0.9 - var(--d, 0) * 0.014));
   transform-origin: left center;
-  transition: color 0.4s ease, transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1), filter 0.45s ease, opacity 0.45s ease;
+  transition: color 0.4s ease, transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1), filter 0.5s ease, opacity 0.5s ease;
 }
 
 .lyric-line.sr {
@@ -1536,25 +1537,45 @@ html[data-lduet="off"] .lyric-line.sc {
   transform-origin: left center;
 }
 
-/* Voces de fondo (líneas entre paréntesis) */
+/* Voces de fondo (v1.05): líneas entre paréntesis y anotaciones [bg:…]. Mucho más pequeñas que el verso principal. */
 .lyric-line.bg {
-  font-size: calc(var(--lyric-size, 24px) * 0.78);
-  font-style: italic;
+  font-size: calc(var(--lyric-size, 24px) * 0.6);
   font-weight: 600;
+  line-height: 1.3;
+  max-width: 84%;
+}
+
+/* [bg:…] que acompaña a un verso: pegada debajo y con entrada suave (sube un poco y se enciende) */
+html .lyrics .lyric-line.sec.tight:not(.plain) { margin-top: -10px; margin-bottom: 16px; }
+.lyric-line.sec {
+  transform: translateY(5px) scale(0.92);
+}
+.lyric-line.sec.active,
+.lyric-line.plain.sec {
+  transform: none;
+}
+.lyrics .lyric-line.sec:not(.active):not(.plain) {
+  opacity: 0.34;
+  filter: none;
+}
+.lyrics .lyric-line.sec.active {
+  opacity: 0.95;
 }
 
 .lyric-line.past {
   color: var(--lyric-past);
 }
 
-.lyric-line.gap {
-  opacity: 0.5;
-}
-
+/* El verso activo: grande y de máxima intensidad (el color de lo que aún no se canta se acerca al texto) */
 .lyric-line.active {
   color: var(--lyric-dim2);
   transform: scale(1);
   filter: none;
+}
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .lyric-line.active {
+    color: color-mix(in srgb, var(--text) 42%, var(--lyric-dim2));
+  }
 }
 
 /* Líneas sin palabra por palabra (.nw): la activa se ve completa */
@@ -1562,10 +1583,12 @@ html[data-lduet="off"] .lyric-line.sc {
   color: var(--text);
 }
 
-/* Desenfoque suave según la distancia a la línea que suena */
-html[data-lblur="on"] .lyrics .lyric-line:not(.active):not(.plain) {
+/* Profundidad: la opacidad baja con la distancia a la línea que suena; el desenfoque es opcional (Ajustes → Letras) */
+.lyrics .lyric-line:not(.active):not(.plain):not(.gap):not(.sec) {
+  opacity: calc(1 - var(--d, 1) * 0.1);
+}
+html[data-lblur="on"] .lyrics .lyric-line:not(.active):not(.plain):not(.gap):not(.sec) {
   filter: blur(calc(var(--d, 1) * 0.38px));
-  opacity: calc(1 - var(--d, 1) * 0.06);
 }
 
 .lyric-line.plain {
@@ -1575,6 +1598,11 @@ html[data-lblur="on"] .lyrics .lyric-line:not(.active):not(.plain) {
   margin-bottom: 8px;
   cursor: default;
   transform: none;
+}
+
+.lyric-line.plain.bg {
+  font-size: 13px;
+  opacity: 0.85;
 }
 
 .lyric-line.plain.sr {
@@ -2384,13 +2412,64 @@ img {
   margin: 0 auto;
 }
 
-/* Marca de pausa de la letra (♪ entre líneas) */
-.lyric-line.gap .icon {
-  display: inline-block;
-  width: 1em;
-  height: 1em;
-  vertical-align: -0.12em;
+/* ---- Indicador de espera de Pulsar RM (v1.05): estrellas de cuatro puntas ----
+   Se enciende en la introducción, en las partes instrumentales y en las pausas largas. Las tres estrellas
+   se van iluminando según avanza la pausa (--s0 / --s1 / --s2, de 0 a 1) y titilan despacio. Solo se animan
+   transform y opacity (baratas para Android); la animación solo corre mientras las estrellas están visibles. */
+.lyric-line.gap:not(.plain) {
+  display: flex;
+  align-items: center;
+  height: calc(var(--lyric-size, 24px) * 1.25);
+  opacity: 0;
+  transform: scale(0.7);
+  cursor: default;
+  pointer-events: none;
 }
+.lyric-line.gap.active:not(.plain) {
+  opacity: 1;
+  transform: scale(1);
+}
+.lyric-line.gap .stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.46em;
+  height: 100%;
+  color: var(--accent);
+}
+.lyric-line.gap .st {
+  display: block;
+  opacity: calc(0.22 + var(--s0, 0) * 0.78);
+  transform: scale(calc(0.72 + var(--s0, 0) * 0.28));
+}
+.lyric-line.gap .st:nth-child(1) { width: 0.62em; height: 0.62em; margin-top: 0.3em; }
+.lyric-line.gap .st:nth-child(2) { width: 0.84em; height: 0.84em; margin-top: -0.22em; opacity: calc(0.22 + var(--s1, 0) * 0.78); transform: scale(calc(0.72 + var(--s1, 0) * 0.28)); }
+.lyric-line.gap .st:nth-child(3) { width: 0.5em; height: 0.5em; margin-top: 0.34em; opacity: calc(0.22 + var(--s2, 0) * 0.78); transform: scale(calc(0.72 + var(--s2, 0) * 0.28)); }
+.lyric-line.gap .st svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+.lyric-line.gap.active .st svg {
+  animation: lyric-twinkle 2.8s ease-in-out infinite;
+}
+.lyric-line.gap.active .st:nth-child(2) svg { animation-duration: 3.4s; animation-delay: -1s; }
+.lyric-line.gap.active .st:nth-child(3) svg { animation-duration: 3s; animation-delay: -1.9s; }
+.lyrics.is-paused .lyric-line.gap .st svg { animation-play-state: paused; }
+@keyframes lyric-twinkle {
+  0%, 100% { transform: scale(0.8) rotate(0deg); opacity: 0.6; }
+  50% { transform: scale(1.1) rotate(14deg); opacity: 1; }
+}
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .lyric-line.gap.active .stars {
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 50%, transparent));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lyric-line.gap .st svg { animation: none !important; }
+}
+html[data-anim="reduced"] .lyric-line.gap .st svg { animation: none !important; }
+html[data-fx="off"] .lyric-line.gap .stars { filter: none !important; }
 
 /* Barra de navegación de abajo */
 .nav-icon {
@@ -3149,6 +3228,7 @@ html[data-lview="plain"] #view-lyrics .lyric-line.plain {
   color: var(--lyric-plain);
   max-width: 100%;
 }
+html[data-lview="plain"] #view-lyrics .lyric-line.plain.bg { font-size: calc(var(--lyric-size, 24px) * 0.6); }
 .lyrics-bar.no-sync .only-sync { display: none; }
 
 /* ---------- Cola ---------- */
