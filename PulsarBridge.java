@@ -120,6 +120,8 @@ final class PulsarBridge {
     @JavascriptInterface public void setPendingIcon(String variant) { activity.savePendingIcon("light".equals(variant)); }
     @JavascriptInterface public void setBars(final String statusHex, final String navHex, final boolean darkIcons) { activity.setBars(statusHex, navHex, darkIcons); }
     @JavascriptInterface public void setStatusBarHidden(final boolean hidden) { activity.setStatusHidden(hidden); }
+    /** v1.05: áreas seguras aplicadas al WebView, en píxeles: {top,bottom,left,right} (se muestran en Diagnóstico). */
+    @JavascriptInterface public String getInsets() { return activity.insetsJson(); }
 
     /** Qué sabe hacer esta app y este dispositivo. La web la llama una vez al iniciar. */
     @JavascriptInterface public String getInfo() {

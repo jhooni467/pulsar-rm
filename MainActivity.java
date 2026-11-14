@@ -10,11 +10,19 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.OpenableColumns;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.LayerDrawable;
+import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import androidx.activity.OnBackPressedCallback;
+import androidx.core.graphics.Insets;
+import androidx.core.view.OnApplyWindowInsetsListener;
+import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -30,10 +38,14 @@ import org.json.JSONObject;
  *        reproducción en segundo plano (el WebView no se duerme mientras suena música).
  * v1.04.2: «Abrir con Pulsar RM» desde el administrador de archivos u otras apps (audio/*), sin reproducción automática
  *          bloqueada por el WebView, y el cambio de icono solo se aplica cuando realmente cambia.
+ * v1.05: pantalla completa real (sin franja gris arriba: el WebView ocupa toda la altura y solo respeta las áreas seguras)
+ *        y botón/gesto Atrás controlado por la app (Reproductor → Biblioteca → Inicio → salir).
  */
 public class MainActivity extends BridgeActivity {
     private PulsarBridge bridge;
     private Intent lastIntent;
+    // Últimas áreas seguras aplicadas al WebView (px): arriba, abajo, izquierda, derecha. Se muestran en Ajustes → Diagnóstico.
+    private volatile int insTop, insBottom, insLeft, insRight;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -45,6 +57,8 @@ public class MainActivity extends BridgeActivity {
         try { web.getSettings().setMediaPlaybackRequiresUserGesture(false); } catch (Exception ignored) { /* el valor por defecto de Capacitor ya lo permite */ }
         bridge = new PulsarBridge(this, web);
         web.addJavascriptInterface(bridge, "PulsarNative");
+        setupEdgeToEdge(web);
+        setupBackHandling(web);
         PulsarEvents.attach(web);
 
         // Canciones de carpetas: el cliente de Capacitor sigue haciendo todo; solo se añaden las dos rutas propias.
@@ -58,6 +72,102 @@ public class MainActivity extends BridgeActivity {
         applyBars(p.getString("barStatus", "#080B16"), p.getString("barNav", "#0D1321"), p.getBoolean("barDarkIcons", false));
         applyStatusHidden(p.getBoolean("statusHidden", false));
         handleIncoming(getIntent());
+    }
+
+
+    /* ---------- Pantalla completa real y áreas seguras (v1.05) ---------- */
+
+    // Origen de la franja gris de arriba: la ventana de Android dejaba una zona sin cubrir encima del WebView y se veía el
+    // fondo de la ventana (gris oscuro). Ahora la ventana ocupa TODA la pantalla (borde a borde) y el WebView se coloca
+    // exactamente dentro de las áreas seguras: barra de estado (si está visible), recorte de la cámara, barra de
+    // navegación y teclado. Con la barra de estado oculta solo se respeta el recorte de la cámara.
+    private void setupEdgeToEdge(final WebView web) {
+        try {
+            Window w = getWindow();
+            WindowCompat.setDecorFitsSystemWindows(w, false);
+            if (Build.VERSION.SDK_INT >= 28) {
+                WindowManager.LayoutParams lp = w.getAttributes();
+                lp.layoutInDisplayCutoutMode = Build.VERSION.SDK_INT >= 30
+                    ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                    : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+                w.setAttributes(lp);
+            }
+            // El teclado ya no redimensiona la ventana sola: llega como inset y se aplica abajo
+            w.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+            ViewCompat.setOnApplyWindowInsetsListener(web, new OnApplyWindowInsetsListener() {
+                @Override
+                public WindowInsetsCompat onApplyWindowInsets(View v, WindowInsetsCompat insets) {
+                    applySafeAreas(v, insets);
+                    return WindowInsetsCompat.CONSUMED;
+                }
+            });
+            ViewCompat.requestApplyInsets(web);
+        } catch (Exception ignored) {
+            // si algo falla, la app sigue con el diseño anterior
+        }
+    }
+
+    private void applySafeAreas(View v, WindowInsetsCompat insets) {
+        Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+        Insets cut = insets.getInsets(WindowInsetsCompat.Type.displayCutout());
+        // Barra de estado oculta: bars.top vale 0 y solo queda el recorte de la cámara (o nada si no hay).
+        int top = Math.max(bars.top, cut.top);
+        int left = Math.max(bars.left, cut.left);
+        int right = Math.max(bars.right, cut.right);
+        int bottom = Math.max(bars.bottom, cut.bottom);
+        if (Build.VERSION.SDK_INT >= 30) bottom = Math.max(bottom, insets.getInsets(WindowInsetsCompat.Type.ime()).bottom);
+        else bottom = Math.max(bottom, insets.getSystemWindowInsetBottom());   // teclado en Android 10 o anterior
+        insTop = top; insBottom = bottom; insLeft = left; insRight = right;
+        ViewGroup.LayoutParams lp = v.getLayoutParams();
+        if (lp instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams m = (ViewGroup.MarginLayoutParams) lp;
+            if (m.topMargin != top || m.bottomMargin != bottom || m.leftMargin != left || m.rightMargin != right) {
+                m.setMargins(left, top, right, bottom);
+                v.setLayoutParams(m);
+            }
+        } else {
+            v.setPadding(left, top, right, bottom);
+        }
+    }
+
+    /** Áreas seguras actuales en píxeles (para el Diagnóstico de Ajustes). */
+    String insetsJson() {
+        return "{\"top\":" + insTop + ",\"bottom\":" + insBottom + ",\"left\":" + insLeft + ",\"right\":" + insRight + "}";
+    }
+
+    /* ---------- Botón / gesto Atrás (v1.05) ---------- */
+
+    // Capacitor sale de la app (o retrocede el historial del WebView) por su cuenta. Aquí la app decide: la web cierra
+    // lo que esté abierto o sube un paso (Reproductor → Biblioteca → Inicio) y solo en Inicio se sale.
+    // Este callback se registra después del de Capacitor, así que tiene prioridad sobre él.
+    private void setupBackHandling(final WebView web) {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                try {
+                    web.evaluateJavascript(
+                        "(function(){try{return window.PulsarBack?window.PulsarBack():'exit'}catch(e){return 'exit'}})()",
+                        new android.webkit.ValueCallback<String>() {
+                            @Override
+                            public void onReceiveValue(String value) {
+                                if (value != null && value.contains("handled")) return;   // la web ya retrocedió
+                                leaveApp();
+                            }
+                        });
+                } catch (Exception e) {
+                    leaveApp();
+                }
+            }
+        });
+    }
+
+    /** En Inicio, Atrás manda la app a segundo plano (como casi todos los reproductores): la música sigue sonando. */
+    private void leaveApp() {
+        try {
+            if (!moveTaskToBack(true)) finish();
+        } catch (Exception e) {
+            finish();
+        }
     }
 
     /* ---------- Audio abierto desde otra app («Abrir con…») ---------- */
@@ -167,14 +277,7 @@ public class MainActivity extends BridgeActivity {
     private void applyStatusHidden(boolean hidden) {
         try {
             Window w = getWindow();
-            if (Build.VERSION.SDK_INT >= 28) {
-                // Sin esto, en teléfonos con notch queda una franja negra arriba
-                WindowManager.LayoutParams lp = w.getAttributes();
-                lp.layoutInDisplayCutoutMode = hidden
-                    ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-                    : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
-                w.setAttributes(lp);
-            }
+            // El modo del recorte de cámara ya lo fija setupEdgeToEdge (siempre dentro del recorte, respetando el área segura)
             WindowInsetsControllerCompat c = WindowCompat.getInsetsController(w, w.getDecorView());
             c.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
             if (hidden) c.hide(WindowInsetsCompat.Type.statusBars());
@@ -203,6 +306,13 @@ public class MainActivity extends BridgeActivity {
             c.setAppearanceLightStatusBars(darkIcons);
             c.setAppearanceLightNavigationBars(darkIcons);
             getBridge().getWebView().setBackgroundColor(status);
+            // Detrás de las barras del sistema y del recorte se ve el fondo de la ventana: mitad superior del color de
+            // la barra de estado y mitad inferior del de la de navegación (antes era un gris oscuro por defecto)
+            ColorDrawable bottomHalf = new ColorDrawable(nav);
+            ColorDrawable topHalf = new ColorDrawable(status);
+            LayerDrawable bg = new LayerDrawable(new android.graphics.drawable.Drawable[]{bottomHalf, topHalf});
+            bg.setLayerInset(1, 0, 0, 0, Math.max(1, getResources().getDisplayMetrics().heightPixels / 2));
+            w.setBackgroundDrawable(bg);
         } catch (Exception ignored) {
             // un color inválido no debe cerrar la app
         }

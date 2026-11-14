@@ -22,6 +22,7 @@ Sin ellos la app funciona como PWA: lo que depende de Android se desactiva y se 
 | `readLyrics(json)` | JSON `{ok,b64}` | Lee el `.lrc/.srt/.vtt/.txt` junto a la canción |
 | `getTrackInfo(uri)` | JSON `{sampleRate,channels,bitrate}` | Detalle técnico |
 | `takePendingOpen()` | JSON `{uri,name,mime}` o `""` | Audio que otra app abrió con «Abrir con Pulsar RM». Se entrega una sola vez |
+| v1.05: `getInsets()` | JSON `{top,bottom,left,right}` (px) | Áreas seguras aplicadas al WebView (Diagnóstico) |
 | v1.03: `setPendingIcon`, `setBars`, `setStatusBarHidden`, `getVersion` | | Sin cambios |
 
 ## Android → Web: `window.PulsarBridge.onNative(tipo, json)`
@@ -43,3 +44,7 @@ Lo que hace que Android trate Pulsar RM como un reproductor de música (lo añad
 - **`PulsarMediaService` es un `MediaBrowserService`** (exportado): lo ven Bluetooth, Android Auto (`automotive_app_desc.xml` → `media`) y los asistentes. Las órdenes internas (extra `k`) llevan una clave privada guardada en las preferencias de la app; las órdenes externas sin ella se ignoran.
 - **Filtros de intent en `MainActivity`:** `VIEW` con `audio/*` (aparece en «Abrir con…»), `MAIN` + `APP_MUSIC`, `MUSIC_PLAYER` y `MEDIA_PLAY_FROM_SEARCH`.
 - Límite conocido: el árbol de canciones no se expone aún a otras apps (la biblioteca vive en la web); `onLoadChildren` devuelve una lista vacía. Si se cierra la app deslizándola, la reproducción se detiene.
+
+## v1.05 — Pantalla y botón Atrás
+- **Pantalla completa real:** `MainActivity` usa `setDecorFitsSystemWindows(false)`, recorte de cámara `ALWAYS` (API 30+) / `SHORT_EDGES` (28–29) y coloca el WebView con márgenes iguales a las áreas seguras (barras visibles, recorte, teclado). `env(safe-area-inset-*)` vale 0 dentro del APK; el fondo de la ventana toma el color de las barras.
+- **Atrás:** un `OnBackPressedCallback` de `MainActivity` (con prioridad sobre el de Capacitor) ejecuta `window.PulsarBack()` en la web. Devuelve `"handled"` si la app retrocedió o cerró algo; si no (Inicio), la app pasa a segundo plano (`moveTaskToBack`) y la música sigue.

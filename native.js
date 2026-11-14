@@ -34,7 +34,12 @@ const Diagnostics = {
 
   text() {
     const info = (typeof Native !== "undefined" && Native.info && Native.info()) || {};
-    const head = `Pulsar RM · Android API ${info.sdk || "—"} · ${navigator.userAgent}`;
+    let area = "";
+    try {
+      const ins = window.PulsarNative && typeof window.PulsarNative.getInsets === "function" ? JSON.parse(window.PulsarNative.getInsets()) : null;
+      area = `\nÁreas seguras (px): ${ins ? `arriba ${ins.top}, abajo ${ins.bottom}, izq ${ins.left}, der ${ins.right}` : "—"} · ventana ${window.innerWidth}×${window.innerHeight} css · ×${window.devicePixelRatio}`;
+    } catch (error) { /* el diagnóstico no debe fallar */ }
+    const head = `Pulsar RM · Android API ${info.sdk || "—"} · ${navigator.userAgent}${area}`;
     if (!this.items.length) return head + "\nSin errores registrados.";
     return head + "\n" + this.items.map((e) => `${new Date(e.t).toLocaleTimeString("es")} [${e.k}] ${e.m}${e.n > 1 ? " ×" + e.n : ""}${e.w ? " @ " + e.w : ""}`).join("\n");
   },

@@ -12,7 +12,8 @@
 // v6 (app v1.03): colores animados, letras estilo Apple Music y ajustes nuevos; renueva la copia guardada.
 // v7 (app v1.04): native.js y features.js, pantallas nuevas y ajustes reorganizados; renueva la copia guardada.
 // v8 (revisión v1.04): las rutas /_pulsar_* de Android no pasan por el service worker.
-const CACHE_NAME = "pulsar-rm-shell-v8";
+// v9 (app v1.05): pantalla completa real, Atrás con ruta Reproductor → Biblioteca → Inicio; renueva la copia guardada.
+const CACHE_NAME = "pulsar-rm-shell-v9";
 
 const APP_SHELL = [
   "./",

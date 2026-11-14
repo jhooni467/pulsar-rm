@@ -1,7 +1,7 @@
 <!-- ================================= --><!--          PULSAR RM               --><!--         README.md                --><!-- ================================= --><div align="center"><h1>🪐 PULSAR RM</h1><p><strong>Your music. Your universe.</strong></p><p>
   Local Music Player for Android
 </p><p>
-  <img src="https://img.shields.io/badge/VERSION-v1.04-8275E8?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/VERSION-v1.05-8275E8?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/PLATFORM-ANDROID-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android">
   <img src="https://img.shields.io/badge/STATUS-IN_DEVELOPMENT-4788C7?style=for-the-badge" alt="Development">
 </p><p>
@@ -51,7 +51,7 @@ Repository| GitHub
 
 📦 Download
 
-<div align="center">Pulsar RM v1.04
+<div align="center">Pulsar RM v1.05
 
 Latest published version
 
@@ -87,6 +87,12 @@ Development focuses on improving stability, refining the interface and expanding
 
 Current version
 
+v1.05 — Full-height screen & back navigation fix
+
+The app now uses the whole screen height (no empty strip above the top tabs) and the Android Back button / gesture follows the screens (Player → Library → Home → leave the app).
+
+Previous version
+
 v1.04 — Screens, queue, library & performance update
 
 This version adds independent Lyrics, Queue, Timer, Song info and Equalizer screens, gapless playback and crossfade, background playback with Android media controls, a folder-based library with manual updates, a Hz/FPS performance section and a reorganized Settings screen. See docs/NATIVE_API.md and docs/CHANGELOG-1.04.md.
@@ -103,6 +109,14 @@ The next major update is planned to include:
 ---
 
 📚 Version History
+
+<details>
+<summary><strong>v1.05 — Full-height screen & back navigation fix</strong></summary>
+
+- Screen: removed the gray strip above the top tabs. The Android window is now truly edge-to-edge and the WebView sits exactly inside the safe areas (status bar when visible, camera cutout, navigation bar, keyboard). Hiding the status bar keeps working.
+- Back button / gesture: Player → Library → Home → leave the app. The Android Back is now handled by the app itself, so it no longer exits from the full-screen player.
+- Settings → Diagnostics now also shows the safe-area values to help with display issues.
+</details>
 
 <details>
 <summary><strong>v1.04 — Screens, queue, library & performance update</strong></summary>

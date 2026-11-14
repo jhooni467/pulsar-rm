@@ -1,4 +1,4 @@
-/* PULSAR RM 1.04 — Pantallas secundarias (Letras, Cola, Ecualizador, Información), cola real, mezcla con crossfade,
+/* PULSAR RM 1.05 — Pantallas secundarias (Letras, Cola, Ecualizador, Información), cola real, mezcla con crossfade,
    temporizador, segundo plano en Android, biblioteca por carpetas, tasa de refresco y Ajustes reorganizados.
    Archivos: native.js (puente con Android) · script.js (núcleo) · features.js (módulos de la v1.04)
    Módulos del núcleo: Store (IndexedDB) · Settings · CoverColor · Lyrics · Queue · AudioGraph · Equalizer · Library · Player · Router · UI
@@ -7,8 +7,8 @@
 "use strict";
 
 // ÚNICO lugar donde se escribe la versión. El workflow de GitHub la lee de aquí para
-// el versionName y el versionCode del APK. Formato: "X.YY" (ej. 1.04 → versionCode 104).
-const APP_VERSION = "1.04";
+// el versionName y el versionCode del APK. Formato: "X.YY" (ej. 1.05).
+const APP_VERSION = "1.05";
 
 // Si el APK expone PulsarNative.getVersion(), se muestra la versión REAL instalada;
 // si no, se usa la constante de arriba.
@@ -3059,6 +3059,8 @@ const Player = {
    v1.01: el historial del navegador refleja EXACTAMENTE la ruta lógica
    (Inicio → pantalla → subpantalla). Nunca se duplican pantallas, no hay ciclos
    y el botón/gesto Atrás de Android sigue la ruta; en Inicio, Atrás sale de la app.
+   v1.05: la ruta recuerda de dónde vienes. Biblioteca → Reproductor → Atrás vuelve a la Biblioteca (antes saltaba a Inicio
+   y a veces sacaba de la app). En el APK, Atrás lo gestiona MainActivity llamando a window.PulsarBack().
    ========================================================= */
 const Router = {
   views: ["home", "library", "player", "lyrics", "queue", "timer", "info", "eq", "settings", "collection"],
@@ -3089,6 +3091,10 @@ const Router = {
       this.stack = ["home"];
       history.replaceState({ pulsar: true, stack: ["home"] }, "", "#home");
     }
+    // Al recargar con historial propio, se recupera la pantalla base (Inicio o Biblioteca) de la ruta guardada
+    for (let i = this.stack.length - 1; i >= 0; i--) {
+      if (this.stack[i] === "home" || this.stack[i] === "library") { this.lastBase = this.stack[i]; break; }
+    }
     this.show(this.stack[this.stack.length - 1]);
   },
 
@@ -3097,13 +3103,21 @@ const Router = {
     return this.views.includes(name) ? name : "home";
   },
 
-  // Ruta lógica hasta una pantalla: player → ["home","player"], eq → ["home","player","eq"]
+  // Pantalla "padre" de una vista. El reproductor y Ajustes cuelgan de la pantalla de la barra inferior desde la que se
+  // abrieron (Inicio o Biblioteca), para que Atrás vuelva exactamente ahí.
+  parentOf(view) {
+    if (this.override && this.override[view]) return this.override[view];
+    if (view === "player" || view === "settings") return this.lastBase;
+    return this.parents[view];
+  },
+
+  // Ruta lógica hasta una pantalla: player (desde Biblioteca) → ["home","library","player"], eq → [..., "player","eq"]
   pathTo(name) {
     const path = [];
     let view = name;
     while (view && !path.includes(view)) {
       path.unshift(view);
-      view = (this.override && this.override[view]) || this.parents[view];
+      view = this.parentOf(view);
     }
     if (path[0] !== "home") path.unshift("home");
     return path;
@@ -3150,6 +3164,28 @@ const Router = {
   back(steps) {
     this.expectPop = true;
     history.go(-steps);
+    // Si el WebView no avisa del retroceso (historial vacío o entradas omitidas), la app avanza por su cuenta
+    clearTimeout(this.popTimer);
+    this.popTimer = setTimeout(() => {
+      if (!this.expectPop) return;
+      this.expectPop = false;
+      this.stack = this.stack.slice(0, Math.max(1, this.stack.length - steps));
+      if (this.afterPop) {
+        const next = this.afterPop;
+        this.afterPop = null;
+        next();
+        return;
+      }
+      this.show(this.stack[this.stack.length - 1]);
+    }, 400);
+  },
+
+  // Atrás de Android (lo llama MainActivity). true = la app lo gestionó; false = ya estás en Inicio y se puede salir.
+  handleBack() {
+    if (this.closeOverlay()) return true;                    // menú ⋮, editores, confirmaciones
+    if (this.stack.length > 1) { this.up(); return true; }   // un paso atrás en la ruta
+    if (this.current !== "home") { this.go("home"); return true; }
+    return false;
   },
 
   // Botón ‹ de las pantallas secundarias: un paso atrás en la ruta (o a Inicio si no hay historial propio)
@@ -3176,6 +3212,7 @@ const Router = {
   onPopState(event) {
     const programmatic = this.expectPop;
     this.expectPop = false;
+    clearTimeout(this.popTimer);
 
     if (this.afterPop) {
       const next = this.afterPop;
@@ -3231,6 +3268,11 @@ const Router = {
     if (name === "settings") { UI.renderSettings(); LyricsPreview.start(); }
     if (typeof Features !== "undefined") Features.onRoute(name);
   }
+};
+
+// Atrás de Android: MainActivity ejecuta esto y, si no devuelve "handled", manda la app a segundo plano
+window.PulsarBack = function () {
+  try { return Router.handleBack() ? "handled" : "exit"; } catch (error) { return "exit"; }
 };
 
 /* =========================================================

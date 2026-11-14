@@ -2548,7 +2548,7 @@ body {
   max-width: var(--content-w);
   margin: 0 auto;
   padding:
-    calc(env(safe-area-inset-top, 0px) + clamp(14px, 3dvh, 24px))
+    calc(env(safe-area-inset-top, 0px) + clamp(8px, 1.6dvh, 14px))   /* v1.05: menos aire arriba (antes 14–24 px) */
     calc(var(--gutter) + env(safe-area-inset-right, 0px))
     calc(var(--nav-h) + var(--mini-h) + env(safe-area-inset-bottom, 0px) + 24px)
     calc(var(--gutter) + env(safe-area-inset-left, 0px));
@@ -3323,8 +3323,8 @@ html[data-fx="off"] .info-cover { box-shadow: none; }
   z-index: 20;
   display: flex;
   gap: 8px;
-  margin: 14px calc(var(--gutter) * -1) 0;
-  padding: calc(env(safe-area-inset-top, 0px) + 8px) var(--gutter) 10px;
+  margin: 4px calc(var(--gutter) * -1) 0;   /* v1.05: antes 14px */
+  padding: calc(env(safe-area-inset-top, 0px) + 6px) var(--gutter) 8px;
   overflow-x: auto;
   scrollbar-width: none;
   background: linear-gradient(to bottom, var(--bg) 82%, transparent);
@@ -3459,3 +3459,11 @@ html[data-fx="off"] .lyrics { -webkit-mask-image: none; mask-image: none; }
 .mix-state { white-space: nowrap; }
 
 .diag-log { margin-top: 12px; padding: 12px; max-height: 220px; overflow: auto; border-radius: 12px; background: var(--field-bg); border: 1px solid var(--border-soft); color: var(--muted); font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; user-select: text; -webkit-user-select: text; }
+
+
+/* =========================================================
+   v1.05 — APROVECHAMIENTO VERTICAL
+   La ventana de Android ya ocupa toda la pantalla y el WebView se coloca dentro de las áreas seguras (MainActivity),
+   así que env(safe-area-inset-*) vale 0 en el APK y estas reglas solo actúan en navegador/PWA con muesca.
+   La altura de los contenedores usa dvh: sigue la altura real visible (con o sin barra de estado, con teclado abierto).
+   ========================================================= */
