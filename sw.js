@@ -16,7 +16,8 @@
 // v10 (app v1.05): letras — estrellas de espera, versos superpuestos y voces de fondo [bg:]; renueva la copia guardada.
 // v12 (app v1.05): letras — grupos de versos (el principal no se apaga antes que sus mini versos), desplazamiento con resorte y fragmentos rápidos compactos; renueva la copia guardada.
 // v13 (app v1.05): estrellas de espera — 3 estrellas grandes y bold que crecen una tras otra; renueva la copia guardada.
-const CACHE_NAME = "pulsar-rm-shell-v13";
+// v14: Temas y Color de portada excluyentes, Intensidad solo cambia la fuerza del color y letras más legibles sobre Portada (Blur); renueva la copia guardada.
+const CACHE_NAME = "pulsar-rm-shell-v14";
 
 const APP_SHELL = [
   "./",

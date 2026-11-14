@@ -222,6 +222,10 @@ const THEMES = [
   { id: "gold", name: "Dorado", bg: "#181409", surface: "#272111", accent: "#F5C542", accentLight: "#9A7000" }
 ];
 
+/* Base neutra que se usa mientras Color de portada está activo (no aparece en el selector de temas).
+   Sus colores completos están en style.css ([data-theme="cover"]); el acento de Pulsar solo se ve si la canción no tiene color. */
+const NEUTRAL_BASE = { id: "cover", name: "Portada", bg: "#0A0A0D", surface: "#141417", accent: "#A18AFF", accentLight: "#6A45F5" };
+
 /* Modo de la app. "icon" = qué icono lleva (light = icono blanco, dark = icono negro). */
 const MODES = [
   { id: "light", name: "Light", icon: "light" },
@@ -328,7 +332,8 @@ const Settings = {
     this.values[key] = value;
     // Solo el tema y el modo repintan la app y avisan a Android (barras, icono).
     // Mover una barra del ecualizador no debe disparar todo eso en cada ajuste.
-    if (key === "theme" || key === "mode") this.apply();
+    // "coverColor" también repinta: al activarlo la app deja la base del tema y usa la neutra (Temas y Color de portada son excluyentes).
+    if (key === "theme" || key === "mode" || key === "coverColor") this.apply();
     this.changed(key);
     try { await Store.setSetting(key, value); } catch (error) { console.warn(error); }
   },
@@ -346,12 +351,16 @@ const Settings = {
   apply() {
     const theme = THEMES.find((item) => item.id === this.values.theme) || THEMES[0];
     const mode = MODES.find((item) => item.id === this.values.mode) || MODES[1];
-    document.documentElement.setAttribute("data-theme", theme.id);
+    // Con Color de portada activo manda la base neutra "cover" (los colores salen solo de la portada).
+    // El tema elegido NO se toca: sigue guardado en values.theme y vuelve al desactivar Color de portada.
+    const cover = Boolean(this.values.coverColor);
+    const shownTheme = cover ? NEUTRAL_BASE : theme;
+    document.documentElement.setAttribute("data-theme", shownTheme.id);
     document.documentElement.setAttribute("data-mode", mode.id);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", Themes.colors(theme, mode.id).bg); // color de la barra de estado de Android
+    if (meta) meta.setAttribute("content", Themes.colors(shownTheme, mode.id).bg); // color de la barra de estado de Android
     try {
-      localStorage.setItem("pulsar-theme", theme.id); // se usan al abrir, para evitar parpadeo
+      localStorage.setItem("pulsar-theme", shownTheme.id); // se usan al abrir, para evitar parpadeo
       localStorage.setItem("pulsar-mode", mode.id);
     } catch (error) { /* sin almacenamiento local */ }
     Themes.refresh();
@@ -1007,9 +1016,28 @@ const Themes = {
       }
       button.setAttribute("aria-checked", String(button.dataset.themeId === Settings.values.theme));
     });
+    this.refreshLock();
+  },
+
+  // Temas y Color de portada son excluyentes: con Color de portada activo la sección queda gris y sin poder tocarse.
+  // La selección guardada se sigue marcando (en gris) para que se vea cuál volverá al desactivarlo.
+  locked() { return Boolean(Settings.values.coverColor); },
+
+  refreshLock() {
+    const locked = this.locked();
+    const card = $("theme-card");
+    if (card) card.classList.toggle("is-locked", locked);
+    const grid = $("theme-grid");
+    if (grid) grid.setAttribute("aria-disabled", String(locked));
+    document.querySelectorAll(".theme-swatch").forEach((button) => {
+      button.disabled = locked;
+    });
+    const note = $("theme-lock-note");
+    if (note) note.hidden = !locked;
   },
 
   select(id) {
+    if (this.locked()) return;
     if (!THEMES.some((theme) => theme.id === id)) return;
     Settings.set("theme", id);
   }
@@ -1145,7 +1173,8 @@ const StatusBar = {
    COLOR DE PORTADA (v1.03)
    Saca el color principal de la portada de la canción que suena y la app se tiñe de él en
    tiempo real. La mezcla la hace style.css (variables --cv y --t-…); aquí solo se calcula el
-   color y cuánto se mezcla según la intensidad: Bajo, Medio o Fuerte.
+   color y cuánta fuerza tiene según la intensidad: Baja, Media o Fuerte.
+   Mientras está activo, Temas queda desactivado: la base es la neutra [data-theme="cover"].
    Los cambios se desvanecen solos (colores registrados con @property).
    ========================================================= */
 const CoverColor = {
@@ -1154,14 +1183,21 @@ const CoverColor = {
   token: 0,
   current: null,
 
-  // [fondo, superficies/tarjetas, líneas] que se mezclan con el color de la portada, por modo.
-  // Amoled nunca tiñe el fondo: el negro puro se conserva.
-  TINTS: {
-    dark:   { low: [0.04, 0.05, 0.04], medium: [0.12, 0.14, 0.10], high: [0.24, 0.26, 0.18] },
-    amoled: { low: [0, 0.02, 0.02],    medium: [0, 0.07, 0.06],    high: [0, 0.16, 0.12] },
-    light:  { low: [0, 0.02, 0.03],    medium: [0, 0.05, 0.06],    high: [0.06, 0.11, 0.12] }
+  // INTENSIDAD = solo la fuerza del color. En los tres niveles reciben color los mismos elementos
+  // (acento, fondo, superficies/tarjetas y líneas) y con el mismo reparto; lo único que cambia es cuánto.
+  //   · sat:  cuánta saturación conserva el color de la portada (Baja la apaga, Fuerte la realza)
+  //   · tint: multiplicador de lo que se mezcla en fondo, superficies y líneas
+  LEVELS: {
+    low:    { sat: 0.55, tint: 0.5 },
+    medium: { sat: 0.85, tint: 1 },
+    high:   { sat: 1.15, tint: 1.8 }
   },
-  ACCENT: { low: 0.6, medium: 0.9, high: 1 }, // cuánto del acento del tema se cambia por el color de la portada
+  // Reparto base [fondo, superficies/tarjetas, líneas] por modo (nivel Media). Amoled nunca tiñe el fondo: el negro puro se conserva.
+  TINTS: {
+    dark:   [0.10, 0.12, 0.09],
+    amoled: [0,    0.05, 0.045],
+    light:  [0.035, 0.05, 0.055]
+  },
 
   async update(song) {
     this.song = song || null;
@@ -1253,16 +1289,20 @@ const CoverColor = {
     const root = document.documentElement;
     const values = Settings.values;
     const color = values.coverColor ? this.current : null;
+    const level = this.LEVELS[values.coverIntensity] ? values.coverIntensity : "medium";
+    const { sat, tint } = this.LEVELS[level];
     if (color) {
-      // Dos versiones del color: clara (para Dark y Amoled) y oscura (para Light)
+      // Dos versiones del color: clara (para Dark y Amoled) y oscura (para Light).
+      // La intensidad solo cambia la saturación; las portadas en grises se quedan grises.
       const grey = color.s < 0.15;
-      root.style.setProperty("--cv", this.hslToHex(color.h, color.s, grey ? 0.78 : 0.68));
-      root.style.setProperty("--cv-d", this.hslToHex(color.h, color.s, grey ? 0.34 : 0.4));
+      const s = grey ? color.s : Math.min(1, Math.max(0.2, color.s * sat));
+      root.style.setProperty("--cv", this.hslToHex(color.h, s, grey ? 0.78 : 0.68));
+      root.style.setProperty("--cv-d", this.hslToHex(color.h, s, grey ? 0.34 : 0.4));
     }
     const mode = root.getAttribute("data-mode") || "dark";
-    const level = this.ACCENT[values.coverIntensity] !== undefined ? values.coverIntensity : "medium";
-    const [bg, surface, line] = color ? this.TINTS[mode][level] : [0, 0, 0];
-    root.style.setProperty("--t-acc", color ? this.ACCENT[level] : 0);
+    const base = this.TINTS[mode] || this.TINTS.dark;
+    const [bg, surface, line] = color ? base.map((x) => Math.min(0.4, x * tint)) : [0, 0, 0];
+    root.style.setProperty("--t-acc", color ? 1 : 0); // el acento es siempre el de la portada: Temas ya no pinta nada
     root.style.setProperty("--t-bg", bg);
     root.style.setProperty("--t-s", surface);
     root.style.setProperty("--t-l", line);

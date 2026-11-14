@@ -230,6 +230,39 @@
   --item-border: transparent;
 }
 
+/* Base neutra — se usa SOLO mientras "Color de portada" está activo (Temas queda desactivado).
+   Sin ningún tinte propio: todo el color sale de la portada (--cv). Light y Amoled la reajustan igual que a cualquier tema. */
+[data-theme="cover"] {
+  --bg0: #0A0A0D;
+  --surface0: #141417;
+  --surface20: #1C1C21;
+  --text: #F5F5F7;
+  --muted: #8E8E98;
+  --accent0: #A18AFF;
+  --accent-light0: #6A45F5;
+  --on-accent: #0A0A0D;
+  --danger: #FF7A8A;
+  --border0: #26262C;
+  --border20: #2B2B31;
+  --border-soft0: #212126;
+  --border30: #36363E;
+  --card-a0: #17171B;
+  --card-b0: #101013;
+  --elevated0: #151519;
+  --rail0: #2E2E36;
+  --toast-bg0: #1F1F25;
+  --knob: #D4D4DA;
+  --lyric-plain: #B2B2BC;
+  --lyric-past: #80808C;
+  --lyric-dim2: #70707C;
+  --lyric-dim: #565662;
+  --tick: #4C4C56;
+  --field-bg0: #0F0F12;
+  --nav-bg0: #0D0D10;
+  --backdrop: rgba(0, 0, 0, 0.72);
+  --item-border: transparent;
+}
+
 /* =========================================================
    MODOS — Light / Dark / Amoled
    Dark = los temas tal cual están arriba.
@@ -351,7 +384,8 @@
    (En un WebView antiguo sin @property todo funciona igual, solo que sin el desvanecido.)
    Los temas definen valores base con sufijo 0 (--bg0, --accent0…). Los colores finales
    (--bg, --accent…) son esa base mezclada con el color de la portada (--cv), en la
-   cantidad que dicen --t-acc, --t-bg, --t-s y --t-l (las pone el JS según la intensidad).
+   cantidad que dicen --t-acc, --t-bg, --t-s y --t-l (las pone el JS: la intensidad solo cambia la fuerza, no el reparto).
+   Con Color de portada activo la base es la neutra [data-theme="cover"]: el tema elegido no interviene.
    ========================================================= */
 
 @property --bg { syntax: '<color>'; inherits: true; initial-value: #080B16; }
@@ -2161,6 +2195,17 @@ html[data-lanim="letters"] .lyric-line.active .lc[data-t]::before {
   color: var(--text);
 }
 
+/* Color de portada activo: la sección Temas queda gris y sin poder tocarse (la selección guardada se conserva) */
+.theme-card .theme-note { margin-top: 10px; }
+.theme-card .theme-note[hidden] { display: none; }
+.theme-card.is-locked > h3,
+.theme-card.is-locked > p { color: var(--muted); }
+.theme-card.is-locked .theme-grid { pointer-events: none; user-select: none; }
+.theme-card .theme-swatch { transition: opacity 0.3s ease, filter 0.3s ease, border-color 0.3s ease; }
+.theme-card.is-locked .theme-swatch,
+.theme-card.is-locked .theme-swatch:disabled { opacity: 0.55; filter: grayscale(1) contrast(0.85); }
+.theme-card.is-locked .theme-swatch[aria-checked="true"] { border-color: var(--muted); color: var(--muted); }
+
 .swatch {
   position: relative;
   display: block;
@@ -3216,10 +3261,42 @@ html.immersive .view.sub { padding-bottom: 8px; }
   pointer-events: none;
 }
 .lyrics-backdrop::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, var(--bg) 0%, transparent 28%, transparent 55%, var(--bg) 100%); opacity: 0.85; }
-html[data-lbg="cover"] .lyrics-backdrop.has-cover { opacity: 0.55; filter: blur(46px) saturate(1.25); }
-html[data-lbg="cover"][data-mode="light"] .lyrics-backdrop.has-cover { opacity: 0.4; }
+/* Portada (Blur): la portada sigue difuminada de fondo, pero domada para que la letra siempre destaque.
+   - se baja la saturación y el brillo (una portada clara o muy viva ya no compite con el texto);
+   - un velo del color de fondo (::before) la aplana y deja un contraste estable;
+   - las líneas apagadas se acercan al color del texto para que se lean (ver más abajo). */
+html[data-lbg="cover"] .lyrics-backdrop.has-cover { opacity: 0.72; filter: blur(46px) saturate(0.95) brightness(0.78); }
+html[data-lbg="cover"][data-mode="light"] .lyrics-backdrop.has-cover { opacity: 0.6; filter: blur(46px) saturate(0.9) brightness(1.08); }
+html[data-lbg="cover"] .lyrics-backdrop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg) 52%, transparent);
+}
+html[data-lbg="cover"][data-mode="light"] .lyrics-backdrop::before {
+  background: color-mix(in srgb, var(--bg) 58%, transparent);
+}
+html[data-lbg="cover"] .lyrics-backdrop::after { opacity: 0.92; }
 html[data-fx="off"] .lyrics-backdrop { filter: none !important; }
 html[data-fx="off"][data-lbg="cover"] .lyrics-backdrop.has-cover { opacity: 0.22; }
+
+/* Letra legible sobre la portada difuminada: más claras las líneas apagadas, y una sombra suave solo en las líneas completas */
+html[data-lbg="cover"] #view-lyrics {
+  --lyric-dim: color-mix(in srgb, var(--text) 58%, var(--bg));
+  --lyric-dim2: color-mix(in srgb, var(--text) 66%, var(--bg));
+  --lyric-past: color-mix(in srgb, var(--text) 62%, var(--bg));
+  --lyric-plain: color-mix(in srgb, var(--text) 78%, var(--bg));
+}
+html[data-lbg="cover"][data-mode="light"] #view-lyrics {
+  --lyric-dim: color-mix(in srgb, var(--text) 70%, var(--bg));
+  --lyric-dim2: color-mix(in srgb, var(--text) 78%, var(--bg));
+  --lyric-past: color-mix(in srgb, var(--text) 74%, var(--bg));
+  --lyric-plain: color-mix(in srgb, var(--text) 88%, var(--bg));
+}
+html[data-lbg="cover"] #view-lyrics .lyric-line.nw,
+html[data-lbg="cover"] #view-lyrics .lyric-line.plain {
+  text-shadow: 0 1px 14px color-mix(in srgb, var(--bg) 70%, transparent);
+}
 
 .lyrics-options {
   display: flex;

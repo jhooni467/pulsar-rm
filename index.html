@@ -382,15 +382,16 @@
         </div>
       </div>
 
-      <div class="card">
+      <div id="theme-card" class="card theme-card">
         <h3>Tema</h3>
         <p>Elige el color de la app. Se adapta al modo elegido.</p>
         <div id="theme-grid" class="theme-grid" role="radiogroup" aria-label="Tema de color"></div>
+        <small id="theme-lock-note" class="set-hint theme-note" hidden>No disponible mientras «Color de portada» esté activo. Tu tema se conserva y vuelve al desactivarlo.</small>
       </div>
 
       <div class="card">
         <h3>Color de portada</h3>
-        <p>La app toma los colores de la portada de la canción que suena y cambia con ella en tiempo real.</p>
+        <p>La app toma los colores de la portada de la canción que suena y cambia con ella en tiempo real. Al activarlo, los temas se desactivan.</p>
         <label class="eq-switch set-row">
           <span>Usar el color de la portada</span>
           <input type="checkbox" data-toggle="coverColor">
@@ -399,11 +400,11 @@
         <div id="cover-intensity" class="set-block">
           <span class="set-label">Intensidad</span>
           <div class="seg" role="radiogroup" aria-label="Intensidad del color de portada" data-seg="coverIntensity">
-            <button type="button" role="radio" aria-checked="false" data-val="low">Bajo</button>
-            <button type="button" role="radio" aria-checked="false" data-val="medium">Medio</button>
+            <button type="button" role="radio" aria-checked="false" data-val="low">Baja</button>
+            <button type="button" role="radio" aria-checked="false" data-val="medium">Media</button>
             <button type="button" role="radio" aria-checked="false" data-val="high">Fuerte</button>
           </div>
-          <small class="set-hint">Bajo: solo cambia el color de acento. Medio: también se tiñe el fondo. Fuerte: toda la app toma el color.</small>
+          <small class="set-hint">Solo cambia la fuerza del color. Baja: colores suaves y discretos. Media: equilibrados y perceptibles. Fuerte: más intensos, saturados y presentes.</small>
         </div>
       </div>
 
