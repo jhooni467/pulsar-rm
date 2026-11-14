@@ -2281,7 +2281,10 @@ const AudioGraph = {
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) throw new Error("Web Audio no disponible");
-      const ctx = new AudioCtx();
+      // latencyHint "playback": búfer más grande, pensado para música (menos microcortes que el "interactive" por defecto,
+      // que busca la mínima latencia y se corta si la interfaz va justa). Si el navegador no acepta opciones, se usa el valor normal.
+      let ctx;
+      try { ctx = new AudioCtx({ latencyHint: "playback" }); } catch (error) { ctx = new AudioCtx(); }
       const sources = Player.decks.map((deck) => ctx.createMediaElementSource(deck.el));
       const gains = sources.map((source) => {
         const gain = ctx.createGain();

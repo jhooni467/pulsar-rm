@@ -33,4 +33,18 @@ final class PulsarEvents {
     }
 
     static void emit(String type) { emit(type, "{}"); }
+
+    /**
+     * Si suena música y se permite segundo plano, vuelve a activar el WebView aunque la pantalla esté oculta o apagada.
+     * MainActivity ya lo hace al ocultarse; esto cubre que la música EMPIECE (o se reanude) cuando la pantalla ya estaba apagada.
+     */
+    static void keepWebAlive() {
+        MAIN.post(new Runnable() {
+            @Override public void run() {
+                WebView view = web.get();
+                if (view == null || !PulsarMediaService.keepAlive) return;
+                try { view.onResume(); view.resumeTimers(); } catch (Exception ignored) { /* el WebView se está cerrando */ }
+            }
+        });
+    }
 }

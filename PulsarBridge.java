@@ -159,6 +159,10 @@ final class PulsarBridge {
     /* ----- Reproducción ----- */
 
     @JavascriptInterface public void mediaUpdate(String json) {
+        // Con el servicio ya en marcha (lo normal durante la reproducción) la actualización se le entrega directo:
+        // no hay llamada a startForegroundService (Android 12+ la rechaza desde segundo plano, p. ej. con la pantalla
+        // apagada al cambiar de canción) ni espera del hilo de JavaScript por una llamada al sistema.
+        if (PulsarMediaService.deliver(json)) return;
         Context ctx = activity.getApplicationContext();
         Intent i = PulsarMediaService.internal(ctx, PulsarMediaService.ACTION_UPDATE).putExtra("json", json);
         try {

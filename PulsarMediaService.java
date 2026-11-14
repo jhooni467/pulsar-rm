@@ -22,6 +22,8 @@ import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.service.media.MediaBrowserService;
 import android.util.Base64;
@@ -85,6 +87,27 @@ public class PulsarMediaService extends MediaBrowserService {
         return new Intent(ctx, PulsarMediaService.class).setAction(action).putExtra(EXTRA_KEY, key(ctx));
     }
 
+    /** Margen tras una pausa antes de soltar el primer plano y el bloqueo de CPU (cubre el cambio automático de canción). */
+    private static final long PAUSE_GRACE_MS = 30_000L;
+    /** Instancia viva: las actualizaciones de la web se le entregan directo, sin pasar por startForegroundService. */
+    private static volatile PulsarMediaService live;
+
+    /** Entrega una actualización de la web al servicio si ya está en marcha. false = no hay servicio vivo (hay que iniciarlo). */
+    static boolean deliver(final String json) {
+        final PulsarMediaService svc = live;
+        if (svc == null || svc.closing) return false;
+        svc.handler.post(new Runnable() {
+            @Override public void run() { if (!svc.closing) svc.apply(json); }
+        });
+        return true;
+    }
+
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private volatile boolean closing = false;
+    /** true mientras suena y durante el margen que sigue a una pausa. */
+    private boolean holding = false;
+    private final Runnable endHoldTask = new Runnable() { @Override public void run() { endHold(); } };
+
     private MediaSession session;
     private AudioManager audio;
     private PowerManager.WakeLock wake;
@@ -135,7 +158,11 @@ public class PulsarMediaService extends MediaBrowserService {
         session = new MediaSession(this, "PulsarRM");
         session.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
         session.setCallback(new MediaSession.Callback() {
-            @Override public void onPlay() { PulsarBridge.action("play", null); }
+            @Override public void onPlay() {
+                // Reanudar desde la pantalla de bloqueo / Bluetooth: si ya se había soltado el primer plano, se recupera ahora
+                if (!title.isEmpty()) ensureForeground();
+                PulsarBridge.action("play", null);
+            }
             @Override public void onPause() { PulsarBridge.action("pause", null); }
             @Override public void onSkipToNext() { PulsarBridge.action("next", null); }
             @Override public void onSkipToPrevious() { PulsarBridge.action("previous", null); }
@@ -143,6 +170,7 @@ public class PulsarMediaService extends MediaBrowserService {
             @Override public void onSeekTo(long pos) { PulsarBridge.action("seek", String.valueOf(pos)); }
         });
         session.setActive(true);
+        live = this;
         // El sistema (Bluetooth, coche, Asistente, controles multimedia) se conecta a la sesión por aquí
         setSessionToken(session.getSessionToken());
         PendingIntent open = openAppIntent();
@@ -167,6 +195,8 @@ public class PulsarMediaService extends MediaBrowserService {
             if (!foreground) { ensureForeground(); shutdown(); }
             return START_NOT_STICKY;
         }
+        closing = false;
+        live = this;
         String action = intent.getAction();
         if (action == null || ACTION_UPDATE.equals(action)) {
             // Android exige llamar a startForeground() pocos segundos después de startForegroundService():
@@ -176,7 +206,11 @@ public class PulsarMediaService extends MediaBrowserService {
             else { shutdown(); } // sin datos: no hay nada que mostrar
         } else if (ACTION_STOP_ALL.equals(action)) {
             shutdown();
-        } else if (ACTION_PLAY.equals(action)) { PulsarBridge.action("play", null); }
+        } else if (ACTION_PLAY.equals(action)) {
+            // El botón de la notificación permite volver a primer plano aunque la app esté oculta
+            if (!title.isEmpty()) ensureForeground();
+            PulsarBridge.action("play", null);
+        }
         else if (ACTION_PAUSE.equals(action)) { PulsarBridge.action("pause", null); }
         else if (ACTION_NEXT.equals(action)) { PulsarBridge.action("next", null); }
         else if (ACTION_PREV.equals(action)) { PulsarBridge.action("previous", null); }
@@ -216,10 +250,18 @@ public class PulsarMediaService extends MediaBrowserService {
                     cover = scaled(BitmapFactory.decodeFile(new File(new File(getFilesDir(), "covers"), file).getPath()));
                 }
             }
-            keepAlive = bgPlayback && playing;
+            // Una pausa NO suelta de inmediato el primer plano ni el bloqueo de CPU: entre canción y canción el audio
+            // se detiene un instante (evento «ended») y, con la pantalla apagada, Android no deja volver a pedir el
+            // primer plano desde segundo plano. Solo se sueltan si la pausa dura más de PAUSE_GRACE_MS.
+            // (Una actualización en pausa que llega DENTRO del margen no lo reinicia ni lo cancela.)
+            if (playing) { handler.removeCallbacks(endHoldTask); holding = true; }
+            else if (was) { handler.removeCallbacks(endHoldTask); holding = true; handler.postDelayed(endHoldTask, PAUSE_GRACE_MS); }
+            keepAlive = bgPlayback && holding;
             publish();
-            if (playing && !was) { acquireFocus(); acquireWake(); registerNoisy(); }
-            if (!playing && was) { releaseWake(); }
+            if (playing) {
+                if (!was) { acquireFocus(); registerNoisy(); PulsarEvents.keepWebAlive(); }
+                acquireWake(); // en cada canción: renueva el tope de seguridad, así no caduca en sesiones largas
+            }
         } catch (Exception e) {
             // datos incompletos: se ignoran
         }
@@ -257,7 +299,7 @@ public class PulsarMediaService extends MediaBrowserService {
             ensureForeground();
             nm.notify(NOTIF_ID, n);
         } else {
-            if (foreground) { stopForeground(false); foreground = false; } // pausada: la notificación se puede descartar
+            if (foreground && !holding) { stopForeground(false); foreground = false; } // pausada de verdad: la notificación se puede descartar
             nm.notify(NOTIF_ID, n);
         }
     }
@@ -302,7 +344,7 @@ public class PulsarMediaService extends MediaBrowserService {
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
-            .setOngoing(playing)
+            .setOngoing(playing || holding)
             .addAction(android.R.drawable.ic_media_previous, "Anterior", service(ACTION_PREV, 1))
             .addAction(playing ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play,
                        playing ? "Pausa" : "Reproducir", service(playing ? ACTION_PAUSE : ACTION_PLAY, 2))
@@ -357,7 +399,7 @@ public class PulsarMediaService extends MediaBrowserService {
             wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PulsarRM:playback");
             wake.setReferenceCounted(false);
         }
-        if (!wake.isHeld()) wake.acquire(6 * 60 * 60 * 1000L); // tope de seguridad: 6 h
+        wake.acquire(6 * 60 * 60 * 1000L); // tope de seguridad: 6 h (cada llamada lo renueva)
     }
 
     private void releaseWake() { if (wake != null && wake.isHeld()) wake.release(); }
@@ -368,7 +410,20 @@ public class PulsarMediaService extends MediaBrowserService {
         receiverOn = true;
     }
 
+    /** Terminó el margen tras una pausa: ahora sí se suelta el primer plano y el bloqueo de CPU. */
+    private void endHold() {
+        if (playing) return;
+        holding = false;
+        keepAlive = false;
+        releaseWake();
+        if (session != null) publish(); // vuelve a dibujar la notificación ya descartable y sale de primer plano
+    }
+
     private void shutdown() {
+        closing = true;
+        if (live == this) live = null;
+        handler.removeCallbacks(endHoldTask);
+        holding = false;
         playing = false;
         keepAlive = false;
         releaseWake();
@@ -387,6 +442,10 @@ public class PulsarMediaService extends MediaBrowserService {
     }
 
     @Override public void onDestroy() {
+        closing = true;
+        if (live == this) live = null;
+        handler.removeCallbacks(endHoldTask);
+        holding = false;
         keepAlive = false;
         releaseWake();
         releaseFocus();

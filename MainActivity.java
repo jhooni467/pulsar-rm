@@ -280,6 +280,10 @@ public class MainActivity extends BridgeActivity {
             // El modo del recorte de cámara ya lo fija setupEdgeToEdge (siempre dentro del recorte, respetando el área segura)
             WindowInsetsControllerCompat c = WindowCompat.getInsetsController(w, w.getDecorView());
             c.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            // Esto se ejecuta cada vez que la ventana recupera el foco (p. ej. tras los botones de volumen). Si la barra ya está
+            // como se pidió no se vuelve a ordenar: cada orden redistribuye las áreas seguras y puede reajustar todo el WebView.
+            WindowInsetsCompat current = ViewCompat.getRootWindowInsets(w.getDecorView());
+            if (current != null && current.isVisible(WindowInsetsCompat.Type.statusBars()) == !hidden) return;
             if (hidden) c.hide(WindowInsetsCompat.Type.statusBars());
             else c.show(WindowInsetsCompat.Type.statusBars());
         } catch (Exception ignored) {
