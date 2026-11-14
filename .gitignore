@@ -1,0 +1,7 @@
+# Se generan en cada compilación (el workflow los crea)
+node_modules/
+www/
+android/
+package-lock.json
+*.apk
+.DS_Store
