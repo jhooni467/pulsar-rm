@@ -1,5 +1,5 @@
 /* =========================================================
-   NOVA INTELLIGENCE — NÚCLEO (etapa 1 · versión 0.1.0)
+   NOVA INTELLIGENCE — NÚCLEO (etapa 2 · versión 0.2.0)
    Es el único archivo de Nova que define el objeto global `Nova`. Aquí viven:
      · errores propios (Nova.Error) y aislamiento: nada de lo que falle en Nova llega al reproductor
      · eventos (Nova.on / Nova.emit)
@@ -8,14 +8,15 @@
      · arranque (Nova.init), llamado desde Features.init (features.js)
    Los demás archivos se enganchan con Nova.use(nombre, pieza):
      nova-store.js (almacenamiento propio) · nova-net.js (red) · nova-ui.js (interfaz discreta)
-   Etapa 1: solo estructura. No hay búsquedas, proveedores reales ni conexiones a internet.
+   Etapa 1: estructura base. Etapa 2: configuración y consentimiento (interruptor en Ajustes, persistencia).
+   Siguen sin existir búsquedas, proveedores reales ni conexiones a internet (la red está bloqueada en nova-net.js).
    Documentación completa: NOVA_INTELLIGENCE.md
    ========================================================= */
 "use strict";
 
 const Nova = (function () {
-  const VERSION = "0.1.0";
-  const STAGE = 1;
+  const VERSION = "0.2.0";
+  const STAGE = 2;
   const NAME = "Nova Intelligence";
   // Lo que Nova sabe hacer (un módulo pide una capacidad y un proveedor la ofrece). Se amplía aquí.
   const CAPABILITIES = ["lyrics", "cover", "metadata", "artist", "library"];
@@ -98,8 +99,11 @@ const Nova = (function () {
      No toca Settings ni IndexedDB de Pulsar RM: vive en su propia clave de localStorage.
      Todo empieza APAGADO: Nova no hace nada hasta que la persona lo active y acepte (consent). */
 
-  function createConfig(storageKey, onChange) {
-    const state = { v: 1, enabled: false, consent: false, wifiOnly: true, cacheDays: 30, modules: {}, providers: {} };
+  // options.requireConsent (etapa 2): la configuración REAL lo activa. Nova no puede quedar encendido sin consentimiento,
+  // ni al pedirlo ni al cargar lo guardado. Las configuraciones de prueba no lo usan para poder simular estados raros.
+  function createConfig(storageKey, onChange, options) {
+    const strict = Boolean(options && options.requireConsent);
+    const state = { v: 1, enabled: false, consent: false, consentAt: 0, wifiOnly: true, cacheDays: 30, modules: {}, providers: {} };
     const BOOLEANS = ["enabled", "consent", "wifiOnly"];
     let persistent = true;
 
@@ -126,8 +130,11 @@ const Nova = (function () {
       if (!isObject(saved)) return;
       BOOLEANS.forEach((key) => { if (typeof saved[key] === "boolean") state[key] = saved[key]; });
       if (typeof saved.cacheDays === "number" && isFinite(saved.cacheDays)) state.cacheDays = clamp(Math.round(saved.cacheDays), 1, 365);
+      if (typeof saved.consentAt === "number" && isFinite(saved.consentAt) && saved.consentAt >= 0) state.consentAt = Math.round(saved.consentAt);
       state.modules = cleanMap(saved.modules);
       state.providers = cleanMap(saved.providers);
+      // Regla de la etapa 2: Nova nunca queda encendido sin el consentimiento expreso (ni aunque el dato guardado lo diga)
+      if (!state.consent) { if (strict) state.enabled = false; state.consentAt = 0; }
     }
 
     const api = {
@@ -153,7 +160,14 @@ const Nova = (function () {
 
       set(key, value) {
         let accepted = false;
-        if (BOOLEANS.indexOf(key) >= 0 && typeof value === "boolean") { state[key] = value; accepted = true; }
+        // Etapa 2: encender Nova exige el consentimiento ya aceptado; nunca se activa solo
+        if (strict && key === "enabled" && value === true && state.consent !== true) return false;
+        if (BOOLEANS.indexOf(key) >= 0 && typeof value === "boolean") {
+          if (key === "consent" && value === true && state.consent !== true) state.consentAt = Date.now();   // cuándo aceptó
+          state[key] = value; accepted = true;
+          // Retirar el consentimiento apaga Nova al instante
+          if (key === "consent" && value === false) { state.enabled = false; state.consentAt = 0; }
+        }
         else if (key === "cacheDays" && typeof value === "number" && isFinite(value)) { state.cacheDays = clamp(Math.round(value), 1, 365); accepted = true; }
         if (!accepted) return false;
         api.save();
@@ -180,10 +194,26 @@ const Nova = (function () {
       moduleActive(id) { return state.enabled === true && api.moduleEnabled(id); },
 
       reset() {
-        state.enabled = false; state.consent = false; state.wifiOnly = true; state.cacheDays = 30;
+        state.enabled = false; state.consent = false; state.consentAt = 0; state.wifiOnly = true; state.cacheDays = 30;
         state.modules = {}; state.providers = {};
         api.save();
         if (onChange) onChange({ key: "*", value: null });
+      },
+
+      // Comprueba que lo que hay en memoria coincide con lo que quedó guardado de verdad (se vuelve a leer el almacenamiento).
+      // status: "saved" (guardado y coincide) · "default" (aún no se guardó nada y todo está en sus valores por defecto)
+      //         "mismatch" (no coincide: no se está guardando bien) · "unavailable" (no hay almacenamiento en este dispositivo)
+      verify() {
+        let raw = null;
+        try { raw = localStorage.getItem(storageKey); } catch (error) { return { ok: false, status: "unavailable", detail: "sin almacenamiento" }; }
+        if (raw === null) {
+          const untouched = state.enabled === false && state.consent === false && state.wifiOnly === true && state.cacheDays === 30;
+          return untouched ? { ok: true, status: "default", detail: "nada guardado aún (valores por defecto)" } : { ok: false, status: "mismatch", detail: "hay cambios sin guardar" };
+        }
+        let saved;
+        try { saved = JSON.parse(raw); } catch (error) { return { ok: false, status: "mismatch", detail: "lo guardado está dañado" }; }
+        const same = isObject(saved) && ["enabled", "consent", "consentAt", "wifiOnly", "cacheDays"].every((key) => (saved[key] === undefined && key === "consentAt" ? 0 : saved[key]) === state[key]);   // lo guardado en la etapa 1 no traía consentAt
+        return same ? { ok: true, status: "saved", detail: "guardado y verificado" } : { ok: false, status: "mismatch", detail: "lo guardado no coincide" };
       },
 
       snapshot() { return JSON.parse(JSON.stringify(state)); },
@@ -192,7 +222,7 @@ const Nova = (function () {
     return api;
   }
 
-  const config = createConfig("pulsar-nova-config", (change) => emit("config", change)).load();
+  const config = createConfig("pulsar-nova-config", (change) => emit("config", change), { requireConsent: true }).load();
 
   /* ---------- Registros (módulos y proveedores) ---------- */
 
@@ -426,7 +456,8 @@ const Nova = (function () {
   function status() {
     return {
       name: NAME, version: VERSION, stage: STAGE, state,
-      enabled: config.get("enabled"), consent: config.get("consent"),
+      enabled: config.get("enabled"), consent: config.get("consent"), consentAt: config.get("consentAt"),
+      saved: config.verify().status,
       parts: Object.keys(parts),
       missing: EXPECTED_PARTS.filter((name) => !parts[name]),
       modules: modules.ids(), providers: providers.ids(),
@@ -468,6 +499,34 @@ const Nova = (function () {
     check("config: valores inválidos se ignoran", probeConfig.set("enabled", "sí") === false && probeConfig.set("otraClave", true) === false);
     try { localStorage.removeItem(testKey); } catch (error) { /* nada */ }
 
+    // Etapa 2: consentimiento y persistencia (configuración estricta, igual que la real; clave de prueba aparte)
+    const consentKey = "pulsar-nova-config-autotest-consent";
+    const wipe = () => { try { localStorage.removeItem(consentKey); } catch (error) { /* nada */ } };
+    const strictConfig = () => createConfig(consentKey, null, { requireConsent: true });
+    wipe();
+    const cfg = strictConfig().load();
+    check("config: no se enciende sin consentimiento", cfg.set("enabled", true) === false && cfg.get("enabled") === false && cfg.canUseNetwork() === false);
+    cfg.set("consent", true);
+    check("config: con consentimiento sí se enciende", cfg.set("enabled", true) === true && cfg.get("enabled") === true);
+    const verified = cfg.verify();
+    check("config: lo guardado coincide con lo que hay en memoria", verified.ok === true && verified.status === "saved", verified.detail);
+    const again = strictConfig().load();
+    check("config: se conserva al volver a abrir (activado, consentimiento y fecha)", again.get("enabled") === true && again.get("consent") === true && again.get("consentAt") > 0 && again.get("consentAt") === cfg.get("consentAt"));
+    cfg.set("consent", false);
+    check("config: retirar el consentimiento apaga Nova", cfg.get("enabled") === false && cfg.get("consent") === false && cfg.get("consentAt") === 0 && cfg.canUseNetwork() === false);
+    try { localStorage.setItem(consentKey, JSON.stringify({ v: 1, enabled: true, consent: false })); } catch (error) { /* nada */ }
+    const tampered = strictConfig().load();
+    check("config: «encendido» sin consentimiento guardado se corrige al cargar", tampered.get("enabled") === false && tampered.canUseNetwork() === false);
+    try { localStorage.setItem(consentKey, JSON.stringify({ v: 1, enabled: true, consent: true, consentAt: 5, wifiOnly: true, cacheDays: 7 })); } catch (error) { /* nada */ }
+    const diverged = strictConfig().load();
+    diverged.set("cacheDays", 20);
+    try { localStorage.setItem(consentKey, JSON.stringify({ v: 1, enabled: false })); } catch (error) { /* nada */ }
+    check("config: detecta cuando lo guardado no coincide", diverged.verify().ok === false);
+    wipe();
+    check("config: sin nada guardado y con valores por defecto, verify lo indica", strictConfig().verify().status === "default");
+    wipe();
+    check("config real: nunca encendida sin consentimiento", config.get("enabled") === false || config.get("consent") === true);
+
     const described = describeSong({ name: " Tema ", artist: "Archivo local", album: "", duration: 183.6 });
     check("describeSong: ignora textos de relleno", described.title === "Tema" && described.artist === "" && described.duration === 184);
 
@@ -491,9 +550,12 @@ const Nova = (function () {
     const info = status();
     const result = await selfTest();
     const bad = result.checks.filter((item) => !item.ok).map((item) => item.name + (item.detail ? " (" + item.detail + ")" : ""));
+    const saved = config.verify();
+    const SAVED_TEXT = { saved: "guardados OK", default: "sin cambios guardados (valores por defecto)", mismatch: "NO SE GUARDAN BIEN (" + saved.detail + ")", unavailable: "SIN ALMACENAMIENTO" };
     const line = NAME + " " + VERSION + " (etapa " + STAGE + ") · autotest " + result.passed + "/" + result.total +
       (bad.length ? " · FALLÓ: " + bad.join("; ") : " OK") +
-      " · red " + (info.netLocked === false ? "ACTIVA" : "bloqueada") + " · Nova " + (info.enabled ? "encendido" : "apagado");
+      " · red " + (info.netLocked === false ? "ACTIVA" : "bloqueada") + " · Nova " + (info.enabled ? "encendido" : "apagado") +
+      " · consentimiento " + (info.consent ? "aceptado" : "no") + " · ajustes " + (SAVED_TEXT[saved.status] || saved.status);
     if (typeof Diagnostics !== "undefined" && Diagnostics && typeof Diagnostics.log === "function") Diagnostics.log("nova", line);
     else console.info(line);
     return result;

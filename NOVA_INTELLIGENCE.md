@@ -2,9 +2,9 @@
 
 Sistema inteligente e independiente de Pulsar RM. Su finalidad: ampliar las capacidades musicales de la app mediante internet y proveedores externos (letras, portadas, metadatos…), **sin dejar de ser un reproductor local que funciona sin conexión**.
 
-- **Versión:** 0.1.0 · **Etapa:** 1 (sistema base)
-- **Estado:** solo estructura. No hay búsquedas, ni proveedores reales, ni conexiones a internet. La red está **bloqueada por diseño** en esta etapa.
-- **Apagado por defecto:** hasta que una etapa posterior añada los ajustes, Nova no hace nada visible.
+- **Versión:** 0.2.0 · **Etapa:** 2 (configuración y activación)
+- **Estado:** hay sección en Ajustes, interruptor y consentimiento. Siguen sin existir búsquedas, proveedores reales ni conexiones a internet. La red está **bloqueada por diseño** (`LOCKED = true` en `nova-net.js`).
+- **Apagado por defecto:** Nova solo se enciende si la persona lo activa en Ajustes y acepta expresamente el consentimiento.
 
 ---
 
@@ -37,8 +37,8 @@ Ideas clave:
 | `nova-core.js` | Define el objeto global `Nova`. Errores propios (`Nova.Error`) y aislamiento (`Nova.safe`), eventos (`Nova.on`/`emit`), configuración independiente (`Nova.config`), registro de módulos y proveedores, arranque (`Nova.init`) y autotest (`Nova.selfTest`). |
 | `nova-store.js` | Almacenamiento propio: base IndexedDB **independiente** `pulsar-nova` (caché con caducidad, historial para deshacer, datos pequeños). Perezoso: no se crea hasta que algo la usa. Respaldo en memoria. |
 | `nova-net.js` | Única puerta hacia internet. Reglas de seguridad ya implementadas, pero **bloqueada** (`LOCKED = true`). |
-| `nova-ui.js` | Interfaz discreta: contenedor oculto `#nova-root`, avisos con el estilo de la app, registro de secciones de Ajustes (aún sin dibujar). |
-| `nova.css` | Estilos base, todo con prefijo `nova-` / `--nova-`. Toma los colores de la app. No toca `style.css`. |
+| `nova-ui.js` | Interfaz: contenedor oculto `#nova-root`, avisos con el estilo de la app, registro de secciones de Ajustes y (etapa 2) la sección «Nova Intelligence ✨» con interruptor, explicación y hoja de consentimiento. |
+| `nova.css` | Estilos, todo con prefijo `nova-` / `--nova-`. Toma los colores de la app. No toca `style.css`. |
 | `NOVA_INTELLIGENCE.md` | Este documento. |
 
 Los archivos se cargan en este orden (en `index.html`): `nova-core.js` → `nova-store.js` → `nova-net.js` → `nova-ui.js`. Cada pieza se engancha con `Nova.use("nombre", pieza)`. Si una no carga, Nova sigue funcionando sin ella (`Nova.status().missing` lo indica) y la app no se entera.
@@ -47,9 +47,9 @@ Los archivos se cargan en este orden (en `index.html`): `nova-core.js` → `nova
 
 | Archivo | Cambio |
 |---|---|
-| `index.html` | `<link>` a `nova.css` y 4 `<script>` de Nova **después** de `features.js`. |
+| `index.html` | `<link>` a `nova.css` y 4 `<script>` de Nova **después** de `features.js`. Etapa 2: el botón «Nova ✨» de la barra de Ajustes y el hueco `<section id="set-nova" hidden>` que dibuja `nova-ui.js` (ambos ocultos si `nova-ui.js` no carga). |
 | `features.js` | 2 líneas: `Features.init` llama a `Nova.init()` y `Features.afterLoad` a `Nova.afterLoad()`, ambas dentro de `this.safe(...)` y protegidas con `typeof Nova !== "undefined"`. |
-| `sw.js` | Los archivos de Nova en `APP_SHELL` y `CACHE_NAME` sube a `v15` (solo versión web). |
+| `sw.js` | Los archivos de Nova en `APP_SHELL` y `CACHE_NAME` sube a `v15` (etapa 1) y a `v16` (etapa 2). Solo versión web. |
 | `.github/workflows/build-apk.yml` | `cp nova-*.js nova.css www/` para que el APK los incluya. |
 
 No se tocó `script.js`, `native.js`, `style.css`, el reproductor, las letras, la cola ni los archivos Java. **No se modificó el esquema de IndexedDB de Pulsar RM** (`pulsar-rm` sigue en versión 1).
@@ -68,13 +68,24 @@ No se tocó `script.js`, `native.js`, `style.css`, el reproductor, las letras, l
 
 ## 5. Configuración independiente
 
-`Nova.config` se guarda en `localStorage`, clave `pulsar-nova-config`, sin tocar `Settings` ni IndexedDB de la app.
+`Nova.config` se guarda en `localStorage`, clave `pulsar-nova-config`, sin tocar `Settings` ni IndexedDB de la app. Se escribe solo cuando la persona cambia algo (arrancar la app no crea la clave).
+
+**Reglas de la etapa 2** (la configuración real se crea con `requireConsent: true`):
+
+- `config.set("enabled", true)` devuelve `false` si `consent` no es `true`: Nova no se enciende sin consentimiento.
+- `config.set("consent", true)` guarda también `consentAt` (fecha de aceptación, en ms).
+- `config.set("consent", false)` (retirar el permiso) **apaga Nova** y borra `consentAt`.
+- Al cargar, un dato guardado con `enabled: true` pero sin `consent` se corrige a apagado.
+- `config.verify()` vuelve a leer `localStorage` y comprueba que coincide con lo que hay en memoria: `{ ok, status, detail }` con `status` = `saved` · `default` · `mismatch` · `unavailable`.
+- Si `localStorage` no está disponible Nova funciona en memoria y Ajustes avisa de que no se guardará (`config.persistent === false`).
 
 ```js
-Nova.config.get("enabled");                         // false — interruptor general
+Nova.config.get("enabled");                         // false — interruptor general (exige consent)
 Nova.config.get("consent");                         // false — consentimiento para usar internet
 Nova.config.set("wifiOnly", true);                  // solo Wi‑Fi (mejor esfuerzo)
 Nova.config.set("cacheDays", 30);                   // caducidad de la caché (1–365)
+Nova.config.get("consentAt");                       // 0 si no hay consentimiento; si no, cuándo se aceptó
+Nova.config.verify();                               // ¿lo guardado coincide con lo que hay en memoria?
 Nova.config.setEntry("modules", "lyrics", { enabled: true });
 Nova.config.setEntry("providers", "lrclib", { enabled: true, appId: "…" });   // appId = identificador PÚBLICO
 Nova.config.moduleActive("lyrics");                 // Nova encendido Y módulo encendido
@@ -173,13 +184,14 @@ Nova.registerProvider({
 
 ## 10. Pruebas
 
-- **Autotest:** abre la app web con `?nova=1` al final de la dirección (por ejemplo `https://…/index.html?nova=1`). Nova ejecuta su autotest y deja una línea en **Ajustes → Acerca de → Diagnóstico**, algo como: `[nova] Nova Intelligence 0.1.0 (etapa 1) · autotest 40/40 OK · red bloqueada · Nova apagado`. El autotest usa registros y bases de prueba aparte y no deja rastro.
+- **Autotest:** abre la app web con `?nova=1` al final de la dirección (por ejemplo `https://…/index.html?nova=1`). Nova ejecuta su autotest y deja una línea en **Ajustes → Acerca de → Diagnóstico**, algo como: `[nova] Nova Intelligence 0.2.0 (etapa 2) · autotest 53/53 OK · red bloqueada · Nova apagado · consentimiento no · ajustes sin cambios guardados (valores por defecto)`. Tras activar Nova y recargar con `?nova=1` debe decir `Nova encendido · consentimiento aceptado · ajustes guardados OK`. Si algo no se guarda bien, la línea dice `ajustes NO SE GUARDAN BIEN (…)`. El autotest usa claves y bases de prueba aparte y no deja rastro.
 - **Consola:** `Nova.status()`, `Nova.selfTest()`, `Nova.errors()`.
 - **Sin conexión:** la app y Nova arrancan sin red; la reproducción local no depende de Nova.
 
 ## 11. Qué falta implementar
 
-- [ ] Sección «Nova Intelligence» en Ajustes (interruptor, consentimiento, módulos, proveedores) con identidad visual e icono propios.
+- [x] Sección «Nova Intelligence ✨» en Ajustes: icono, descripción, interruptor, explicación y consentimiento (etapa 2).
+- [ ] Ajustes de módulos y proveedores dentro de esa sección (llegarán con cada módulo/proveedor).
 - [ ] Desbloquear `nova-net.js` (`LOCKED`), con autorización, y verificar CORS en el WebView de Android; si hace falta, transporte nativo en `PulsarBridge.java`.
 - [ ] Proveedor LRCLIB.
 - [ ] Lyrics Intelligence (búsqueda manual por canción, sin pisar letras existentes, con opción de deshacer).
@@ -187,3 +199,11 @@ Nova.registerProvider({
 - [ ] Capa «aplicar cambios»: no pisar datos del usuario, registrar el origen y usar el historial para deshacer.
 - [ ] Cola en segundo plano (opcional, con Wi‑Fi) y límites de caché.
 - [ ] Actualizar `NATIVE_API.md` y `README.md` cuando Nova tenga funciones visibles.
+
+## 12. Etapa 2 · Configuración y activación (resumen)
+
+- **Dónde:** Ajustes → «Nova ✨» (nuevo acceso en la barra de categorías, entre *Rendimiento* y *Acerca de*).
+- **Interruptor:** apagado por defecto. Al encenderlo por primera vez se muestra una hoja que explica que Nova podrá usar internet cuando sus módulos estén disponibles, qué datos compartiría (título, artista, álbum y duración) y que hoy no hay ningún servicio conectado. Solo **«Acepto y activar»** lo enciende; «Ahora no», tocar fuera o el botón Atrás de Android lo dejan apagado.
+- **Permiso:** una vez aceptado no se vuelve a preguntar al apagar y encender. «Retirar mi permiso» apaga Nova y vuelve a exigir la aceptación.
+- **Persistencia:** `localStorage` → `pulsar-nova-config` (independiente de `Settings`). Se conserva al cerrar y abrir la app.
+- **Límites:** `nova-net.js` no se tocó (`LOCKED = true`); no hay proveedores, ni búsquedas, ni peticiones; reproductor, letras y biblioteca intactos.

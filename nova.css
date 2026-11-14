@@ -1,8 +1,8 @@
 /* =========================================================
-   NOVA INTELLIGENCE — ESTILOS BASE (etapa 1)
+   NOVA INTELLIGENCE — ESTILOS (etapas 1 y 2)
    Todo lleva el prefijo nova- / --nova-: ninguna regla toca elementos de Pulsar RM.
    Los colores se toman de los de la app (tema, modo y color de portada), con respaldo propio.
-   La identidad visual definitiva de Nova llegará en una etapa posterior.
+   Etapa 2: sección «Nova Intelligence ✨» de Ajustes. Reutiliza las clases de la app (card, eq-switch, chip-btn…).
    ========================================================= */
 
 :root {
@@ -39,3 +39,16 @@
 }
 
 .nova-muted { color: var(--nova-muted); }
+
+/* ---------- Etapa 2: sección de Ajustes ---------- */
+#set-nova[hidden], #set-nova [hidden], #settings-nav [data-jump="nova"][hidden] { display: none !important; }   /* las clases de la app (p. ej. .set-hint) fijan display y anularían «hidden» */
+
+.nova-title { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+.nova-ico { background: var(--nova-accent); color: var(--nova-on-accent); }
+.nova-badge.off { background: transparent; color: var(--nova-muted); border: 1px solid var(--nova-border); }
+
+.nova-lead { margin: 6px 0 0; color: var(--nova-muted); font-size: 13px; }
+.nova-list { margin: 10px 0 0; padding-left: 18px; color: var(--nova-muted); font-size: 13px; line-height: 1.5; }
+.nova-list li + li { margin-top: 8px; }
+.nova-list b { color: var(--nova-text); }
+.nova-warn { color: var(--nova-text); }
