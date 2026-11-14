@@ -831,7 +831,7 @@ const LibraryScan = {
 
   addFolder() {
     if (!this.supported()) {
-      UI.toast(Native.available ? "Este Android no permite elegir carpetas (hace falta Android 8 o superior)." : "Elegir carpetas solo está disponible en la app de Android.");
+      UI.toast(Native.available ? "Este Android no permite elegir carpetas (hace falta Android 8 o superior)." : Native.oldShell ? "Este APK es antiguo y no trae las funciones de Android. Instala el último desde Releases." : "Elegir carpetas solo está disponible en la app de Android.");
       return;
     }
     if (this.running) { UI.toast("Espera a que termine la actualización."); return; }
@@ -897,7 +897,9 @@ const LibraryScan = {
     if (!supported) {
       if (text) text.textContent = Native.available
         ? "Este Android no permite elegir carpetas. Puedes importar archivos sueltos."
-        : "Elegir carpetas está disponible en la app de Android. En el navegador puedes importar archivos sueltos.";
+        : Native.oldShell
+          ? "Este APK es antiguo y no trae las funciones de Android. Instala el último APK desde Releases para elegir carpetas."
+          : "Elegir carpetas está disponible en la app de Android. En el navegador puedes importar archivos sueltos.";
       box.innerHTML = "";
       return;
     }
@@ -942,7 +944,7 @@ const LibraryScan = {
   async start(opts = {}) {
     if (this.running) { UI.toast("Ya se está actualizando la biblioteca."); return; }
     if (!this.supported()) {
-      UI.toast(Native.available ? "Este Android no permite leer carpetas." : "Actualizar carpetas solo está disponible en la app de Android.");
+      UI.toast(Native.available ? "Este Android no permite leer carpetas." : Native.oldShell ? "Este APK es antiguo y no trae las funciones de Android. Instala el último desde Releases." : "Actualizar carpetas solo está disponible en la app de Android.");
       return;
     }
     if (Library.importing) { UI.toast("Espera a que termine la importación."); return; }
@@ -1943,7 +1945,7 @@ const Features = {
     const about = $("about-device");
     if (about) {
       const d = Performance.display;
-      about.textContent = info ? `App Android · Android API ${info.sdk || "?"} · pantalla ${d.currentHz} Hz` : "Versión web (PWA)";
+      about.textContent = info ? `App Android · Android API ${info.sdk || "?"} · pantalla ${d.currentHz} Hz` : (Native.oldShell ? "APK antiguo (sin funciones de Android) · instala el último desde Releases" : "Versión web (PWA)");
     }
     LibraryScan.renderFolders();
     LibraryScan.renderLast();

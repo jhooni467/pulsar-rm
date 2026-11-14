@@ -74,6 +74,10 @@ const Native = {
   // true solo con el APK de la v1.04 en adelante (los APK anteriores no traen getInfo)
   get available() { return this.has("getInfo"); },
 
+  // true si la web corre dentro de una app Android (WebView) pero SIN el puente v1.04:
+  // es un APK antiguo o un paquete de PWABuilder. Sirve para avisar en vez de decir "versión web".
+  get oldShell() { return !this.available && /;\s*wv\)/.test(navigator.userAgent || ""); },
+
   call(name, ...args) {
     try {
       if (this.has(name)) return window.PulsarNative[name](...args);
