@@ -2510,6 +2510,7 @@ img {
 .lyric-line.gap .st {
   --p: 0;
   display: block;
+  flex: none;                 /* las tres conservan siempre exactamente el mismo tamaño: el contenedor nunca las comprime */
   width: 1.05em;
   height: 1.05em;
   margin: 0;
@@ -2544,85 +2545,109 @@ html[data-anim="reduced"] .lyric-line.gap .st { transition: none; }
 html[data-fx="off"] .lyric-line.gap .stars { filter: none !important; }
 html[data-fx="off"] .lyric-line.gap .st svg { filter: none !important; }
 
-/* ---- v1.07: movimiento ambiental de las tres estrellas ----
-   Cada estrella flota y gira muy despacio y describe una espiral que se abre desde su sitio mientras se aleja «hacia el fondo»
-   (se hace pequeña y se desvanece de forma gradual). No hay estrellas ni partículas nuevas: solo se animan transform y opacity.
-   Capas (de fuera adentro):
-     .st   encendido progresivo de la pausa (--p, sin cambios)
-     .so   órbita: gira alrededor del sitio de la estrella (ángulo lineal → con el radio crece la espiral)
-     .sa   se aleja del centro de la órbita (radio, ease-in) + profundidad (escala y opacidad)
-     svg   rotación propia lenta (compensa la órbita para que no gire de más) y levitación suave
-   Cada estrella tiene su propio ángulo, barrido, radio, duración y retardo (--a0, --A, --R, --D, --dl) para que no se note mecánica.
-   El ciclo de cada una: emerge → flota casi en su sitio → se aleja en espiral encogiéndose y desvaneciéndose hasta 0 (sin cortes)
-   → vuelve a emerger. La animación solo corre con la clase .go (pausa encendida + el fundido de salida). */
+/* ---- v1.08: movimiento de las tres estrellas (reescrito) ----
+   Orden de la secuencia, por estrella:
+     1) CRECE      (.st, --p: pequeña y casi transparente → escala y opacidad máximas; 1.ª, luego 2.ª y al final la 3.ª; sin cambios)
+     2) GIRA y LEVITA sobre su propio centro (clase .fin, la pone paintGap cuando esa estrella termina de crecer)
+     3) SE ALEJA   cuando acaba la pausa (la línea pierde .active): trayectoria en espiral que se abre, escala y opacidad bajan poco a poco
+   Cada movimiento vive en SU PROPIA capa, así ninguno pisa a otro y la silueta nunca se deforma (todas las escalas son uniformes):
+     .st    crecimiento (transform + opacity)
+     .so    ángulo de la espiral (rotate; transición lineal)
+     .sa    radio de la espiral (translate, ease-in) + profundidad (scale y opacity)
+     .sb    contragiro de .so: la estrella no hereda el ángulo de la espiral
+     svg    giro propio lento (rotate) y levitación vertical (translate)
+   Cada estrella tiene su propio sector de salida (--a0, --A, --R): las tres se reparten hacia lados distintos y se separan más
+   con el tiempo (comprobado: la distancia entre ellas nunca baja de la que tienen en reposo). Sin colores fijos: todo hereda currentColor. */
 .lyric-line.gap .so,
-.lyric-line.gap .sa {
+.lyric-line.gap .sa,
+.lyric-line.gap .sb {
   display: block;
   width: 100%;
   height: 100%;
   font-weight: inherit;
 }
-.lyric-line.gap .st:nth-child(1) { --a0: 250deg; --A: 190deg; --R: 3.4em; --D: 11s;   --dl: 0s;   --spin: 60deg;   --fd: 6.3s; --fy: 0.12em; }
-.lyric-line.gap .st:nth-child(2) { --a0: 130deg; --A: 300deg; --R: 3.8em; --D: 13.5s; --dl: 0.7s; --spin: -120deg; --fd: 7.6s; --fy: 0.10em; }
-.lyric-line.gap .st:nth-child(3) { --a0: 165deg; --A: 215deg; --R: 3.2em; --D: 16s;   --dl: 1.5s; --spin: 70deg;   --fd: 8.9s; --fy: 0.13em; }
 
-@keyframes st-orbit {
-  from { rotate: var(--a0); }
-  to   { rotate: calc(var(--a0) + var(--A)); }
+/* Parámetros de cada estrella. --a0/--A: ángulo inicial y barrido de la espiral · --R: radio final · --dl/--D: retardo y duración de la salida
+   --sd/--sto: periodo y sentido del giro propio · --fd/--fy: periodo y amplitud de la levitación */
+.lyric-line.gap .st:nth-child(1) { --a0: 165deg; --A: 160deg; --R: 3.4em; --dl: 0.5s; --D: 2.6s; --sd: 30s; --sto: 360deg;  --fd: 5.4s; --fy: 0.09em; }
+.lyric-line.gap .st:nth-child(2) { --a0: 265deg; --A: 160deg; --R: 3.8em; --dl: 0.7s; --D: 2.8s; --sd: 36s; --sto: -360deg; --fd: 6.2s; --fy: 0.08em; }
+.lyric-line.gap .st:nth-child(3) { --a0: 5deg;   --A: 160deg; --R: 3.4em; --dl: 0.9s; --D: 3s;   --sd: 33s; --sto: 360deg;  --fd: 5.8s; --fy: 0.10em; }
+/* Versos de la segunda voz (alineados a la derecha): el espacio libre está a la izquierda, así que la espiral se refleja
+   (y se invierte el reparto, porque la estrella 3 es la que queda junto al borde). No cambia el orden en que crecen. */
+html:not([data-lduet="off"]) .lyric-line.gap.sr .st:nth-child(1) { --a0: 175deg; --A: -160deg; }
+html:not([data-lduet="off"]) .lyric-line.gap.sr .st:nth-child(2) { --a0: 275deg; --A: -160deg; }
+html:not([data-lduet="off"]) .lyric-line.gap.sr .st:nth-child(3) { --a0: 15deg;  --A: -160deg; }
+
+@keyframes st-spin {
+  from { rotate: 0deg; }
+  to   { rotate: var(--sto); }
 }
-@keyframes st-drift {
-  from { translate: 0 0; }
-  to   { translate: var(--R) 0; }
-}
-@keyframes st-depth {
-  0%   { opacity: 0; scale: 0.55; }
-  9%   { opacity: 1; scale: 1; }
-  20%  { opacity: 1; scale: 1; }
-  100% { opacity: 0; scale: 0.18; }
-}
-@keyframes st-turn {
-  from { rotate: calc(var(--a0) * -1); }
-  to   { rotate: calc(var(--a0) * -1 - var(--A) + var(--spin)); }
-}
+/* Arranca y termina en 0: sin salto al empezar */
 @keyframes st-float {
-  from { translate: 0 calc(var(--fy) * -1); }
-  to   { translate: 0 var(--fy); }
+  0%, 100% { translate: 0 0; }
+  25%      { translate: 0 calc(var(--fy) * -1); }
+  75%      { translate: 0 var(--fy); }
 }
 
-/* Solo en navegadores con propiedades de transformación individuales (translate / rotate / scale); si no, las estrellas quedan quietas como antes */
+/* Solo en navegadores con propiedades de transformación individuales (translate / rotate / scale); si no, las estrellas
+   quedan quietas y la línea se desvanece como antes */
 @supports (translate: 0 0) and (rotate: 1deg) and (scale: 1) {
-  .lyric-line.gap.go .so {
-    animation: st-orbit var(--D) linear var(--dl) infinite backwards;
-  }
-  .lyric-line.gap.go .sa {
-    will-change: transform, opacity;
+  /* 2) Giro propio + levitación: solo cuando esa estrella ya terminó de crecer (.fin) y mientras dure la línea (.go incluye la salida) */
+  .lyric-line.gap.go .st.fin svg {
     animation:
-      st-drift var(--D) cubic-bezier(0.45, 0.05, 0.85, 0.55) var(--dl) infinite backwards,
-      st-depth var(--D) ease-in-out var(--dl) infinite backwards;
+      st-spin var(--sd) linear infinite,
+      st-float var(--fd) ease-in-out infinite;
   }
-  .lyric-line.gap.go .st svg {
-    animation:
-      st-turn var(--D) linear var(--dl) infinite backwards,
-      st-float var(--fd) ease-in-out infinite alternate;
+
+  /* 3) Reposo (pausa encendida): la estrella está en su sitio. Sin transición: al encender la pausa se reinicia al instante */
+  .lyric-line.gap.active .so { rotate: var(--a0); }
+  .lyric-line.gap.active .sb { rotate: calc(var(--a0) * -1); }
+  .lyric-line.gap.active .sa { translate: 0 0; scale: 1; opacity: 1; }
+
+  /* Salida (la pausa terminó): espiral que se abre (ángulo lineal + radio con ease-in), contragiro para no girar de más,
+     y alejamiento en profundidad: la escala y la opacidad bajan gradualmente hasta integrarse con el fondo */
+  .lyric-line.gap:not(.active) .so {
+    rotate: calc(var(--a0) + var(--A));
+    transition: rotate var(--D) linear var(--dl);
   }
-  /* Versos de la segunda voz (alineados a la derecha): la espiral se refleja para abrirse hacia dentro de la pantalla. No cambia el orden en que se encienden. */
-  html:not([data-lduet="off"]) .lyric-line.gap.sr .st { scale: -1 1; }
+  .lyric-line.gap:not(.active) .sb {
+    rotate: calc((var(--a0) + var(--A)) * -1);
+    transition: rotate var(--D) linear var(--dl);
+  }
+  .lyric-line.gap:not(.active) .sa {
+    translate: var(--R) 0;
+    scale: 0.18;
+    opacity: 0;
+    transition:
+      translate var(--D) cubic-bezier(0.4, 0, 0.75, 0.55) var(--dl),
+      scale var(--D) cubic-bezier(0.3, 0, 0.7, 1) var(--dl),
+      opacity var(--D) cubic-bezier(0.3, 0, 0.7, 1) var(--dl);
+  }
+  .lyric-line.gap.go .sa { will-change: transform, opacity; }
+
+  /* La línea se mantiene visible (y sin encogerse, para no acercar las estrellas) mientras dura la salida; JS quita .go cuando termina */
+  .lyric-line.gap.go:not(.active):not(.plain) {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-/* En pausa, las estrellas se quedan quietas donde están */
-.lyrics.is-paused .lyric-line.gap.go .so,
-.lyrics.is-paused .lyric-line.gap.go .sa,
-.lyrics.is-paused .lyric-line.gap.go .st svg {
+/* En pausa del reproductor, las estrellas se quedan quietas donde están */
+.lyrics.is-paused .lyric-line.gap.go .st.fin svg {
   animation-play-state: paused;
 }
 
-/* Movimiento reducido: las estrellas se quedan quietas, encendidas como antes (sin bucles) */
+/* Movimiento reducido: las estrellas se quedan quietas (sin giro, levitación ni espiral); la línea se desvanece rápido como antes */
 @media (prefers-reduced-motion: reduce) {
-  .lyric-line.gap .so, .lyric-line.gap .sa, .lyric-line.gap .st svg { animation: none !important; will-change: auto; }
+  .lyric-line.gap .st svg { animation: none !important; }
+  .lyric-line.gap .so, .lyric-line.gap .sb { rotate: none !important; transition: none !important; }
+  .lyric-line.gap .sa { translate: none !important; scale: none !important; opacity: 1 !important; transition: none !important; will-change: auto; }
+  .lyric-line.gap.go:not(.active):not(.plain) { opacity: 0 !important; transform: scale(0.7) !important; }
 }
-html[data-anim="reduced"] .lyric-line.gap .so,
-html[data-anim="reduced"] .lyric-line.gap .sa,
-html[data-anim="reduced"] .lyric-line.gap .st svg { animation: none !important; will-change: auto; }
+html[data-anim="reduced"] .lyric-line.gap .st svg { animation: none !important; }
+html[data-anim="reduced"] .lyric-line.gap .so, html[data-anim="reduced"] .lyric-line.gap .sb { rotate: none !important; transition: none !important; }
+html[data-anim="reduced"] .lyric-line.gap .sa { translate: none !important; scale: none !important; opacity: 1 !important; transition: none !important; will-change: auto; }
+html[data-anim="reduced"] .lyric-line.gap.go:not(.active):not(.plain) { opacity: 0 !important; transform: scale(0.7) !important; }
 
 /* Barra de navegación de abajo */
 .nav-icon {

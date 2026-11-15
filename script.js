@@ -1312,9 +1312,10 @@ const CoverColor = {
 
 /* Indicador de espera de Pulsar RM (v1.05): tres estrellas de cuatro puntas que brillan poco a poco.
    Se usa en la introducción, en las partes instrumentales y en las pausas largas entre versos. */
-/* v1.07: cada estrella lleva dos capas internas solo para el movimiento ambiental (.so = órbita en espiral,
-   .sa = alejamiento en profundidad). No se añade ninguna estrella: siguen siendo exactamente tres. */
-const LYRIC_STAR = '<i class="st"><b class="so"><b class="sa"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 1.5C12.9 7.7 16.3 11.1 22.5 12C16.3 12.9 12.9 16.3 12 22.5C11.1 16.3 7.7 12.9 1.5 12C7.7 11.1 11.1 7.7 12 1.5Z"/></svg></b></b></i>';
+/* v1.08: cada estrella lleva tres capas internas solo para el movimiento (cada una anima UNA sola cosa, así no se pisan):
+   .so = ángulo de la espiral, .sa = radio + profundidad (escala/opacidad), .sb = contragiro. El giro propio y la levitación van en el svg.
+   No se añade ninguna estrella: siguen siendo exactamente tres. */
+const LYRIC_STAR = '<i class="st"><b class="so"><b class="sa"><b class="sb"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 1.5C12.9 7.7 16.3 11.1 22.5 12C16.3 12.9 12.9 16.3 12 22.5C11.1 16.3 7.7 12.9 1.5 12C7.7 11.1 11.1 7.7 12 1.5Z"/></svg></b></b></b></i>';
 const LYRIC_STARS = '<span class="stars">' + LYRIC_STAR + LYRIC_STAR + LYRIC_STAR + '</span>';
 
 /* =========================================================
@@ -1739,11 +1740,13 @@ const Lyrics = {
       else if (line.words) this.paints.push({ els: Array.from(el.querySelectorAll(".lw")), units: LyricsParser.units(line) });
     });
 
-    // v1.07: el movimiento ambiental de las estrellas (CSS) corre mientras su pausa está encendida y unos instantes más,
-    // hasta que la línea termina de desvanecerse: así no se reinicia a mitad del fundido. Fuera de ahí no hay animación activa.
+    // v1.08: el movimiento de las estrellas (CSS) corre mientras su pausa está encendida y durante su salida (la espiral de
+    // alejamiento dura hasta ~3.5 s), hasta que se han desvanecido del todo. Fuera de ahí no hay animación activa.
+    // Al terminar la pausa, las tres pasan a girar/levitar aunque la tercera apenas haya llegado a crecer del todo.
     if (prevGapEl && prevGapEl !== this.gapEl) {
+      prevGapEl.querySelectorAll(".st").forEach((s) => s.classList.add("fin"));
       clearTimeout(prevGapEl._goT);
-      prevGapEl._goT = setTimeout(() => prevGapEl.classList.remove("go"), 900);
+      prevGapEl._goT = setTimeout(() => prevGapEl.classList.remove("go"), 3800);
     }
     if (this.gapEl) { clearTimeout(this.gapEl._goT); this.gapEl.classList.add("go"); }
 
@@ -1762,7 +1765,13 @@ const Lyrics = {
     const key = g.toFixed(2);
     if (el._g === key) return;
     el._g = key;
-    for (let k = 0; k < 3; k++) el.style.setProperty("--s" + k, Math.min(1, Math.max(0, g * 3 - k)).toFixed(2));
+    // Cada estrella crece en su turno (--s0/--s1/--s2). Cuando termina de crecer (.fin) empieza a girar y a levitar sobre su centro.
+    const st = el._st || (el._st = el.querySelectorAll(".st"));
+    for (let k = 0; k < 3; k++) {
+      const v = Math.min(1, Math.max(0, g * 3 - k));
+      el.style.setProperty("--s" + k, v.toFixed(2));
+      if (st[k]) st[k].classList.toggle("fin", v >= 1);
+    }
   },
 
   // Posición de cada línea (una sola lectura de la maqueta; encender, apagar o escalar líneas no la cambia)
