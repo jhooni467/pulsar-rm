@@ -19,7 +19,7 @@
 // v14: Temas y Color de portada excluyentes, Intensidad solo cambia la fuerza del color y letras más legibles sobre Portada (Blur); renueva la copia guardada.
 // v15 (Nova Intelligence, etapa 1): nova-core.js, nova-store.js, nova-net.js, nova-ui.js y nova.css se guardan para uso sin conexión; renueva la copia guardada.
 // v16 (Nova Intelligence, etapa 2): sección «Nova Intelligence ✨» en Ajustes (index.html, nova-core.js, nova-ui.js, nova.css); renueva la copia guardada.
-const CACHE_NAME = "pulsar-rm-shell-v16";
+const CACHE_NAME = "pulsar-rm-shell-v17";
 
 const APP_SHELL = [
   "./",

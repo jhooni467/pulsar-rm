@@ -1312,7 +1312,9 @@ const CoverColor = {
 
 /* Indicador de espera de Pulsar RM (v1.05): tres estrellas de cuatro puntas que brillan poco a poco.
    Se usa en la introducción, en las partes instrumentales y en las pausas largas entre versos. */
-const LYRIC_STAR = '<i class="st"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 1.5C12.9 7.7 16.3 11.1 22.5 12C16.3 12.9 12.9 16.3 12 22.5C11.1 16.3 7.7 12.9 1.5 12C7.7 11.1 11.1 7.7 12 1.5Z"/></svg></i>';
+/* v1.07: cada estrella lleva dos capas internas solo para el movimiento ambiental (.so = órbita en espiral,
+   .sa = alejamiento en profundidad). No se añade ninguna estrella: siguen siendo exactamente tres. */
+const LYRIC_STAR = '<i class="st"><b class="so"><b class="sa"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 1.5C12.9 7.7 16.3 11.1 22.5 12C16.3 12.9 12.9 16.3 12 22.5C11.1 16.3 7.7 12.9 1.5 12C7.7 11.1 11.1 7.7 12 1.5Z"/></svg></b></b></i>';
 const LYRIC_STARS = '<span class="stars">' + LYRIC_STAR + LYRIC_STAR + LYRIC_STAR + '</span>';
 
 /* =========================================================
@@ -1727,6 +1729,7 @@ const Lyrics = {
     });
 
     this.paints = [];
+    const prevGapEl = this.gapEl;
     this.gapEl = null;
     this.gapLine = null;
     lit.forEach((i) => {
@@ -1735,6 +1738,14 @@ const Lyrics = {
       if (line.gap) { this.gapEl = el; this.gapLine = line; el._g = null; }
       else if (line.words) this.paints.push({ els: Array.from(el.querySelectorAll(".lw")), units: LyricsParser.units(line) });
     });
+
+    // v1.07: el movimiento ambiental de las estrellas (CSS) corre mientras su pausa está encendida y unos instantes más,
+    // hasta que la línea termina de desvanecerse: así no se reinicia a mitad del fundido. Fuera de ahí no hay animación activa.
+    if (prevGapEl && prevGapEl !== this.gapEl) {
+      clearTimeout(prevGapEl._goT);
+      prevGapEl._goT = setTimeout(() => prevGapEl.classList.remove("go"), 900);
+    }
+    if (this.gapEl) { clearTimeout(this.gapEl._goT); this.gapEl.classList.add("go"); }
 
     // La pantalla SOLO se desplaza cuando cambia el grupo que manda. Encender o apagar un mini verso, o que otro grupo
     // se quede o deje de estar encendido, no la mueve: mientras suena el mismo conjunto de versos, la posición es estable.
