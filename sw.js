@@ -22,7 +22,8 @@
 // v18: estrellas de espera — restauradas las 3 estrellas independientes; crecen una a una, luego giran y levitan y al acabar la pausa se alejan en espiral (escala y opacidad graduales); renueva la copia guardada.
 // v19: letras — espacios dinámicos (versos secundarios, [bg:] y estrellas solo ocupan lugar mientras se muestran) y salida en espiral de las estrellas justo antes de la frase siguiente (script.js, style.css); renueva la copia guardada.
 // v20: barra de progreso rediseñada (línea fina, pista sutil, indicador discreto; solo estilo, script.js y style.css); renueva la copia guardada.
-const CACHE_NAME = "pulsar-rm-shell-v20";
+// v21: barra de progreso más gruesa, sin indicador circular y con extremos redondeados (solo style.css); renueva la copia guardada.
+const CACHE_NAME = "pulsar-rm-shell-v21";
 
 const APP_SHELL = [
   "./",

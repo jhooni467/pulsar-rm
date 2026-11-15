@@ -926,15 +926,15 @@ button {
   font-size: 11px;
 }
 
-/* ---- Barra de progreso (v1.09): línea fina, pista sutil e indicador discreto ----
-   Es el mismo <input type="range"> de siempre (arrastre, teclado y accesibilidad nativos); solo cambia cómo se dibuja.
+/* ---- Barra de progreso: gruesa, sólida y sin indicador ----
+   Es el mismo <input type="range"> de siempre (arrastre, toque, teclado y accesibilidad nativos); solo cambia cómo se dibuja.
    --p (0 a 1) = lo reproducido; lo pone la app junto al valor de la barra (ver paintProgress en script.js).
-   La zona táctil sigue midiendo 28 px de alto aunque la línea sea de 4 px. */
+   No hay puntito: el indicador del input mide 0 y no se dibuja, pero el toque y el arrastre siguen funcionando sobre toda la barra.
+   La zona táctil sigue midiendo 28 px de alto aunque la línea sea de 12 px. */
 .progress-container {
   gap: 10px;
   --pg-track: color-mix(in srgb, var(--text, #fff) 15%, transparent);
-  --pg-thumb: 12px;
-  --pg-line: 4px;
+  --pg-line: 12px;
 }
 .progress-container [data-time] {
   min-width: 34px;
@@ -963,13 +963,16 @@ button {
 .progress-container input:focus { outline: none; }
 .progress-container input:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 2px; border-radius: 999px; }
 
-/* Pista: sutil; lo reproducido se rellena con un degradado suave del color del tema (alineado con el centro del indicador) */
+/* Pista: extremos totalmente redondeados. Lo reproducido se rellena con el degradado del color del tema y
+   termina también en punta redonda (un círculo del grosor de la barra, alineado con --p); el resto queda en la pista sutil. */
 .progress-container input::-webkit-slider-runnable-track {
   height: var(--pg-line);
   border-radius: 999px;
   background:
+    radial-gradient(circle closest-side, var(--accent) calc(100% - 0.6px), transparent 100%)
+      calc(var(--p) * 100%) 0 / var(--pg-line) var(--pg-line) no-repeat,
     linear-gradient(90deg, color-mix(in srgb, var(--accent) 55%, transparent), var(--accent))
-      0 0 / calc(var(--pg-thumb) / 2 + (100% - var(--pg-thumb)) * var(--p)) 100% no-repeat,
+      0 0 / calc(var(--pg-line) / 2 + (100% - var(--pg-line)) * var(--p)) 100% no-repeat,
     var(--pg-track);
 }
 .progress-container input::-moz-range-track {
@@ -983,49 +986,24 @@ button {
   background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 55%, transparent), var(--accent));
 }
 
-/* Indicador: pequeño y redondo; crece un poco y gana un halo suave solo al tocarlo o arrastrarlo */
+/* Sin indicador: el control existe (para que el toque y el arrastre sigan funcionando) pero mide 0 y no se ve */
 .progress-container input::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: var(--pg-thumb);
-  height: var(--pg-thumb);
-  margin-top: calc((var(--pg-line) - var(--pg-thumb)) / 2);
+  width: 0;
+  height: 0;
+  margin: 0;
   border: 0;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 24%, transparent), 0 1px 3px rgba(0, 0, 0, 0.28);
-  transform: scale(0.8);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  background: transparent;
+  box-shadow: none;
 }
 .progress-container input::-moz-range-thumb {
-  width: var(--pg-thumb);
-  height: var(--pg-thumb);
+  width: 0;
+  height: 0;
   border: 0;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 24%, transparent), 0 1px 3px rgba(0, 0, 0, 0.28);
-  transform: scale(0.8);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  background: transparent;
+  box-shadow: none;
 }
-.progress-container input:active::-webkit-slider-thumb,
-.progress-container input:focus-visible::-webkit-slider-thumb {
-  transform: scale(1.15);
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent), 0 1px 3px rgba(0, 0, 0, 0.28);
-}
-.progress-container input:active::-moz-range-thumb,
-.progress-container input:focus-visible::-moz-range-thumb {
-  transform: scale(1.15);
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent), 0 1px 3px rgba(0, 0, 0, 0.28);
-}
-@media (hover: hover) {
-  .progress-container input:hover::-webkit-slider-thumb { transform: scale(1); }
-  .progress-container input:hover::-moz-range-thumb { transform: scale(1); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .progress-container input::-webkit-slider-thumb, .progress-container input::-moz-range-thumb { transition: none; }
-}
-html[data-anim="reduced"] .progress-container input::-webkit-slider-thumb,
-html[data-anim="reduced"] .progress-container input::-moz-range-thumb { transition: none; }
 
 .controls {
   display: flex;
