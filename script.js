@@ -1429,39 +1429,53 @@ class LyricScroller {
    Funciones puras del tiempo (sin tocar el DOM). Las usa Lyrics.paint, que solo escribe una variable CSS cuando su valor cambia.
    ========================================================= */
 const LyricFx = {
-  REL: 0.7,          // s: lo que tarda en apagarse el efecto de una palabra prolongada cuando ella termina
-  PRE: 0.93,         // Escala: tamaño de las letras que todavía no se cantan (la palabra "empieza ligeramente reducida")
-  SWELL: 1.085,      // Escala (palabra prolongada): tamaño al que llega al final, expansión lenta
-  SPRING_T: 0.7,     // s: duración del resorte de una letra (pasado ese tiempo ya está en su tamaño)
-  // Resorte amortiguado con impulso inicial: sale de PRE, pasa de 1 (~1.11), rebota por debajo (~0.975) y se asienta en 1
-  ZETA: 0.42,
-  OMEGA: 15,
-  KICK: 3.4,
+  REL: 0.9,            // s: lo que tarda en apagarse / volver a su tamaño una palabra prolongada cuando ella termina (igual que .rel en style.css)
+
+  // Palabra por palabra · palabra normal: la luz de cada letra
+  GLOW_IN: 0.34,       // s: la luz de la palabra sube con suavidad desde que empieza (nunca aparece de golpe)
+  GLOW_OUT: 0.6,      // s: lo menos que tarda en apagarse la luz de una letra, aunque se levante más rápido (así una palabra corta no parpadea)
+
+  // Palabra prolongada (Fluida y Palabra por palabra): la luz se enciende despacio y luego crece mientras suena la palabra
+  LONG_IN: 0.55,       // s: encendido inicial
+  LONG_BASE: 0.3,      // intensidad que ya tiene al terminar de encenderse; de ahí sube hasta 1 al final de la palabra
+
+  // Escala
+  RISE: 0.75,          // s: lo que tarda cada letra en subir hasta su sitio desde que le toca cantarse
+  SWELL: 1.055,        // palabra prolongada: tamaño al que llega al final (expansión muy sutil)
+  SWELL_LAG: 0.07,     // s: retraso entre una letra y la siguiente al expandirse (la expansión recorre la palabra)
 
   clamp(x) { return x < 0 ? 0 : x > 1 ? 1 : x; },
   smooth(x) { x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); },
 
-  // Palabra prolongada: intensidad (0 a 1) mientras se canta. Sube de forma progresiva (arranque y llegada suaves).
-  rise(p) { return this.smooth(p); },
-
-  // Escala, palabra normal: tamaño de una letra a los `age` segundos de empezar su movimiento
-  spring(age) {
-    if (age <= 0) return this.PRE;
-    if (age >= this.SPRING_T) return 1;
-    const x0 = this.PRE - 1;
-    const a = this.ZETA * this.OMEGA;
-    const wd = this.OMEGA * Math.sqrt(1 - this.ZETA * this.ZETA);
-    return 1 + Math.exp(-a * age) * (x0 * Math.cos(wd * age) + ((this.KICK + a * x0) / wd) * Math.sin(wd * age));
+  /* Palabra por palabra, palabra normal: luz (0 a 1) de una letra.
+     Sube suavemente cuando empieza la palabra y se apaga con la misma suavidad a partir del momento en que esa letra se levanta.
+     Los dos tramos son curvas suaves y el apagado dura al menos GLOW_OUT: la luz de una palabra se solapa con la de la siguiente
+     y se ve como una luz continua que acompaña a las letras, no como destellos. */
+  glow(time, wordStart, letterStart, letterLen) {
+    const on = this.smooth((time - wordStart) / this.GLOW_IN);
+    if (on <= 0) return 0;
+    return on * (1 - this.smooth((time - letterStart) / Math.max(this.GLOW_OUT, letterLen * 2)));
   },
 
-  // Escala, palabra prolongada: expansión lenta + oscilaciones muy sutiles y distintas en cada letra.
-  // Tres ondas con frecuencias que no son múltiplos entre sí (nunca se repite igual) y una fase propia por letra y por palabra.
-  swell(p, time, k, seed) {
-    const base = this.PRE + (this.SWELL - this.PRE) * this.smooth(p);
-    const env = this.smooth(p * 6) * (0.65 + 0.35 * this.smooth(p)); // las oscilaciones entran poco a poco
-    const ph = seed + k * 0.83;
-    const wave = 0.5 * Math.sin(time * 10.7 + ph) + 0.32 * Math.sin(time * 17.3 + ph * 1.7 + 1.3) + 0.18 * Math.sin(time * 4.1 + ph * 0.6 + 2.1);
-    return base + 0.011 * env * wave;
+  /* Palabra prolongada: progreso (0 a 1) del cambio de color / del tamaño de la palabra. */
+  rise(p) { return this.smooth(p); },
+
+  /* Palabra prolongada: luz (0 a 1). Se enciende despacio (LONG_IN) hasta LONG_BASE y desde ahí crece con la palabra hasta 1. */
+  halo(age, dur) {
+    return this.smooth(age / this.LONG_IN) * (this.LONG_BASE + (1 - this.LONG_BASE) * this.smooth(age / dur));
+  },
+
+  /* Escala: cuánto le falta a una letra para llegar a su sitio (1 = abajo del todo, 0 = en su posición normal).
+     Sube con una sola curva suave (arranca y llega sin velocidad): sin rebote, sin pasarse de su altura. */
+  lift(age) { return 1 - this.smooth(age / this.RISE); },
+
+  /* Escala, palabra prolongada: tamaño de una letra. La expansión es lenta, recorre la palabra de la primera letra a la última
+     (cada una empieza un poco después) y lleva una respiración casi imperceptible con fase propia por letra y por palabra. */
+  swell(age, dur, k, count, time, seed) {
+    const lag = count > 1 ? Math.min(this.SWELL_LAG, (dur * 0.3) / (count - 1)) : 0;
+    const p = this.smooth((age - lag * k) / Math.max(0.3, dur - lag * (count - 1)));
+    const breath = 0.004 * this.smooth(age / 0.8) * Math.sin(time * 1.4 + seed + k * 0.8);
+    return 1 + (this.SWELL - 1) * p + breath;
   }
 };
 
@@ -1704,9 +1718,11 @@ const Lyrics = {
   /* Dibuja el avance de las palabras (o letras) de la línea activa. Lo usa también la vista previa de Ajustes.
      `anim` = estilo activo (flow | letters | scale). Cada fotograma solo se escribe una variable CSS cuando su valor cambió.
        --n  progreso de color de cada sílaba o letra (0 a 1)
-       --a  (Palabra por palabra) entrada del brillo inicial de cada palabra
-       --g  (palabras prolongadas) intensidad del efecto especial de la palabra: sube mientras se canta y baja al terminar
-       --s  (Escala) tamaño de cada letra
+       --l  (Palabra por palabra) luz de cada letra en una palabra normal (0 a 1)
+       --g  (palabras prolongadas) progreso del cambio de color / del tamaño de la palabra (0 a 1)
+       --h  (palabras prolongadas) luz de la palabra: se enciende despacio, crece mientras suena y baja al terminar
+       --y  (Escala) cuánto le falta a cada letra para llegar a su sitio (1 = abajo, 0 = en su posición)
+       --s  (Escala, palabras prolongadas) tamaño de cada letra
      Todo se calcula del tiempo de la letra, así que buscar en la canción o cambiar de línea siempre deja cada palabra en su sitio. */
   paint(unitEls, units, time, anim) {
     const F = LyricFx;
@@ -1714,6 +1730,11 @@ const Lyrics = {
     const put = (el, name, text) => {
       const key = "_v" + name;
       if (el[key] !== text) { el[key] = text; el.style.setProperty("--" + name, text); }
+    };
+    // Ventana de una letra: empieza cuando le toca (según los tiempos de su sílaba) y dura lo que su parte de la sílaba (mínimo 0.12 s)
+    const slot = (unit, count, k) => {
+      const span = Math.max(0.05, unit.end - unit.t);
+      return { start: unit.t + (span * k) / count, len: Math.max(0.12, span / count) };
     };
     units.forEach((unit, j) => {
       const el = unitEls[j];
@@ -1725,41 +1746,38 @@ const Lyrics = {
       if (!letters) { put(el, "n", p.toFixed(3)); return; }
       const chars = el.children, count = chars.length || 1;
       for (let k = 0; k < chars.length; k++) {
-        const start = unit.t + (span * k) / count;
-        const length = Math.max(0.12, span / count);
-        put(chars[k], "n", F.clamp((time - start) / length).toFixed(3));
+        const w = slot(unit, count, k);
+        put(chars[k], "n", F.clamp((time - w.start) / w.len).toFixed(3));
       }
     });
 
     // Efectos por palabra (la palabra prolongada se detecta una por una, con sus propios tiempos)
     const words = LyricsParser.wordsOf(units);
-    const lineStart = units.length ? units[0].t : 0;
-    // Escala: las letras que aún no se cantan esperan algo más pequeñas; al encenderse la línea se achican con suavidad
-    const pre = 1 - (1 - F.PRE) * F.smooth((time - lineStart) / 0.3);
     for (let w = 0; w < words.length; w++) {
       const word = words[w];
       const head = unitEls[word.from];
       const wd = head && head.parentNode;
       if (!wd) continue;
-      const state = word.long ? this.longFx(wd, word, time, put) : 0;
+      const state = word.long ? this.longFx(wd, word, time, put, anim) : 0;
+      if (anim === "flow") continue; // Fluida: la palabra normal solo lleva el color; la prolongada lo resuelve longFx
 
-      if (anim === "letters") {
-        // Brillo inicial: aparece al empezar la palabra y se apaga letra a letra mientras se levantan (lo resuelve style.css con --a y --n)
-        if (!word.long) put(wd, "a", F.smooth((time - word.t) / 0.1).toFixed(2));
-      } else if (anim === "scale") {
-        let total = 0;
-        for (let u = word.from; u < word.to; u++) total += unitEls[u] ? unitEls[u].children.length : 0;
-        const stagger = Math.min(0.045, (word.dur * 0.55) / Math.max(1, total - 1)); // pequeño desfase entre letras
-        const seed = (word.t * 12.9898) % 6.2832; // fase propia de cada palabra prolongada
-        const rise = F.clamp((time - word.t) / Math.max(0.05, word.dur));
-        let idx = 0;
-        for (let u = word.from; u < word.to; u++) {
-          const chars = unitEls[u] ? unitEls[u].children : [];
-          for (let k = 0; k < chars.length; k++, idx++) {
-            let v;
-            if (word.long) v = state === 1 ? F.swell(rise, time, idx, seed) : time < word.t ? pre : 1; // al terminar vuelve a 1 con una transición CSS (estado 2)
-            else v = time < word.t + stagger * idx ? pre : F.spring(time - (word.t + stagger * idx));
-            put(chars[k], "s", v.toFixed(3));
+      let total = 0;
+      if (anim === "scale" && word.long) for (let u = word.from; u < word.to; u++) total += unitEls[u] ? unitEls[u].children.length : 0;
+      const seed = (word.t * 12.9898) % 6.2832; // fase propia de cada palabra prolongada
+      let idx = 0;
+      for (let u = word.from; u < word.to; u++) {
+        const chars = unitEls[u] ? unitEls[u].children : [];
+        const count = chars.length || 1;
+        for (let k = 0; k < chars.length; k++, idx++) {
+          const win = slot(units[u], count, k);
+          if (anim === "letters") {
+            // Luz de cada letra (la palabra prolongada usa --h de la palabra entera, no esta)
+            if (!word.long) put(chars[k], "l", F.glow(time, word.t, win.start, win.len).toFixed(3));
+          } else {
+            // Escala: la letra sube hasta su sitio cuando le llega el turno, sin rebote
+            put(chars[k], "y", F.lift(time - win.start).toFixed(3));
+            // Palabra prolongada: expansión lenta; al terminar vuelve a 1 con una transición CSS (estado 2)
+            if (word.long) put(chars[k], "s", (state === 1 ? F.swell(time - word.t, word.dur, idx, total, time, seed) : 1).toFixed(3));
           }
         }
       }
@@ -1767,21 +1785,28 @@ const Lyrics = {
   },
 
   /* Palabra prolongada: lleva su propio estado en el elemento (wd._fx).
-       0 = sin efecto · 1 = se está cantando (--g sube de 0 a 1) · 2 = terminó (--g vuelve a 0 con una transición CSS de LyricFx.REL)
+       0 = sin efecto · 1 = se está cantando (--g y --h suben) · 2 = terminó (vuelven a 0 con una transición CSS de LyricFx.REL)
      La clase .xl enciende el efecto y .rel su apagado suave; al pasar REL segundos (o si se busca otro momento) se quitan las dos,
      así que no queda ningún efecto activo. Devuelve el estado. */
-  longFx(wd, word, time, put) {
+  longFx(wd, word, time, put, anim) {
+    const F = LyricFx;
     const was = wd._fx || 0;
     let now = 0;
     if (time >= word.t && time < word.end) now = 1;
-    else if (was && time >= word.end && time < word.end + LyricFx.REL) now = 2;
+    else if (was && time >= word.end && time < word.end + F.REL) now = 2;
     if (now !== was) {
       wd._fx = now;
       if (now === 1) { wd.classList.remove("rel"); wd.classList.add("xl"); }
-      else if (now === 2) { wd.classList.add("rel"); put(wd, "g", "0"); }
-      else { wd.classList.remove("xl", "rel"); put(wd, "g", "0"); }
+      else if (now === 2) { wd.classList.add("rel"); put(wd, "g", "0"); put(wd, "h", "0"); }
+      else { wd.classList.remove("xl", "rel"); put(wd, "g", "0"); put(wd, "h", "0"); }
     }
-    if (now === 1) put(wd, "g", LyricFx.rise((time - word.t) / word.dur).toFixed(3));
+    if (now === 1) {
+      const age = time - word.t;
+      if (anim !== "scale") { // Escala no usa luz ni degradado
+        put(wd, "g", F.rise(age / word.dur).toFixed(3));
+        put(wd, "h", F.halo(age, word.dur).toFixed(3));
+      }
+    }
     return now;
   },
 
@@ -2097,9 +2122,9 @@ const Lyrics = {
    Los valores van en atributos de <html> (data-lanim…) y variables CSS; style.css hace el resto.
    ========================================================= */
 const LYRIC_ANIMS = [
-  { id: "flow", name: "Fluida", hint: "La letra se llena de color con un degradado suave. Las palabras largas se iluminan con un brillo y un degradado que crecen mientras suenan." },
-  { id: "letters", name: "Palabra por palabra", hint: "Cada letra se enciende y sube un poquito, con un brillo inicial que se apaga. Las palabras largas brillan y crecen un poco." },
-  { id: "scale", name: "Escala", hint: "Las letras se expanden con un rebote elástico. Las palabras largas crecen despacio y respiran." }
+  { id: "flow", name: "Fluida", hint: "La letra se llena de color con un degradado suave. Las palabras largas adquieren luz y un degradado que crecen mientras suenan." },
+  { id: "letters", name: "Palabra por palabra", hint: "Cada letra se enciende y sube un poquito, con una luz suave que se apaga al levantarse. Las palabras largas brillan cada vez más y crecen un poco." },
+  { id: "scale", name: "Escala", hint: "Las letras emergen desde abajo y suben con suavidad al ritmo de la frase, sin rebotes. Las palabras largas se expanden muy despacio." }
 ];
 const LYRIC_FONTS = [
   { id: "default", name: "Predeterminada", stack: "inherit", weight: 700 },

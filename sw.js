@@ -26,7 +26,8 @@
 // v22: controles del reproductor — play/pausa y anterior/siguiente más gruesos, tiempos debajo de la barra; renueva la copia guardada.
 // v23: portada del reproductor — cambia de tamaño con play/pausa y bordes limpios (sin marco ni fondo detrás de la imagen); renueva la copia guardada.
 // v24: animaciones de letras — Fluida, Palabra por palabra y Escala (se quita «Fluida con glow»), con efectos especiales para palabras prolongadas (script.js, style.css, index.html); renueva la copia guardada.
-const CACHE_NAME = "pulsar-rm-shell-v24";
+// v25: animaciones de letras refinadas — luz integrada en las letras (sin parpadeo ni mancha) en Palabra por palabra y Fluida, y Escala con ascenso progresivo sin rebotes (script.js, style.css); renueva la copia guardada.
+const CACHE_NAME = "pulsar-rm-shell-v25";
 
 const APP_SHELL = [
   "./",
