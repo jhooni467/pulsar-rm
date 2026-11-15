@@ -1409,7 +1409,7 @@ const Lyrics = {
   anchorKey: -1,     // v1.06: grupo de versos que manda en el desplazamiento (solo se desplaza cuando CAMBIA)
   frameIdx: [],      // líneas que se enmarcan en pantalla: el grupo más reciente y los que aún se cantan (con todos sus mini versos)
   sig: 0,            // qué líneas encendidas ya terminaron de cantarse (para atenuarlas cuando entra otro grupo)
-  geo: null,         // posiciones de las líneas en caché (no cambian al encender o apagar líneas)
+  geo: null,         // (sin uso desde la v1.09: la posición de las líneas cambia al abrirse y cerrarse sus espacios, se lee en cada encuadre)
   scroller: null,
   resizeTimer: 0,
   hold: -1,
@@ -1417,6 +1417,10 @@ const Lyrics = {
   paints: [],        // líneas encendidas con palabra por palabra: { els, units }
   gapEl: null,       // estrellas encendidas (si las hay) y su línea
   gapLine: null,
+  anchorEl: null,    // v1.09: línea principal que encuadra la pantalla (se mantiene quieta mientras se abren o cierran espacios)
+  anchorTop: null,   // su posición en la última lectura
+  trackUntil: 0,     // hasta cuándo se vigila la maqueta (ms, performance.now)
+  trackRaf: 0,
   paused: null,
   lineEls: [],
   raf: 0,
@@ -1503,6 +1507,9 @@ const Lyrics = {
     this.paints = [];
     this.gapEl = null;
     this.gapLine = null;
+    this.anchorEl = null;
+    this.anchorTop = null;
+    this.trackUntil = 0;
   },
 
   shift() {
@@ -1558,6 +1565,9 @@ const Lyrics = {
     this.gapEl = null;
     this.geo = null;
     this.anchorKey = -1;
+    this.anchorEl = null;
+    this.anchorTop = null;
+    this.trackUntil = 0;
     this.frameIdx = [];
     this.sig = 0;
     if (this.scroller) this.scroller.stop();
@@ -1590,11 +1600,14 @@ const Lyrics = {
       const side = ` s${line.side || "l"}${line.bg ? " bg" : ""}${line.sec ? " sec" : ""}${line.sec && prev && !prev.gap ? " tight" : ""}${line.words ? "" : " nw"}`;
       if (line.gap || (!line.text && !line.words)) {
         // Pausas: en la vista sincronizada son las estrellas; como texto normal, solo un espacio (las automáticas no se dibujan)
-        if (live) return `<p class="lyric-line gap${side}"${seek} aria-hidden="true">${LYRIC_STARS}</p>`;
+        // v1.09: .lx/.lt = envoltorio del espacio dinámico (ver "Espacios dinámicos" en style.css): .lx recorta, .lt conserva su altura natural
+        if (live) return `<p class="lyric-line gap${side}"${seek} aria-hidden="true"><span class="lx"><span class="lt">${LYRIC_STARS}</span></span></p>`;
         return line.auto ? "" : `<p class="lyric-line plain gap">&nbsp;</p>`;
       }
       // Como texto normal no se necesita el dibujo palabra por palabra
       const inner = line.words && live ? this.wordsHTML(line) : UI.escapeHTML(line.text);
+      // Los versos secundarios y [bg:] tampoco reservan hueco mientras están apagados: llevan el mismo envoltorio
+      if (live && line.sec) return `<p class="lyric-line${side}"${seek}><span class="lx"><span class="lt">${inner}</span></span></p>`;
       return `<p class="lyric-line${live ? "" : " plain"}${side}"${seek}>${inner}</p>`;
     }).join("");
     this.lineEls = Array.from(this.el.querySelectorAll(".lyric-line"));
@@ -1716,9 +1729,11 @@ const Lyrics = {
     // Grupo más reciente: manda en el desplazamiento y en cuáles líneas se ven en primer plano
     const newest = LyricsParser.frameOf(this.data, lit, time, this.frameIdx);
 
+    let spaces = false; // ¿se abre o se cierra algún espacio (verso secundario, [bg:] o estrellas)?
     this.lineEls.forEach((el, i) => {
       const line = lines[i];
       const on = lit.indexOf(i) >= 0;
+      if ((line.sec || line.gap) && Boolean(el._on) !== on) { el._on = on; spaces = true; }
       el.classList.toggle("active", on);
       el.classList.toggle("past", !on && line.vend <= time);
       // Un grupo que ya terminó de cantarse y solo se mantiene encendido mientras empieza el siguiente: sigue legible, pero cede el protagonismo
@@ -1740,15 +1755,16 @@ const Lyrics = {
       else if (line.words) this.paints.push({ els: Array.from(el.querySelectorAll(".lw")), units: LyricsParser.units(line) });
     });
 
-    // v1.08: el movimiento de las estrellas (CSS) corre mientras su pausa está encendida y durante su salida (la espiral de
-    // alejamiento dura hasta ~3.5 s), hasta que se han desvanecido del todo. Fuera de ahí no hay animación activa.
-    // Al terminar la pausa, las tres pasan a girar/levitar aunque la tercera apenas haya llegado a crecer del todo.
+    // v1.09: las estrellas giran/levitan solo mientras su pausa está encendida. Su salida en espiral (clase .out) la marca paintGap
+    // ANTES de que acabe la pausa, así que cuando la línea se apaga ya no queda nada animándose: .go se quita en cuanto se desvanece.
     if (prevGapEl && prevGapEl !== this.gapEl) {
-      prevGapEl.querySelectorAll(".st").forEach((s) => s.classList.add("fin"));
       clearTimeout(prevGapEl._goT);
-      prevGapEl._goT = setTimeout(() => prevGapEl.classList.remove("go"), 3800);
+      prevGapEl._goT = setTimeout(() => prevGapEl.classList.remove("go"), 700);
     }
     if (this.gapEl) { clearTimeout(this.gapEl._goT); this.gapEl.classList.add("go"); }
+
+    // Se abrió o cerró algún espacio: se vigila la maqueta unos instantes para que las frases principales no se muevan con él
+    if (spaces) this.trackLayout();
 
     // La pantalla SOLO se desplaza cuando cambia el grupo que manda. Encender o apagar un mini verso, o que otro grupo
     // se quede o deje de estar encendido, no la mueve: mientras suena el mismo conjunto de versos, la posición es estable.
@@ -1757,42 +1773,86 @@ const Lyrics = {
     if (moved || force || snap) this.center(Boolean(snap), Boolean(force));
   },
 
-  // Las estrellas se van encendiendo una a una según avanza la pausa: se nota cuánto falta para la siguiente voz
+  /* Las estrellas se van encendiendo una a una según avanza la pausa: se nota cuánto falta para la siguiente voz.
+     v1.09: la espera se reparte en dos tramos. Las tres estrellas crecen durante la pausa menos `lead` segundos; en esos
+     últimos `lead` segundos (justo antes de la frase siguiente) hacen su salida en espiral (.out) y el espacio se cierra, de modo
+     que la frase que sigue empieza sobre un espacio ya recuperado. */
   paintGap(time) {
     const line = this.gapLine, el = this.gapEl;
     const span = Math.max(0.1, line.end - line.t);
-    const g = Math.min(1, Math.max(0, (time - line.t) / span));
-    const key = g.toFixed(2);
+    const lead = this.gapLead(span);
+    const out = time >= line.end - lead;
+    if (el._k !== lead) { el._k = lead; el.style.setProperty("--k", (lead / this.GAP_EXIT).toFixed(3)); } // escala la salida (CSS está escrita para GAP_EXIT s)
+    if (el._o !== out) {
+      el._o = out;
+      el.classList.toggle("out", out);
+      this.trackLayout();
+    }
+    const g = Math.min(1, Math.max(0, (time - line.t) / Math.max(0.1, span - lead)));
+    const key = g.toFixed(2) + (out ? "o" : "");
     if (el._g === key) return;
     el._g = key;
     // Cada estrella crece en su turno (--s0/--s1/--s2). Cuando termina de crecer (.fin) empieza a girar y a levitar sobre su centro.
     const st = el._st || (el._st = el.querySelectorAll(".st"));
     for (let k = 0; k < 3; k++) {
-      const v = Math.min(1, Math.max(0, g * 3 - k));
+      const v = out ? 1 : Math.min(1, Math.max(0, g * 3 - k));
       el.style.setProperty("--s" + k, v.toFixed(2));
       if (st[k]) st[k].classList.toggle("fin", v >= 1);
     }
   },
 
-  // Posición de cada línea (una sola lectura de la maqueta; encender, apagar o escalar líneas no la cambia)
-  geometry() {
-    if (this.geo) return this.geo;
-    const height = this.el.clientHeight;
-    if (!height) return null; // pantalla oculta: no se puede medir todavía
-    const count = this.lineEls.length;
-    const top = new Float32Array(count), bottom = new Float32Array(count);
-    for (let i = 0; i < count; i++) {
-      const el = this.lineEls[i];
-      top[i] = el.offsetTop;
-      bottom[i] = el.offsetTop + el.offsetHeight;
-    }
-    this.geo = { top, bottom, height, max: Math.max(0, this.el.scrollHeight - height) };
-    return this.geo;
+  // Segundos de antelación con que empieza la salida de las estrellas (cabe en pausas cortas: nunca más de la mitad de la pausa)
+  GAP_EXIT: 1.8,
+  gapLead(span) {
+    return Math.min(this.GAP_EXIT, Math.max(0.6, span * 0.5));
   },
 
-  /* Encuadra el grupo que suena. El destino depende SOLO de los versos principales del grupo (más el hueco que ya
-     tienen reservado sus mini versos), nunca de qué mini versos estén encendidos en ese instante. Solo se llama cuando
-     el grupo cambia, y el movimiento lo hace un resorte que no se reinicia al cambiar de destino: sin saltos ni temblor. */
+  /* ---------- Espacios dinámicos (v1.09) ----------
+     Los versos secundarios, los [bg:] y las estrellas abren su hueco solo mientras están encendidos y lo cierran al apagarse
+     (CSS: grid-template-rows 0fr ↔ 1fr). Como la maqueta cambia durante esa transición, aquí se mantiene quieta la línea principal que
+     encuadra la pantalla: cada fotograma se compara su posición con la anterior y la diferencia (lo que se abrió o cerró por encima) se
+     descuenta del desplazamiento, igual que hace el navegador con overflow-anchor (que está apagado porque manda el resorte). */
+  trackLayout() {
+    this.trackUntil = performance.now() + 1300; // más que la transición más larga (apertura/cierre ≤ ~1 s)
+    if (this.trackRaf) return;
+    const tick = () => {
+      this.trackRaf = 0;
+      this.holdAnchor();
+      if (performance.now() < this.trackUntil) this.trackRaf = requestAnimationFrame(tick);
+    };
+    this.trackRaf = requestAnimationFrame(tick);
+  },
+
+  holdAnchor() {
+    const el = this.anchorEl;
+    if (!el || !el.isConnected || !this.visible()) { this.anchorTop = null; return; }
+    const top = el.offsetTop;
+    const prev = this.anchorTop;
+    this.anchorTop = top;
+    const d = prev === null ? 0 : top - prev;
+    if (!d || Date.now() < this.userScrollUntil) return; // si la persona desplaza a mano, manda ella
+    const s = this.scroller;
+    if (s.running) { s.pos += d; s.target += d; this.el.scrollTop = s.pos; } // el resorte sigue su camino, desplazado lo mismo que la maqueta
+    else this.el.scrollTop += d;
+  },
+
+  // Medidas de la pantalla (la posición de las líneas ya no se guarda: cambia cuando se abren y cierran espacios)
+  geometry() {
+    const height = this.el.clientHeight;
+    if (!height) return null; // pantalla oculta: no se puede medir todavía
+    return { height, max: Math.max(0, this.el.scrollHeight - height) };
+  },
+
+  // Altura que tiene (o tendrá) una línea con su espacio abierto: la de su contenido, aunque ahora mismo esté cerrada o a medias
+  naturalHeight(el) {
+    const inner = el._lt === undefined ? (el._lt = el.querySelector(".lt")) : el._lt;
+    return inner ? inner.offsetHeight : el.offsetHeight;
+  },
+
+  /* Encuadra el grupo que suena. El destino depende SOLO de sus versos principales (mide la altura natural de cada uno, esté su
+     espacio abierto o no) y nunca de qué mini versos estén encendidos en ese instante: sus huecos se abren y cierran debajo sin
+     mover el encuadre. Solo se llama cuando el grupo cambia, y el movimiento lo hace un resorte que no se reinicia al cambiar de
+     destino: sin saltos ni temblor. */
   center(instant, manual) {
     if (!this.lit.length || !this.frameIdx.length) return;
     // Desplazamiento automático apagado: solo se centra cuando la persona lo pide (botón «Centrar»)
@@ -1804,13 +1864,21 @@ const Lyrics = {
     const geo = this.geometry();
     if (!geo) return;
     this.needsCenter = false;
-    let top = Infinity, bottom = 0;
+    const lines = this.data.lines;
+    let top = Infinity, bottom = 0, anchor = null;
     for (let k = 0; k < this.frameIdx.length; k++) {
       const i = this.frameIdx[k];
-      if (geo.top[i] < top) top = geo.top[i];
-      if (geo.bottom[i] > bottom) bottom = geo.bottom[i];
+      if (lines[i].sec && lines[i].pidx >= 0) continue; // un mini verso no encuadra: su espacio se abre debajo de su verso principal
+      const el = this.lineEls[i];
+      const y = el.offsetTop;
+      if (y < top) { top = y; anchor = el; }
+      const end = y + this.naturalHeight(el);
+      if (end > bottom) bottom = end;
     }
     if (top === Infinity) return;
+    this.anchorEl = anchor;
+    this.anchorTop = top;
+    this.trackLayout(); // los espacios que están cerrándose o abriéndose por encima del ancla no deben moverla
     const span = bottom - top;
     const target = span > geo.height * 0.7 ? top - geo.height * 0.28 : top - (geo.height - span) / 2;
     const goal = Math.min(geo.max, Math.max(0, Math.round(target)));

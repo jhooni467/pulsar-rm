@@ -20,7 +20,8 @@
 // v15 (Nova Intelligence, etapa 1): nova-core.js, nova-store.js, nova-net.js, nova-ui.js y nova.css se guardan para uso sin conexión; renueva la copia guardada.
 // v16 (Nova Intelligence, etapa 2): sección «Nova Intelligence ✨» en Ajustes (index.html, nova-core.js, nova-ui.js, nova.css); renueva la copia guardada.
 // v18: estrellas de espera — restauradas las 3 estrellas independientes; crecen una a una, luego giran y levitan y al acabar la pausa se alejan en espiral (escala y opacidad graduales); renueva la copia guardada.
-const CACHE_NAME = "pulsar-rm-shell-v18";
+// v19: letras — espacios dinámicos (versos secundarios, [bg:] y estrellas solo ocupan lugar mientras se muestran) y salida en espiral de las estrellas justo antes de la frase siguiente (script.js, style.css); renueva la copia guardada.
+const CACHE_NAME = "pulsar-rm-shell-v19";
 
 const APP_SHELL = [
   "./",

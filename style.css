@@ -1579,8 +1579,30 @@ html[data-lduet="off"] .lyric-line.sc {
   max-width: 84%;
 }
 
+/* ---- Espacios dinámicos (v1.09) ----
+   Los versos secundarios, los [bg:] y las estrellas NO reservan hueco mientras están apagados (antes solo se ocultaban con
+   opacity/visibility y conservaban su altura y su margen: de ahí los huecos fijos entre frases, también en modo compacto).
+   Ahora cada uno abre su propio espacio cuando le toca y lo cierra al apagarse (grid-template-rows 0fr ↔ 1fr, margen incluido).
+   Estructura: p.lyric-line (grid) > .lx (recorta; min-height:0) > .lt (contenido, siempre con su altura natural).
+   En navegadores sin animación de grid el espacio se abre y cierra de golpe, pero igualmente no se reserva. */
+.lyric-line.sec:not(.plain),
+.lyric-line.gap:not(.plain) {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+.lyric-line .lx {
+  min-height: 0;
+  overflow: clip;
+  overflow-clip-margin: 0.4em; /* deja respirar al brillo y a la letra que sube un poco; el recorte solo importa mientras el espacio está cerrándose */
+}
+.lyric-line .lt { display: block; }
+/* Las estrellas hacen su espiral FUERA de su línea: ahí no se recorta (se desvanecen antes de que el hueco termine de cerrarse) */
+.lyric-line.gap .lx { overflow: visible; }
+
 /* [bg:…] que acompaña a un verso: pegada debajo y con entrada suave (sube un poco y se enciende) */
-html .lyrics .lyric-line.sec.tight:not(.plain) { margin-top: -10px; margin-bottom: 16px; }
+html .lyrics .lyric-line.sec.tight.active:not(.plain) { margin-top: -10px; margin-bottom: 16px; }
+html[data-lspace="compact"] .lyrics .lyric-line.sec.tight.active:not(.plain) { margin-top: -8px; margin-bottom: 9px; }
+html[data-lspace="wide"] .lyrics .lyric-line.sec.tight.active:not(.plain) { margin-bottom: 26px; }
 .lyric-line.sec {
   transform: translateY(5px) scale(0.92);
 }
@@ -1588,16 +1610,27 @@ html .lyrics .lyric-line.sec.tight:not(.plain) { margin-top: -10px; margin-botto
 .lyric-line.plain.sec {
   transform: none;
 }
-/* Voz de fondo apagada = oculta (su hueco se conserva para que nada se mueva). Se apaga a la vez que su verso principal. */
+/* Voz de fondo apagada = sin espacio. Al apagarse (a la vez que su verso principal) se desvanece y su hueco se cierra suavemente
+   (un instante después, para que primero se lea cómo termina); al encenderse el hueco se abre. */
 .lyrics .lyric-line.sec:not(.active):not(.plain) {
+  grid-template-rows: 0fr;
+  margin-top: 0;
+  margin-bottom: 0;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
   filter: none;
-  transition: color 0.4s ease, transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.35s ease, visibility 0s linear 0.35s;
+  transition: color 0.4s ease, transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.3s ease,
+    grid-template-rows 0.46s cubic-bezier(0.4, 0, 0.2, 1) 0.12s, margin-top 0.46s cubic-bezier(0.4, 0, 0.2, 1) 0.12s,
+    margin-bottom 0.46s cubic-bezier(0.4, 0, 0.2, 1) 0.12s, visibility 0s linear 0.6s;
 }
 .lyrics .lyric-line.sec.active {
   opacity: 0.95;
+}
+.lyrics .lyric-line.sec.active:not(.plain) {
+  transition: color 0.4s ease, transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.4s ease 0.06s,
+    grid-template-rows 0.46s cubic-bezier(0.2, 0.7, 0.2, 1), margin-top 0.46s cubic-bezier(0.2, 0.7, 0.2, 1),
+    margin-bottom 0.46s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 /* v1.06 — Grupos de versos. Un grupo que ya terminó de cantarse pero sigue encendido (porque aún no acaba su último
@@ -1615,8 +1648,10 @@ html .lyrics .lyric-line.sec.tight:not(.plain) { margin-top: -10px; margin-botto
   overflow-anchor: none;
 }
 /* Canciones rápidas (rap): los mini versos aparecen más ágiles para no llegar tarde a su palabra */
-.lyrics[data-pace="fast"] .lyric-line.sec.active {
-  transition: color 0.3s ease, transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.22s ease;
+.lyrics[data-pace="fast"] .lyric-line.sec.active:not(.plain) {
+  transition: color 0.3s ease, transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.22s ease 0.03s,
+    grid-template-rows 0.3s cubic-bezier(0.2, 0.7, 0.2, 1), margin-top 0.3s cubic-bezier(0.2, 0.7, 0.2, 1),
+    margin-bottom 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 .lyric-line.past {
@@ -2484,18 +2519,50 @@ img {
    Se enciende en la introducción, en las partes instrumentales y en las pausas largas. Las tres estrellas
    se van iluminando una tras otra según avanza la pausa (--s0 / --s1 / --s2, de 0 a 1) y se quedan encendidas. Solo se animan
    transform y opacity (baratas para Android); la animación solo corre mientras las estrellas están visibles. */
+/* v1.09: la línea de estrellas no reserva hueco mientras no hace falta (ver "Espacios dinámicos" más arriba): su altura vive en .lt,
+   y la línea abre su espacio al encenderse y lo cierra al final de la salida en espiral (.out) o al apagarse. */
 .lyric-line.gap:not(.plain) {
-  display: flex;
-  align-items: center;
-  height: calc(var(--lyric-size, 24px) * 1.25);
   opacity: 0;
   transform: scale(0.7);
   cursor: default;
   pointer-events: none;
 }
+.lyric-line.gap .lt {
+  display: flex;
+  align-items: center;
+  height: calc(var(--lyric-size, 24px) * 1.25);
+}
 .lyric-line.gap.active:not(.plain) {
   opacity: 1;
   transform: scale(1);
+}
+/* Abrir: el hueco crece mientras las estrellas aparecen */
+html .lyrics .lyric-line.gap.active:not(.plain) {
+  transition: transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1), opacity 0.4s ease 0.05s,
+    grid-template-rows 0.5s cubic-bezier(0.2, 0.7, 0.2, 1), margin-top 0.5s cubic-bezier(0.2, 0.7, 0.2, 1),
+    margin-bottom 0.5s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+/* Salida (.out, empieza justo antes de que acabe la pausa: 1.8 s × --k): primero la espiral de las estrellas (ver abajo) y, cuando casi
+   han desaparecido, el hueco se cierra para que la frase siguiente empiece sobre un espacio ya recuperado. --k = duración de la salida
+   (--k = 1 en pausas largas; menos en pausas cortas, lo pone paintGap). */
+html .lyrics .lyric-line.gap.active.out:not(.plain) {
+  grid-template-rows: 0fr;
+  margin-top: 0;
+  margin-bottom: 0;
+  transition: grid-template-rows calc(0.8s * var(--k, 1)) cubic-bezier(0.45, 0, 0.35, 1) calc(1s * var(--k, 1)),
+    margin-top calc(0.8s * var(--k, 1)) cubic-bezier(0.45, 0, 0.35, 1) calc(1s * var(--k, 1)),
+    margin-bottom calc(0.8s * var(--k, 1)) cubic-bezier(0.45, 0, 0.35, 1) calc(1s * var(--k, 1));
+}
+/* Apagada = sin espacio (también si la pausa se interrumpe, p. ej. al saltar a otro punto de la canción) */
+html .lyrics .lyric-line.gap:not(.active):not(.plain) {
+  grid-template-rows: 0fr;
+  margin-top: 0;
+  margin-bottom: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, transform 0.3s ease,
+    grid-template-rows 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.05s, margin-top 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.05s,
+    margin-bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.05s, visibility 0s linear 0.5s;
 }
 .lyric-line.gap .stars {
   display: inline-flex;
@@ -2568,10 +2635,11 @@ html[data-fx="off"] .lyric-line.gap .st svg { filter: none !important; }
 }
 
 /* Parámetros de cada estrella. --a0/--A: ángulo inicial y barrido de la espiral · --R: radio final · --dl/--D: retardo y duración de la salida
+   (v1.09: la salida arranca ~1.8 s antes de que acabe la pausa y la espiral dura ~1.1 s; JS la escala con --k en pausas cortas)
    --sd/--sto: periodo y sentido del giro propio · --fd/--fy: periodo y amplitud de la levitación */
-.lyric-line.gap .st:nth-child(1) { --a0: 165deg; --A: 160deg; --R: 3.4em; --dl: 0.5s; --D: 2.6s; --sd: 30s; --sto: 360deg;  --fd: 5.4s; --fy: 0.09em; }
-.lyric-line.gap .st:nth-child(2) { --a0: 265deg; --A: 160deg; --R: 3.8em; --dl: 0.7s; --D: 2.8s; --sd: 36s; --sto: -360deg; --fd: 6.2s; --fy: 0.08em; }
-.lyric-line.gap .st:nth-child(3) { --a0: 5deg;   --A: 160deg; --R: 3.4em; --dl: 0.9s; --D: 3s;   --sd: 33s; --sto: 360deg;  --fd: 5.8s; --fy: 0.10em; }
+.lyric-line.gap .st:nth-child(1) { --a0: 165deg; --A: 160deg; --R: 3.4em; --dl: 0s;    --D: 1s;    --sd: 30s; --sto: 360deg;  --fd: 5.4s; --fy: 0.09em; }
+.lyric-line.gap .st:nth-child(2) { --a0: 265deg; --A: 160deg; --R: 3.8em; --dl: 0.06s; --D: 1.04s; --sd: 36s; --sto: -360deg; --fd: 6.2s; --fy: 0.08em; }
+.lyric-line.gap .st:nth-child(3) { --a0: 5deg;   --A: 160deg; --R: 3.4em; --dl: 0.12s; --D: 1.08s; --sd: 33s; --sto: 360deg;  --fd: 5.8s; --fy: 0.10em; }
 /* Versos de la segunda voz (alineados a la derecha): el espacio libre está a la izquierda, así que la espiral se refleja
    (y se invierte el reparto, porque la estrella 3 es la que queda junto al borde). No cambia el orden en que crecen. */
 html:not([data-lduet="off"]) .lyric-line.gap.sr .st:nth-child(1) { --a0: 175deg; --A: -160deg; }
@@ -2604,32 +2672,27 @@ html:not([data-lduet="off"]) .lyric-line.gap.sr .st:nth-child(3) { --a0: 15deg; 
   .lyric-line.gap.active .sb { rotate: calc(var(--a0) * -1); }
   .lyric-line.gap.active .sa { translate: 0 0; scale: 1; opacity: 1; }
 
-  /* Salida (la pausa terminó): espiral que se abre (ángulo lineal + radio con ease-in), contragiro para no girar de más,
-     y alejamiento en profundidad: la escala y la opacidad bajan gradualmente hasta integrarse con el fondo */
-  .lyric-line.gap:not(.active) .so {
+  /* Salida (.out: los últimos ~1.8 s de la pausa, justo antes de la frase siguiente): espiral que se abre (ángulo lineal +
+     radio con ease-in), contragiro para no girar de más, y alejamiento en profundidad: la escala y la opacidad bajan gradualmente.
+     Es la ÚNICA vez que las estrellas hacen la espiral: en reposo no hay ningún giro orbital. */
+  .lyric-line.gap.out .so {
     rotate: calc(var(--a0) + var(--A));
-    transition: rotate var(--D) linear var(--dl);
+    transition: rotate calc(var(--D) * var(--k, 1)) linear calc(var(--dl) * var(--k, 1));
   }
-  .lyric-line.gap:not(.active) .sb {
+  .lyric-line.gap.out .sb {
     rotate: calc((var(--a0) + var(--A)) * -1);
-    transition: rotate var(--D) linear var(--dl);
+    transition: rotate calc(var(--D) * var(--k, 1)) linear calc(var(--dl) * var(--k, 1));
   }
-  .lyric-line.gap:not(.active) .sa {
+  .lyric-line.gap.out .sa {
     translate: var(--R) 0;
     scale: 0.18;
     opacity: 0;
     transition:
-      translate var(--D) cubic-bezier(0.4, 0, 0.75, 0.55) var(--dl),
-      scale var(--D) cubic-bezier(0.3, 0, 0.7, 1) var(--dl),
-      opacity var(--D) cubic-bezier(0.3, 0, 0.7, 1) var(--dl);
+      translate calc(var(--D) * var(--k, 1)) cubic-bezier(0.4, 0, 0.75, 0.55) calc(var(--dl) * var(--k, 1)),
+      scale calc(var(--D) * var(--k, 1)) cubic-bezier(0.3, 0, 0.7, 1) calc(var(--dl) * var(--k, 1)),
+      opacity calc(var(--D) * var(--k, 1)) cubic-bezier(0.3, 0, 0.7, 1) calc(var(--dl) * var(--k, 1));
   }
   .lyric-line.gap.go .sa { will-change: transform, opacity; }
-
-  /* La línea se mantiene visible (y sin encogerse, para no acercar las estrellas) mientras dura la salida; JS quita .go cuando termina */
-  .lyric-line.gap.go:not(.active):not(.plain) {
-    opacity: 1;
-    transform: scale(1);
-  }
 }
 
 /* En pausa del reproductor, las estrellas se quedan quietas donde están */
@@ -2642,12 +2705,12 @@ html:not([data-lduet="off"]) .lyric-line.gap.sr .st:nth-child(3) { --a0: 15deg; 
   .lyric-line.gap .st svg { animation: none !important; }
   .lyric-line.gap .so, .lyric-line.gap .sb { rotate: none !important; transition: none !important; }
   .lyric-line.gap .sa { translate: none !important; scale: none !important; opacity: 1 !important; transition: none !important; will-change: auto; }
-  .lyric-line.gap.go:not(.active):not(.plain) { opacity: 0 !important; transform: scale(0.7) !important; }
+  .lyrics .lyric-line.sec:not(.plain), .lyrics .lyric-line.gap:not(.plain) { transition-duration: 0.01s !important; transition-delay: 0s !important; }
 }
 html[data-anim="reduced"] .lyric-line.gap .st svg { animation: none !important; }
 html[data-anim="reduced"] .lyric-line.gap .so, html[data-anim="reduced"] .lyric-line.gap .sb { rotate: none !important; transition: none !important; }
 html[data-anim="reduced"] .lyric-line.gap .sa { translate: none !important; scale: none !important; opacity: 1 !important; transition: none !important; will-change: auto; }
-html[data-anim="reduced"] .lyric-line.gap.go:not(.active):not(.plain) { opacity: 0 !important; transform: scale(0.7) !important; }
+html[data-anim="reduced"] .lyrics .lyric-line.sec:not(.plain), html[data-anim="reduced"] .lyrics .lyric-line.gap:not(.plain) { transition-duration: 0.01s !important; transition-delay: 0s !important; }
 
 /* Barra de navegación de abajo */
 .nav-icon {
