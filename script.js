@@ -4151,6 +4151,11 @@ const UI = {
       });
     });
 
+    // Solo visual: al arrastrar, el relleno de la barra sigue al dedo (el arrastre y el cambio de posición no se tocan)
+    document.querySelectorAll("[data-progress]").forEach((progress) => {
+      progress.addEventListener("input", () => this.paintProgress(progress));
+    });
+
     // Barras deslizantes de Ajustes (duración del crossfade, balance…)
     document.addEventListener("input", (event) => {
       const range = event.target.closest && event.target.closest("[data-range]");
@@ -4391,7 +4396,15 @@ const UI = {
 
   // Las mismas barras y tiempos se repiten en el reproductor y en la pantalla de letras
   setProgressValue(value) {
-    document.querySelectorAll("[data-progress]").forEach((input) => { input.value = value; });
+    document.querySelectorAll("[data-progress]").forEach((input) => { input.value = value; this.paintProgress(input); });
+  },
+
+  // Solo visual: lo reproducido que rellena la barra (--p de 0 a 1). No toca el valor ni la reproducción.
+  paintProgress(input) {
+    const max = Number(input.max) || 1000;
+    const fraction = Math.min(1, Math.max(0, (Number(input.value) || 0) / max));
+    const text = fraction.toFixed(4);
+    if (input._p !== text) { input._p = text; input.style.setProperty("--p", text); }
   },
 
   setTimeText(kind, text) {
