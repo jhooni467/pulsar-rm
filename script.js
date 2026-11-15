@@ -32,6 +32,9 @@ const $ = (id) => document.getElementById(id);
 const Icons = {
   play: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 5v14l12-7z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
   pause: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="6.5" y="5" width="4" height="14" rx="1.3" fill="currentColor"/><rect x="13.5" y="5" width="4" height="14" rx="1.3" fill="currentColor"/></svg>',
+  // Versión gruesa y sólida de play/pausa: solo para el botón circular del reproductor (bloques .controls)
+  playBold: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="ic-play" d="M7.5 4.5v15L20 12z" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></svg>',
+  pauseBold: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5.8" y="4.5" width="5" height="15" rx="1.7" fill="currentColor"/><rect x="13.2" y="4.5" width="5" height="15" rx="1.7" fill="currentColor"/></svg>',
   check: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 12.5l3.8 3.8 7.2-8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   note: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></g></svg>',
   x: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -4372,7 +4375,8 @@ const UI = {
       const state = playing ? "pause" : "play";
       if (button.dataset.state !== state) { // solo si cambió: así el icono puede animarse
         button.dataset.state = state;
-        button.innerHTML = symbol;
+        // El botón circular del reproductor (dentro de .controls) usa los símbolos gruesos; mini-player y letras conservan los suyos
+        button.innerHTML = button.closest(".controls") ? (playing ? Icons.pauseBold : Icons.playBold) : symbol;
       }
       button.setAttribute("aria-label", playing ? "Pausar" : "Reproducir");
     });

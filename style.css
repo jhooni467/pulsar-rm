@@ -936,14 +936,28 @@ button {
   --pg-track: color-mix(in srgb, var(--text, #fff) 15%, transparent);
   --pg-line: 12px;
 }
+/* Disposición: la barra ocupa todo el ancho disponible y los tiempos van debajo (transcurrido a la izquierda, duración a la derecha).
+   El orden del HTML no cambia (tiempo, barra, duración): la cuadrícula los coloca, así el script no necesita saber nada de esto. */
+.progress-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas:
+    "bar bar"
+    "cur dur";
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 6px; /* separación cómoda entre la barra y los textos */
+}
+.progress-container input { grid-area: bar; width: 100%; }
 .progress-container [data-time] {
-  min-width: 34px;
+  min-width: 0;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   opacity: 0.85;
+  line-height: 1.2;
 }
-.progress-container [data-time="current"] { text-align: right; }
-.progress-container [data-time="duration"] { text-align: left; }
+.progress-container [data-time="current"] { grid-area: cur; text-align: left; }
+.progress-container [data-time="duration"] { grid-area: dur; text-align: right; }
 
 .progress-container input {
   flex: 1;
@@ -3893,3 +3907,11 @@ html[data-fx="off"] .lyrics { -webkit-mask-image: none; mask-image: none; }
    así que env(safe-area-inset-*) vale 0 en el APK y estas reglas solo actúan en navegador/PWA con muesca.
    La altura de los contenedores usa dvh: sigue la altura real visible (con o sin barra de estado, con teclado abierto).
    ========================================================= */
+
+/* ---------- Controles del reproductor: lenguaje visual grueso y sólido ----------
+   Solo afecta a los botones dentro de .controls (reproductor y dock de letras). Colores, tamaños del botón circular y temas no cambian. */
+.controls .round-btn .icon {
+  width: 1.35em;  /* símbolo con más presencia dentro del mismo círculo */
+  height: 1.35em;
+}
+.controls .side-btn .icon g { stroke-width: 2.4; } /* aleatorio / repetir al mismo peso que el resto */
