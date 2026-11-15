@@ -4433,6 +4433,7 @@ const UI = {
 
   setCover(element, url) {
     if (!element) return;
+    element.classList.toggle("has-img", !!url); // con imagen real, el marco y el fondo de respaldo se quitan (ver style.css)
     if (url) {
       const current = element.querySelector("img");
       if (current && current.getAttribute("src") === url) return; // misma portada: sin parpadeo

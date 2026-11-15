@@ -24,7 +24,8 @@
 // v20: barra de progreso rediseñada (línea fina, pista sutil, indicador discreto; solo estilo, script.js y style.css); renueva la copia guardada.
 // v21: barra de progreso más gruesa, sin indicador circular y con extremos redondeados (solo style.css); renueva la copia guardada.
 // v22: controles del reproductor — play/pausa y anterior/siguiente más gruesos, tiempos debajo de la barra; renueva la copia guardada.
-const CACHE_NAME = "pulsar-rm-shell-v22";
+// v23: portada del reproductor — cambia de tamaño con play/pausa y bordes limpios (sin marco ni fondo detrás de la imagen); renueva la copia guardada.
+const CACHE_NAME = "pulsar-rm-shell-v23";
 
 const APP_SHELL = [
   "./",
