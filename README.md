@@ -145,7 +145,7 @@ The next major update is planned to include:
 - Softer animations: cover and title changes, play/pause icon, tab panels, notifications and selectors.
 - Lyrics support: Apple Music style duets (V1:, V2:, V1000:, M:, F:, D:, <v Name>), background vocals in parentheses and speaker-only lines.
 - Duet layout: main singer on the left, secondary singer on the right, both together in the center.
-- Lyrics settings: three animations (Fluid, Fluid with glow, Letter by letter) with live preview, font (including importing your own .ttf/.otf/.woff/.woff2), size, duet layout and blur of distant lines.
+- Lyrics settings: three animations (Fluid, Word by word, Scale) with live preview, each one has its own special effect for prolonged words (1.371 s or longer, detected word by word from the lyric timestamps); font (including importing your own .ttf/.otf/.woff/.woff2), size, duet layout and blur of distant lines.
 - Fixes: removed the duplicated root workflow and the unused equalizer.js.
 
 </details><details>

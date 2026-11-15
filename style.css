@@ -1788,10 +1788,17 @@ html[data-lblur="on"] .lyrics .lyric-line:not(.active):not(.plain):not(.gap):not
   text-align: right;
 }
 
-/* ---- Palabra por palabra ----
+/* ---- Animaciones de las letras ----
+   Tres estilos independientes (Ajustes → Letras y animaciones, atributo html[data-lanim]):
+     flow    Fluida              el color avanza con un borde difuminado
+     letters Palabra por palabra  cada letra se enciende y sube un poquito, con un brillo inicial que se apaga
+     scale   Escala              las letras se expanden con un rebote elástico (sin brillo ni degradados)
+   Cada estilo tiene su animación normal y la de las palabras prolongadas (las que duran 1.371 s o más; script.js las detecta una a una
+   y les pone .xl mientras dura su efecto y .rel mientras se apaga).
    .wd = palabra (no se parte al cambiar de renglón), .lw = sílaba o palabra, .lc = letra.
-   Encima del texto apagado hay una capa de color (::before) que se revela con --n (de 0 a 1),
-   y otra de brillo (::after) que solo se ve en las animaciones con glow. */
+   Encima del texto apagado hay una capa de color (::before) que se revela con --n (de 0 a 1).
+   Variables que escribe script.js:  --n progreso de color · --a entrada del brillo inicial (Palabra por palabra)
+                                     --g intensidad del efecto de la palabra prolongada (0 a 1) · --s tamaño de cada letra (Escala) */
 .wd {
   display: inline-block;
   white-space: nowrap;
@@ -1815,48 +1822,82 @@ html[data-lblur="on"] .lyrics .lyric-line:not(.active):not(.plain):not(.gap):not
   pointer-events: none;
 }
 
-/* Fluida: el color avanza con el borde difuminado */
-html[data-lanim="flow"] .lyric-line.active .lw[data-t]::before,
-html[data-lanim="glow"] .lyric-line.active .lw[data-t]::before {
-  -webkit-mask-image: linear-gradient(90deg, #000 calc(var(--n) * 112% - 12%), transparent calc(var(--n) * 112%));
-  mask-image: linear-gradient(90deg, #000 calc(var(--n) * 112% - 12%), transparent calc(var(--n) * 112%));
-}
-
-/* Brillo: capa aparte (el texto es transparente, solo se ve la sombra) que sigue a la palabra que se canta */
-html[data-lanim="glow"] .lyric-line.active .lw[data-t]::after,
-html[data-lanim="letters"] .lyric-line.active .lc[data-t]::after {
+/* Capas de brillo (el texto es transparente: solo se ve la sombra). Solo las usan Fluida y Palabra por palabra en sus palabras
+   con efecto; Escala no tiene brillo. */
+html[data-lanim="letters"] .lyric-line.active .lc[data-t]::after,
+html[data-lanim="letters"] .wd.xl .lc[data-t]::after,
+html[data-lanim="flow"] .wd.xl .lw[data-t]::after {
   content: attr(data-t);
   position: absolute;
   left: 0;
   top: 0;
   white-space: pre;
   color: transparent;
-  text-shadow: 0 0 10px var(--accent), 0 0 24px var(--accent);
-  clip-path: inset(-1em calc((1 - var(--n)) * 100%) -1em -1em);
-  opacity: 0.25;
   pointer-events: none;
-  transition: opacity 0.4s ease;
 }
 
-/* Fluida con glow: la palabra que se está cantando brilla más */
-html[data-lanim="glow"] .lyric-line.active .lw.cur[data-t]::after {
-  opacity: 0.9;
+/* ===== Fluida ===== */
+
+/* Animación normal: el color avanza con el borde difuminado (sin brillo ni efectos añadidos) */
+html[data-lanim="flow"] .lyric-line.active .lw[data-t]::before {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(var(--n) * 112% - 12%), transparent calc(var(--n) * 112%));
+  mask-image: linear-gradient(90deg, #000 calc(var(--n) * 112% - 12%), transparent calc(var(--n) * 112%));
 }
 
-/* Letra por letra: el brillo de cada letra crece con ella (sin recorte, para que no se vean cortes verticales) */
-html[data-lanim="letters"] .lyric-line.active .lc[data-t]::after {
-  clip-path: none;
-  opacity: calc(var(--n) * 0.85);
+/* Palabra prolongada: el color pasa poco a poco a un degradado de tonos cercanos al acento (así respeta temas y Color de portada)
+   y un brillo crece con --g. Al terminar la palabra, --g vuelve a 0 y todo regresa suavemente a su estado normal. */
+html[data-lanim="flow"] .wd.xl {
+  --tone-b: var(--accent);
+  --tone-c: var(--accent);
 }
-
 @supports (color: color-mix(in srgb, red 50%, blue)) {
-  html[data-lanim="glow"] .lyric-line.active .lw[data-t]::after,
+  html[data-lanim="flow"] .wd.xl {
+    --tone-b: color-mix(in srgb, var(--accent) 55%, var(--text));
+    --tone-c: color-mix(in srgb, var(--accent) 80%, var(--text));
+  }
+}
+@supports (color: hsl(from red calc(h + 20) s l)) {
+  html[data-lanim="flow"] .wd.xl { --tone-c: hsl(from var(--accent) calc(h + 26) s l); }
+}
+/* El degradado mide 3 veces el ancho de la letra y se desliza con --g: con 0 solo se ve el acento liso; con 1, el degradado completo */
+html[data-lanim="flow"] .wd.xl .lw[data-t]::before {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background-image: linear-gradient(90deg, var(--accent) 0%, var(--accent) 34%, var(--tone-b) 50%, var(--tone-c) 72%, var(--tone-b) 100%);
+  background-size: 300% 100%;
+  background-repeat: no-repeat;
+  background-position: calc(var(--g, 0) * 100%) 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+html[data-lanim="flow"] .wd.xl .lw[data-t]::after {
+  text-shadow: 0 0 9px var(--accent), 0 0 24px var(--accent), 0 0 42px var(--accent);
+  opacity: calc(var(--g, 0) * 0.85);
+}
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  html[data-lanim="flow"] .wd.xl .lw[data-t]::after {
+    text-shadow: 0 0 9px color-mix(in srgb, var(--accent) 85%, transparent), 0 0 24px color-mix(in srgb, var(--accent) 60%, transparent), 0 0 42px color-mix(in srgb, var(--accent) 38%, transparent);
+  }
+}
+/* Apagado: mismo tiempo que LyricFx.REL (script.js) */
+html[data-lanim="flow"] .wd.xl.rel .lw[data-t]::before { transition: background-position 0.7s ease-out; }
+html[data-lanim="flow"] .wd.xl.rel .lw[data-t]::after { transition: opacity 0.7s ease-out; }
+
+/* ===== Palabra por palabra ===== */
+
+/* Animación normal: brillo inicial al empezar la palabra; se apaga letra a letra (--n) mientras se levantan.
+   Al terminar el movimiento de una letra su brillo ya es 0. */
+html[data-lanim="letters"] .lyric-line.active .lc[data-t]::after {
+  text-shadow: 0 0 10px var(--accent), 0 0 24px var(--accent);
+  opacity: calc(var(--a, 0) * (1 - var(--n)) * (1 - var(--n)) * 0.9);
+}
+@supports (color: color-mix(in srgb, red 50%, blue)) {
   html[data-lanim="letters"] .lyric-line.active .lc[data-t]::after {
     text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 85%, transparent), 0 0 26px color-mix(in srgb, var(--accent) 60%, transparent);
   }
 }
 
-/* Letra por letra: cada letra se enciende y sube un poquito */
+/* Cada letra se enciende y sube un poquito */
 html[data-lanim="letters"] .lyric-line.active .lc {
   transform: translateY(calc(var(--n) * -0.07em));
   transition: transform 0.25s ease-out;
@@ -1866,6 +1907,46 @@ html[data-lanim="letters"] .lyric-line.active .lc[data-t]::before {
   -webkit-mask-image: linear-gradient(90deg, #000 calc(var(--n) * 130% - 30%), transparent calc(var(--n) * 130%));
   mask-image: linear-gradient(90deg, #000 calc(var(--n) * 130% - 30%), transparent calc(var(--n) * 130%));
 }
+
+/* Palabra prolongada: brillo sobre toda la palabra que crece con --g y una pequeña variación de escala de la palabra entera
+   (convive con el levantamiento de cada letra: son transformaciones de elementos distintos). Al terminar, --g vuelve a 0 con suavidad. */
+html[data-lanim="letters"] .wd.xl .lc[data-t]::after {
+  text-shadow: 0 0 9px var(--accent), 0 0 22px var(--accent), 0 0 40px var(--accent);
+  opacity: calc(var(--g, 0) * 0.95);
+}
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  html[data-lanim="letters"] .wd.xl .lc[data-t]::after {
+    text-shadow: 0 0 9px color-mix(in srgb, var(--accent) 88%, transparent), 0 0 22px color-mix(in srgb, var(--accent) 65%, transparent), 0 0 40px color-mix(in srgb, var(--accent) 42%, transparent);
+  }
+}
+html[data-lanim="letters"] .wd.xl {
+  transform: scale(calc(1 + var(--g, 0) * 0.04));
+  transform-origin: 50% 62%;
+}
+/* Apagado: mismo tiempo que LyricFx.REL (script.js) */
+html[data-lanim="letters"] .wd.xl.rel { transition: transform 0.7s cubic-bezier(0.3, 0, 0.2, 1); }
+html[data-lanim="letters"] .wd.xl.rel .lc[data-t]::after { transition: opacity 0.7s ease-out; }
+
+/* ===== Escala ===== */
+
+/* Cada letra tiene su tamaño (--s, lo calcula script.js: resorte elástico en las palabras normales, expansión lenta con oscilaciones
+   sutiles en las prolongadas). El tamaño no cambia el espacio que ocupa el texto (transform), así que no mueve ni apila nada.
+   El color sigue la misma progresión de siempre: Escala no usa brillo ni degradados. */
+html[data-lanim="scale"] .lyric-line.active .lc,
+html[data-lanim="scale"] .wd.xl .lc {
+  transform: scale(var(--s, 1));
+  transform-origin: 50% 78%;
+}
+html[data-lanim="scale"] .lyric-line.active .lc[data-t]::before {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(var(--n) * 130% - 30%), transparent calc(var(--n) * 130%));
+  mask-image: linear-gradient(90deg, #000 calc(var(--n) * 130% - 30%), transparent calc(var(--n) * 130%));
+}
+/* Contracción suave al terminar una palabra prolongada: mismo tiempo que LyricFx.REL (script.js) */
+html[data-lanim="scale"] .wd.xl.rel .lc { transition: transform 0.7s cubic-bezier(0.3, 0, 0.2, 1); }
+
+/* Con las animaciones desactivadas (Ajustes → Rendimiento) no hay escalas */
+html[data-anim="off"] .wd.xl { transform: none !important; }
+html[data-anim="off"][data-lanim="scale"] .lc { transform: none !important; }
 
 /* Vista previa en Ajustes */
 .lyric-preview {
@@ -3850,7 +3931,7 @@ html[data-anim="off"] .ring-fg { transition: none !important; }
 html[data-fx="off"] * { text-shadow: none !important; }
 html[data-fx="off"] .mini-player, html[data-fx="off"] .q-row.dragging, html[data-fx="off"] .big-cover { box-shadow: none !important; }
 html[data-fx="off"] .lyric-line:not(.active) { filter: none !important; }
-html[data-fx="off"] .lyric-line.active .lw::after, html[data-fx="off"] .lyric-line.active .lc::after { display: none; }
+html[data-fx="off"] .lw::after, html[data-fx="off"] .lc::after { display: none; }
 html[data-fx="off"] .lyrics { -webkit-mask-image: none; mask-image: none; }
 
 /* ---------- Adaptación a pantallas ---------- */

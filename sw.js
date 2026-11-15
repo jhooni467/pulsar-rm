@@ -25,7 +25,8 @@
 // v21: barra de progreso más gruesa, sin indicador circular y con extremos redondeados (solo style.css); renueva la copia guardada.
 // v22: controles del reproductor — play/pausa y anterior/siguiente más gruesos, tiempos debajo de la barra; renueva la copia guardada.
 // v23: portada del reproductor — cambia de tamaño con play/pausa y bordes limpios (sin marco ni fondo detrás de la imagen); renueva la copia guardada.
-const CACHE_NAME = "pulsar-rm-shell-v23";
+// v24: animaciones de letras — Fluida, Palabra por palabra y Escala (se quita «Fluida con glow»), con efectos especiales para palabras prolongadas (script.js, style.css, index.html); renueva la copia guardada.
+const CACHE_NAME = "pulsar-rm-shell-v24";
 
 const APP_SHELL = [
   "./",

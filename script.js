@@ -243,7 +243,7 @@ const Settings = {
     coverColor: false,        // la app toma el color de la portada que suena
     coverIntensity: "medium", // low | medium | high
     hideStatusBar: false,     // oculta la barra de estado de Android
-    lyricsAnim: "flow",       // flow | glow | letters
+    lyricsAnim: "flow",       // flow (Fluida) | letters (Palabra por palabra) | scale (Escala)
     lyricsFont: "default",    // ver LYRIC_FONTS ("custom" = fuente importada)
     lyricsFontFile: null,     // { name, data } de la fuente importada
     lyricsSize: "medium",     // small | medium | large
@@ -322,6 +322,11 @@ const Settings = {
         await Store.setSetting("theme", this.values.theme);
         await Store.setSetting("mode", this.values.mode);
       } catch (error) { console.warn(error); }
+    }
+    // «Fluida con glow» ya no existe: quien la tenía elegida pasa a «Fluida» (su base). Cualquier valor desconocido también.
+    if (typeof LYRIC_ANIMS !== "undefined" && !LYRIC_ANIMS.some((item) => item.id === this.values.lyricsAnim)) {
+      this.values.lyricsAnim = this.defaults.lyricsAnim;
+      try { await Store.setSetting("lyricsAnim", this.values.lyricsAnim); } catch (error) { console.warn(error); }
     }
     this.apply();
     StatusBar.apply(false);
@@ -407,6 +412,7 @@ const LyricsParser = {
   PACE_SLOW: 1.7,        // y por debajo de las cuales es "lenta"
   MERGE_MAX_CHARS: 54,   // una línea compacta de fragmentos no pasa de este largo
   GROUP_TAIL: 1.6,       // s: un grupo no se queda encendido más de esto después de que empiece el verso siguiente
+  LONG_WORD: 1.371,      // s: una palabra que dura esto o más se considera prolongada (efectos especiales de cada animación)
 
   toSeconds(h, m, s, f) {
     return Number(h || 0) * 3600 + Number(m) * 60 + Number(s) + (f ? parseFloat("0." + f) : 0);
@@ -484,6 +490,26 @@ const LyricsParser = {
       });
     });
     line.units = out;
+    return out;
+  },
+
+  /* Palabras de una línea (una palabra puede tener varias sílabas/unidades). Cada una: { from, to (unidades), t, end, dur, long }.
+     La misma regla que usa el dibujo para armar cada .wd; `long` = la palabra dura LONG_WORD o más según sus propios tiempos
+     (inicio de su primera unidad y final de la última). Se calcula una vez por línea y se guarda en el arreglo de unidades. */
+  wordsOf(units) {
+    if (units._words) return units._words;
+    const out = [];
+    let cur = null;
+    units.forEach((unit, j) => {
+      const prev = units[j - 1];
+      if (cur && prev && !prev.sa && !unit.sb) { cur.to = j + 1; if (unit.end > cur.end) cur.end = unit.end; }
+      else { cur = { from: j, to: j + 1, t: unit.t, end: unit.end }; out.push(cur); }
+    });
+    out.forEach((word) => {
+      word.dur = word.end - word.t;
+      word.long = word.dur + 1e-6 >= this.LONG_WORD;
+    });
+    units._words = out;
     return out;
   },
 
@@ -1399,6 +1425,47 @@ class LyricScroller {
 }
 
 /* =========================================================
+   CURVAS DE LAS ANIMACIONES DE LETRAS
+   Funciones puras del tiempo (sin tocar el DOM). Las usa Lyrics.paint, que solo escribe una variable CSS cuando su valor cambia.
+   ========================================================= */
+const LyricFx = {
+  REL: 0.7,          // s: lo que tarda en apagarse el efecto de una palabra prolongada cuando ella termina
+  PRE: 0.93,         // Escala: tamaño de las letras que todavía no se cantan (la palabra "empieza ligeramente reducida")
+  SWELL: 1.085,      // Escala (palabra prolongada): tamaño al que llega al final, expansión lenta
+  SPRING_T: 0.7,     // s: duración del resorte de una letra (pasado ese tiempo ya está en su tamaño)
+  // Resorte amortiguado con impulso inicial: sale de PRE, pasa de 1 (~1.11), rebota por debajo (~0.975) y se asienta en 1
+  ZETA: 0.42,
+  OMEGA: 15,
+  KICK: 3.4,
+
+  clamp(x) { return x < 0 ? 0 : x > 1 ? 1 : x; },
+  smooth(x) { x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); },
+
+  // Palabra prolongada: intensidad (0 a 1) mientras se canta. Sube de forma progresiva (arranque y llegada suaves).
+  rise(p) { return this.smooth(p); },
+
+  // Escala, palabra normal: tamaño de una letra a los `age` segundos de empezar su movimiento
+  spring(age) {
+    if (age <= 0) return this.PRE;
+    if (age >= this.SPRING_T) return 1;
+    const x0 = this.PRE - 1;
+    const a = this.ZETA * this.OMEGA;
+    const wd = this.OMEGA * Math.sqrt(1 - this.ZETA * this.ZETA);
+    return 1 + Math.exp(-a * age) * (x0 * Math.cos(wd * age) + ((this.KICK + a * x0) / wd) * Math.sin(wd * age));
+  },
+
+  // Escala, palabra prolongada: expansión lenta + oscilaciones muy sutiles y distintas en cada letra.
+  // Tres ondas con frecuencias que no son múltiplos entre sí (nunca se repite igual) y una fase propia por letra y por palabra.
+  swell(p, time, k, seed) {
+    const base = this.PRE + (this.SWELL - this.PRE) * this.smooth(p);
+    const env = this.smooth(p * 6) * (0.65 + 0.35 * this.smooth(p)); // las oscilaciones entran poco a poco
+    const ph = seed + k * 0.83;
+    const wave = 0.5 * Math.sin(time * 10.7 + ph) + 0.32 * Math.sin(time * 17.3 + ph * 1.7 + 1.3) + 0.18 * Math.sin(time * 4.1 + ph * 0.6 + 2.1);
+    return base + 0.011 * env * wave;
+  }
+};
+
+/* =========================================================
    LYRICS — letra de la canción actual (resaltado de línea y de palabra, desplazamiento automático)
    La letra se guarda tal cual (texto) en song.lyrics = { raw, delay, updatedAt }.
    ========================================================= */
@@ -1618,51 +1685,104 @@ const Lyrics = {
   },
 
   /* Palabra por palabra: cada palabra es un bloque que no se parte al cambiar de renglón;
-     dentro van sus sílabas (.lw). En la animación "Letra por letra" cada sílaba se reparte en letras (.lc).
-     El color y el brillo se dibujan en una capa encima (::before / ::after) que se revela con --n (0 a 1). */
+     dentro van sus sílabas (.lw). En «Palabra por palabra» y en «Escala» cada sílaba se reparte en letras (.lc).
+     El color y el brillo se dibujan en una capa encima (::before / ::after) que se revela con --n (0 a 1).
+     Las palabras salen de LyricsParser.wordsOf: así cada .wd coincide con la palabra cuya duración se mide. */
   wordsHTML(line) {
-    const letters = LyricsStyle.anim() === "letters";
+    const mode = LyricsStyle.anim();
+    const letters = mode === "letters" || mode === "scale";
     const esc = (text) => UI.escapeHTML(text);
-    let html = "", open = false, prev = null;
-    LyricsParser.units(line).forEach((unit) => {
-      const joined = prev && !prev.sa && !unit.sb;
-      if (!joined) {
-        if (open) html += "</span>";
-        if (prev) html += " ";
-        html += '<span class="wd">';
-        open = true;
-      }
-      html += letters
+    const units = LyricsParser.units(line);
+    return LyricsParser.wordsOf(units).map((word) => {
+      const inner = units.slice(word.from, word.to).map((unit) => letters
         ? `<span class="lw">${Array.from(unit.text).map((c) => `<span class="lc" data-t="${esc(c)}">${esc(c)}</span>`).join("")}</span>`
-        : `<span class="lw" data-t="${esc(unit.text)}">${esc(unit.text)}</span>`;
-      prev = unit;
-    });
-    if (open) html += "</span>";
-    return html;
+        : `<span class="lw" data-t="${esc(unit.text)}">${esc(unit.text)}</span>`).join("");
+      return `<span class="wd">${inner}</span>`;
+    }).join(" ");
   },
 
-  // Dibuja el avance de las palabras (o letras) de la línea activa. Lo usa también la vista previa de Ajustes.
-  paint(unitEls, units, time, letters) {
-    const clamp = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
-    const set = (el, value) => {
-      const text = value.toFixed(3);
-      if (el._n !== text) { el._n = text; el.style.setProperty("--n", text); }
+  /* Dibuja el avance de las palabras (o letras) de la línea activa. Lo usa también la vista previa de Ajustes.
+     `anim` = estilo activo (flow | letters | scale). Cada fotograma solo se escribe una variable CSS cuando su valor cambió.
+       --n  progreso de color de cada sílaba o letra (0 a 1)
+       --a  (Palabra por palabra) entrada del brillo inicial de cada palabra
+       --g  (palabras prolongadas) intensidad del efecto especial de la palabra: sube mientras se canta y baja al terminar
+       --s  (Escala) tamaño de cada letra
+     Todo se calcula del tiempo de la letra, así que buscar en la canción o cambiar de línea siempre deja cada palabra en su sitio. */
+  paint(unitEls, units, time, anim) {
+    const F = LyricFx;
+    const letters = anim === "letters" || anim === "scale";
+    const put = (el, name, text) => {
+      const key = "_v" + name;
+      if (el[key] !== text) { el[key] = text; el.style.setProperty("--" + name, text); }
     };
     units.forEach((unit, j) => {
       const el = unitEls[j];
       if (!el) return;
       const span = Math.max(0.05, unit.end - unit.t);
-      const p = clamp((time - unit.t) / span);
+      const p = F.clamp((time - unit.t) / span);
       const current = p > 0 && p < 1;
       if (el._cur !== current) { el._cur = current; el.classList.toggle("cur", current); }
-      if (!letters) { set(el, p); return; }
+      if (!letters) { put(el, "n", p.toFixed(3)); return; }
       const chars = el.children, count = chars.length || 1;
       for (let k = 0; k < chars.length; k++) {
         const start = unit.t + (span * k) / count;
         const length = Math.max(0.12, span / count);
-        set(chars[k], clamp((time - start) / length));
+        put(chars[k], "n", F.clamp((time - start) / length).toFixed(3));
       }
     });
+
+    // Efectos por palabra (la palabra prolongada se detecta una por una, con sus propios tiempos)
+    const words = LyricsParser.wordsOf(units);
+    const lineStart = units.length ? units[0].t : 0;
+    // Escala: las letras que aún no se cantan esperan algo más pequeñas; al encenderse la línea se achican con suavidad
+    const pre = 1 - (1 - F.PRE) * F.smooth((time - lineStart) / 0.3);
+    for (let w = 0; w < words.length; w++) {
+      const word = words[w];
+      const head = unitEls[word.from];
+      const wd = head && head.parentNode;
+      if (!wd) continue;
+      const state = word.long ? this.longFx(wd, word, time, put) : 0;
+
+      if (anim === "letters") {
+        // Brillo inicial: aparece al empezar la palabra y se apaga letra a letra mientras se levantan (lo resuelve style.css con --a y --n)
+        if (!word.long) put(wd, "a", F.smooth((time - word.t) / 0.1).toFixed(2));
+      } else if (anim === "scale") {
+        let total = 0;
+        for (let u = word.from; u < word.to; u++) total += unitEls[u] ? unitEls[u].children.length : 0;
+        const stagger = Math.min(0.045, (word.dur * 0.55) / Math.max(1, total - 1)); // pequeño desfase entre letras
+        const seed = (word.t * 12.9898) % 6.2832; // fase propia de cada palabra prolongada
+        const rise = F.clamp((time - word.t) / Math.max(0.05, word.dur));
+        let idx = 0;
+        for (let u = word.from; u < word.to; u++) {
+          const chars = unitEls[u] ? unitEls[u].children : [];
+          for (let k = 0; k < chars.length; k++, idx++) {
+            let v;
+            if (word.long) v = state === 1 ? F.swell(rise, time, idx, seed) : time < word.t ? pre : 1; // al terminar vuelve a 1 con una transición CSS (estado 2)
+            else v = time < word.t + stagger * idx ? pre : F.spring(time - (word.t + stagger * idx));
+            put(chars[k], "s", v.toFixed(3));
+          }
+        }
+      }
+    }
+  },
+
+  /* Palabra prolongada: lleva su propio estado en el elemento (wd._fx).
+       0 = sin efecto · 1 = se está cantando (--g sube de 0 a 1) · 2 = terminó (--g vuelve a 0 con una transición CSS de LyricFx.REL)
+     La clase .xl enciende el efecto y .rel su apagado suave; al pasar REL segundos (o si se busca otro momento) se quitan las dos,
+     así que no queda ningún efecto activo. Devuelve el estado. */
+  longFx(wd, word, time, put) {
+    const was = wd._fx || 0;
+    let now = 0;
+    if (time >= word.t && time < word.end) now = 1;
+    else if (was && time >= word.end && time < word.end + LyricFx.REL) now = 2;
+    if (now !== was) {
+      wd._fx = now;
+      if (now === 1) { wd.classList.remove("rel"); wd.classList.add("xl"); }
+      else if (now === 2) { wd.classList.add("rel"); put(wd, "g", "0"); }
+      else { wd.classList.remove("xl", "rel"); put(wd, "g", "0"); }
+    }
+    if (now === 1) put(wd, "g", LyricFx.rise((time - word.t) / word.dur).toFixed(3));
+    return now;
   },
 
   updateBar() {
@@ -1707,8 +1827,8 @@ const Lyrics = {
     if (this.needsCenter && Date.now() >= this.userScrollUntil) this.center(false);
 
     if (this.paints.length) {
-      const letters = LyricsStyle.anim() === "letters";
-      for (let k = 0; k < this.paints.length; k++) this.paint(this.paints[k].els, this.paints[k].units, time, letters);
+      const anim = LyricsStyle.anim();
+      for (let k = 0; k < this.paints.length; k++) this.paint(this.paints[k].els, this.paints[k].units, time, anim);
     }
     if (this.gapEl) this.paintGap(time);
   },
@@ -1747,6 +1867,7 @@ const Lyrics = {
       if (el._d !== d) { el._d = d; el.style.setProperty("--d", d); }
     });
 
+    const droppedPaints = this.paints;
     this.paints = [];
     const prevGapEl = this.gapEl;
     this.gapEl = null;
@@ -1755,8 +1876,16 @@ const Lyrics = {
       const line = lines[i], el = this.lineEls[i];
       if (!el) return;
       if (line.gap) { this.gapEl = el; this.gapLine = line; el._g = null; }
-      else if (line.words) this.paints.push({ els: Array.from(el.querySelectorAll(".lw")), units: LyricsParser.units(line) });
+      else if (line.words) this.paints.push({ i, els: Array.from(el.querySelectorAll(".lw")), units: LyricsParser.units(line) });
     });
+    // Una línea que deja de pintarse (terminó o se buscó otro momento) se pinta una última vez en este instante: así una palabra
+    // prolongada que acaba justo con ella arranca su apagado suave, o se limpia si ya no le toca, y no queda ningún efecto a medias.
+    if (droppedPaints.length) {
+      const anim = LyricsStyle.anim();
+      droppedPaints.forEach((entry) => {
+        if (!this.paints.some((now) => now.i === entry.i)) this.paint(entry.els, entry.units, time, anim);
+      });
+    }
 
     // v1.09: las estrellas giran/levitan solo mientras su pausa está encendida. Su salida en espiral (clase .out) la marca paintGap
     // ANTES de que acabe la pausa, así que cuando la línea se apaga ya no queda nada animándose: .go se quita en cuanto se desvanece.
@@ -1968,9 +2097,9 @@ const Lyrics = {
    Los valores van en atributos de <html> (data-lanim…) y variables CSS; style.css hace el resto.
    ========================================================= */
 const LYRIC_ANIMS = [
-  { id: "flow", name: "Fluida", hint: "La letra se llena de color con un degradado suave." },
-  { id: "glow", name: "Fluida con glow", hint: "Igual de fluida, con un brillo que acompaña a cada palabra." },
-  { id: "letters", name: "Letra por letra", hint: "Cada letra se enciende y sube un poquito al cantarse." }
+  { id: "flow", name: "Fluida", hint: "La letra se llena de color con un degradado suave. Las palabras largas se iluminan con un brillo y un degradado que crecen mientras suenan." },
+  { id: "letters", name: "Palabra por palabra", hint: "Cada letra se enciende y sube un poquito, con un brillo inicial que se apaga. Las palabras largas brillan y crecen un poco." },
+  { id: "scale", name: "Escala", hint: "Las letras se expanden con un rebote elástico. Las palabras largas crecen despacio y respiran." }
 ];
 const LYRIC_FONTS = [
   { id: "default", name: "Predeterminada", stack: "inherit", weight: 700 },
@@ -2013,7 +2142,7 @@ const LyricsStyle = {
     root.style.setProperty("--lyric-font", font.stack);
     root.style.setProperty("--lyric-weight", font.weight);
     Lyrics.invalidate(); // tamaño, espaciado o fuente distintos: las posiciones guardadas ya no valen
-    // Con "Letra por letra" (o al pasar a texto normal) el texto se dibuja distinto: hay que volver a armar las líneas
+    // Cada estilo dibuja el texto distinto (por palabra o por letra) y al pasar a texto normal también: hay que volver a armar las líneas. Así no queda nada del estilo anterior.
     const signature = anim + "|" + view;
     if (signature !== this.last) {
       this.last = signature;
@@ -2100,7 +2229,7 @@ const LyricsPreview = {
       words: words.map(([text, t, end]) => ({ text, t, end }))
     });
     this.lines = [
-      make("l", [["Tu ", 0, 0.5], ["música, ", 0.5, 1.7], ["tu ", 1.7, 2.1], ["universo", 2.1, 3.5]]),
+      make("l", [["Tu ", 0, 0.5], ["música, ", 0.5, 1.7], ["tu ", 1.7, 2.1], ["universo", 2.1, 3.6]]),
       make("r", [["Brilla ", 3.9, 4.7], ["conmigo", 4.7, 6.3]])
     ];
     return this.lines;
@@ -2131,7 +2260,7 @@ const LyricsPreview = {
       });
     }
     if (index < 0 || !this.els[index]) return;
-    Lyrics.paint(Array.from(this.els[index].querySelectorAll(".lw")), LyricsParser.units(lines[index]), time, LyricsStyle.anim() === "letters");
+    Lyrics.paint(Array.from(this.els[index].querySelectorAll(".lw")), LyricsParser.units(lines[index]), time, LyricsStyle.anim());
   },
 
   start() {
