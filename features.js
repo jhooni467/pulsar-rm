@@ -1780,6 +1780,8 @@ const Features = {
     this.safe("cola", () => QueueScreen.init());
     this.safe("información", () => SongInfo.init());
     this.safe("explorar", () => LibraryBrowse.init());
+    this.safe("orden e indicador", () => { if (typeof LibraryTools !== "undefined") LibraryTools.init(); });   // library-tools.js
+    this.safe("avisos de versión", () => { if (typeof UpdateCheck !== "undefined") UpdateCheck.init(); });     // updates.js
     this.safe("carpetas", () => LibraryScan.init());
     this.safe("rendimiento", () => Performance.init());
     this.safe("ajustes", () => SettingsNav.init());
@@ -1810,6 +1812,7 @@ const Features = {
     this.safe("diagnóstico", () => Diagnostics.render());
     this.safe("abrir con", () => ExternalOpen.check());   // audio con el que Android abrió la app
     this.safe("nova", () => { if (typeof Nova !== "undefined") Nova.afterLoad(); });
+    this.safe("buscar versión", () => { if (typeof UpdateCheck !== "undefined") UpdateCheck.start(); });   // en segundo plano, a los 4 s
     // Un APK nuevo puede haber perdido permisos de carpeta: se comprueba en silencio (no se lee ningún archivo)
     this.safe("permisos", () => {
       if (LibraryScan.supported() && Native.has("getPersistedFolders")) {
@@ -1840,6 +1843,8 @@ const Features = {
   onRoute(name) {
     this.safe("pantalla " + name, () => {
       LyricsScreen.onRoute(name);
+      if (typeof LibraryTools !== "undefined") LibraryTools.onRoute(name);
+      if (typeof UpdateCheck !== "undefined") UpdateCheck.onRoute(name);
       if (name === "queue") QueueScreen.onRoute();
       else if (name === "timer") SleepTimer.refresh();
       else if (name === "info") SongInfo.onRoute();

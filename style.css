@@ -4066,3 +4066,312 @@ html.is-playing #stage .big-cover {
   outline: 0;
 }
 
+
+
+/* =========================================================
+   BIBLIOTECA: ORDEN, INDICADOR ALFABÉTICO Y AVISO DE VERSIÓN
+   (library-tools.js · updates.js)
+   Todo usa las variables de tema (--accent, --elevated, --text…): se adapta a cada tema y a Light / Night / AMOLED.
+   Las animaciones solo usan opacity y transform; html[data-anim="reduced" | "off"] las acorta o quita (reglas de arriba).
+   ========================================================= */
+
+/* ---------- Botón de orden (junto al contador de canciones) ---------- */
+.section-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sort-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--item-border);
+  transition: transform 0.14s ease, background-color 0.2s ease, color 0.2s ease;
+}
+.sort-btn:active { transform: scale(0.9); }
+.sort-btn[aria-expanded="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* ---------- Menú de orden ---------- */
+.sm {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+}
+.sm-scrim {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+.sm-menu {
+  position: fixed;
+  max-width: calc(100vw - 24px);
+  background: var(--elevated);
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 22px 48px -14px rgba(0, 0, 0, 0.6);
+  animation: smIn 0.2s cubic-bezier(0.2, 0.85, 0.25, 1);
+}
+.sm.out .sm-menu { animation: smOut 0.16s ease-in forwards; }
+.sm-group { display: flex; flex-direction: column; }
+.sm-gap { height: 6px; background: var(--surface2); }   /* banda más marcada entre bloques */
+.sm-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+  min-height: 52px;
+  padding: 14px 20px;
+  text-align: left;
+  font-size: 16px;
+  color: var(--text);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.sm-item + .sm-item { border-top: 1px solid var(--border-soft); }   /* separadores sutiles */
+.sm-item span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sm-item .icon { font-size: 21px; }
+.sm-item:active { background: var(--surface2); }
+.sm-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sm-item.on { color: var(--accent); font-weight: 700; }
+
+@keyframes smIn  { from { opacity: 0; transform: scale(0.9) translateY(-6px); } to { opacity: 1; transform: none; } }
+@keyframes smOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.94) translateY(-4px); } }
+
+/* ---------- Indicador alfabético ---------- */
+.alpha {
+  position: fixed;
+  top: 0;
+  height: 0;
+  /* En el borde derecho del contenido (en tablet queda junto a la lista, no pegado a la pantalla) */
+  right: calc(max(0px, (100vw - var(--content-w)) / 2) + env(safe-area-inset-right, 0px) + 2px);
+  width: 24px;
+  z-index: 12;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  touch-action: none;
+  transform: translateX(10px);
+  transition: opacity 0.22s ease, transform 0.22s ease, visibility 0s linear 0.22s;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.alpha[data-show="1"] {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+  transition-delay: 0s;
+}
+.alpha-probe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  visibility: hidden;
+  padding-top: env(safe-area-inset-top, 0px);   /* solo sirve para medir la zona segura */
+}
+.alpha-track {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+.alpha-track i {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--muted);
+  transition: color 0.16s ease;
+}
+.alpha-track i.dot::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+.alpha-track i.on { color: var(--on-accent); }
+.alpha-track i.dot.on::before { opacity: 1; }
+/* El elemento de fuera solo se POSICIONA (transform lo pone el script); la animación visual va en el de dentro.
+   Así «scale» no multiplica el desplazamiento (la propiedad scale se aplica antes que transform). */
+.alpha-thumb {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  margin-left: -11px;
+  transition: transform 0.16s cubic-bezier(0.2, 0.85, 0.25, 1);
+  will-change: transform;
+}
+.alpha-thumb span {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 3px 10px -3px rgba(0, 0, 0, 0.5);
+  transition: scale 0.2s ease;
+}
+.alpha.drag .alpha-thumb span { scale: 1.18; }
+.alpha.snap .alpha-thumb,
+.alpha.snap .alpha-bubble { transition: none; }
+
+/* Burbuja con la letra: grande, de color de acento, apuntando al círculo */
+.alpha-bubble {
+  position: absolute;
+  top: 0;
+  right: 34px;
+  width: 72px;
+  height: 60px;
+  pointer-events: none;
+  transition: transform 0.12s ease-out;
+  will-change: transform;
+}
+.alpha-bubble > div {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--on-accent);
+  border-radius: 34px 16px 16px 34px;
+  box-shadow: 0 14px 30px -10px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  scale: 0.7;
+  transform-origin: 100% 50%;
+  transition: opacity 0.16s ease, scale 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+.alpha.drag .alpha-bubble > div { opacity: 1; scale: 1; }
+.alpha-bubble b {
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+/* Al cambiar de letra, la nueva entra desde el lado hacia donde te mueves (--dy lo pone el script) */
+.alpha-bubble b.pop { animation: alphaPop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.1); }
+@keyframes alphaPop {
+  from { opacity: 0; transform: translateY(var(--dy, 14px)) scale(0.7); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---------- Aviso de nueva versión ---------- */
+.upd {
+  position: fixed;
+  inset: 0;
+  z-index: 62;
+  display: grid;
+  place-items: center;
+  padding: calc(20px + env(safe-area-inset-top, 0px)) calc(var(--gutter) + env(safe-area-inset-right, 0px))
+           calc(20px + env(safe-area-inset-bottom, 0px)) calc(var(--gutter) + env(safe-area-inset-left, 0px));
+}
+.upd-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--backdrop);
+  animation: fadeIn 0.24s ease-out;
+}
+.upd-panel {
+  position: relative;
+  width: min(100%, 360px);
+  max-height: min(80vh, 640px);
+  max-height: min(80dvh, 640px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 26px;
+  background: var(--elevated);
+  border: 1px solid var(--border2);
+  box-shadow: 0 32px 70px -22px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: updIn 0.34s cubic-bezier(0.2, 0.85, 0.25, 1);
+}
+/* Destello de acento arriba a la izquierda (el panel sigue siendo opaco) */
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .upd-panel {
+    background:
+      radial-gradient(120% 60% at 10% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 62%),
+      var(--elevated);
+  }
+}
+/* Cristal oscuro: la transparencia sutil SOLO se usa cuando hay desenfoque real; sin él (modo ligero, WebView antiguo)
+   el panel es opaco, para que no se transparente el texto de detrás. */
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) and (color: color-mix(in srgb, red 50%, blue)) {
+  html:not([data-fx="off"]) .upd-panel {
+    background:
+      radial-gradient(120% 60% at 10% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 62%),
+      color-mix(in srgb, var(--elevated) 90%, transparent);
+    -webkit-backdrop-filter: blur(26px) saturate(1.3);
+    backdrop-filter: blur(26px) saturate(1.3);
+  }
+  html:not([data-fx="off"]) .upd-backdrop { -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); }
+}
+.upd.out .upd-panel { animation: updOut 0.22s ease-in forwards; }
+.upd.out .upd-backdrop { animation: fadeOut 0.22s ease-in forwards; }
+
+.upd-head { padding: 26px 24px 20px; text-align: center; }
+.upd-head h3 { font-size: 18px; font-weight: 800; letter-spacing: -0.2px; }
+.upd-head p { margin-top: 8px; font-size: 14px; line-height: 1.45; color: var(--text); opacity: 0.85; }
+
+.upd-sec { border-top: 1px solid var(--border-soft); min-height: 0; display: flex; flex-direction: column; }
+.upd-label { display: block; padding: 14px 24px 8px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.upd-notes {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 24px 34px;   /* el espacio de abajo deja pasar la última línea por encima del difuminado */
+  max-height: 38vh;
+  max-height: 38dvh;
+  font-size: 15px;
+  line-height: 1.5;
+  outline: none;
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 30px), transparent);
+  mask-image: linear-gradient(#000 calc(100% - 30px), transparent);
+}
+.upd-notes h4 { margin: 14px 0 6px; font-size: 20px; font-weight: 800; color: var(--muted); }
+.upd-notes h4:first-child { margin-top: 2px; }
+.upd-notes p { margin: 6px 0; color: var(--text); }
+.upd-notes p.upd-none { color: var(--muted); }
+.upd-notes ul { list-style: none; margin: 6px 0; padding: 0; }
+.upd-notes li { position: relative; padding-left: 18px; margin: 5px 0; color: var(--text); }
+.upd-notes li::before { content: "•"; position: absolute; left: 4px; color: var(--muted); }
+.upd-notes code { font-size: 0.92em; padding: 1px 5px; border-radius: 6px; background: var(--surface2); }
+
+.upd-actions { border-top: 1px solid var(--border-soft); display: flex; flex-direction: column; }
+.upd-actions button {
+  min-height: 56px;
+  padding: 14px;
+  font-size: 16px;
+  text-align: center;
+  color: var(--text);
+  transition: background-color 0.15s ease;
+}
+.upd-actions button + button { border-top: 1px solid var(--border-soft); }
+.upd-actions button:active { background: var(--surface2); }
+.upd-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.upd-actions .upd-go { font-weight: 800; color: var(--accent); }
+
+@keyframes updIn  { from { opacity: 0; transform: translateY(16px) scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes updOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(10px) scale(0.97); } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }

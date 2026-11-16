@@ -78,7 +78,10 @@
       <section class="library">
         <div class="section-title">
           <h2>Tu biblioteca</h2>
-          <span id="song-count">0 canciones</span>
+          <div class="section-tools">
+            <span id="song-count">0 canciones</span>
+            <button type="button" id="sort-button" class="sort-btn hidden" data-sort-open aria-haspopup="menu" aria-expanded="false" aria-label="Ordenar canciones" title="Ordenar canciones"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 4.2l4.4 5.4H7.6z"/><path d="M12 19.8l-4.4-5.4h8.8z"/></g></svg></button>
+          </div>
         </div>
 
         <div id="lib-tabs" class="tabs" role="tablist" aria-label="Explorar la biblioteca">
@@ -655,6 +658,10 @@
         <p>Pulsar RM · versión <span id="app-version"></span></p>
         <p>Tus canciones se guardan solo en este dispositivo.</p>
         <p id="about-device"></p>
+        <div class="set-actions">
+          <button type="button" id="update-check" class="chip-btn" data-update-check>Buscar actualizaciones</button>
+        </div>
+        <small id="update-status" class="set-hint" aria-live="polite"></small>
       </div>
       <div class="card">
         <h3>Diagnóstico</h3>
@@ -779,6 +786,9 @@
 <script src="native.js"></script>
 <script src="script.js"></script>
 <script src="features.js"></script>
+<!-- Orden de la biblioteca + indicador alfabético, y aviso de nuevas versiones. Si alguno falla, la app sigue igual. -->
+<script src="library-tools.js"></script>
+<script src="updates.js"></script>
 <!-- Nova Intelligence (etapa 1): el núcleo primero; las demás piezas se enganchan a él. Si alguno falla, la app sigue igual. -->
 <script src="nova-core.js"></script>
 <script src="nova-store.js"></script>

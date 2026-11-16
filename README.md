@@ -69,6 +69,8 @@ Path| Purpose
 android-native/java/| Native Android code copied into the Capacitor project by the workflow
 docs/| NATIVE_API.md and CHANGELOG-1.04.md
 index.html, script.js, native.js, features.js, style.css| The app (web)
+library-tools.js| Library sort menu (Name / Artist / Recently added, ascending / descending) and the alphabet index
+updates.js| New-version notice: reads the latest GitHub Release and offers Download now / Remind me later (notify only, no auto-update)
 sw.js, manifest.json| Web/PWA only (the APK does not use the service worker)
 pulsar-debug.keystore| Fixed signing key — keep it, it lets every APK update over the previous one
 

@@ -27,7 +27,8 @@
 // v23: portada del reproductor — cambia de tamaño con play/pausa y bordes limpios (sin marco ni fondo detrás de la imagen); renueva la copia guardada.
 // v24: animaciones de letras — Fluida, Palabra por palabra y Escala (se quita «Fluida con glow»), con efectos especiales para palabras prolongadas (script.js, style.css, index.html); renueva la copia guardada.
 // v25: animaciones de letras refinadas — luz integrada en las letras (sin parpadeo ni mancha) en Palabra por palabra y Fluida, y Escala con ascenso progresivo sin rebotes (script.js, style.css); renueva la copia guardada.
-const CACHE_NAME = "pulsar-rm-shell-v25";
+// v26: biblioteca — orden de canciones (Nombre / Artista / Agregado recientemente), indicador alfabético y aviso de nuevas versiones (library-tools.js, updates.js, index.html, script.js, features.js, style.css); renueva la copia guardada.
+const CACHE_NAME = "pulsar-rm-shell-v26";
 
 const APP_SHELL = [
   "./",
@@ -36,6 +37,8 @@ const APP_SHELL = [
   "native.js",
   "script.js",
   "features.js",
+  "library-tools.js",
+  "updates.js",
   "nova-core.js",
   "nova-store.js",
   "nova-net.js",

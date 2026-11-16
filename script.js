@@ -281,7 +281,13 @@ const Settings = {
     fpsCap: "auto",           // auto | 30 | 60 (cuántos cuadros por segundo dibujan las animaciones de la app)
     // v1.04 — avisos de una sola vez
     notifAsked: false,        // ya se pidió el permiso de notificaciones
-    perfInit: false           // ya se revisó si el dispositivo necesita el modo ligero
+    perfInit: false,          // ya se revisó si el dispositivo necesita el modo ligero
+    // biblioteca: orden de la lista de canciones (library-tools.js). Solo cambia lo que se ve, no los archivos.
+    sortBy: "name",           // name | artist | added
+    sortDir: "asc",           // asc | desc
+    // aviso de nuevas versiones (updates.js)
+    updateSnooze: null,       // { v: "1.06", until: ms } mientras «Recordar más tarde» siga vigente
+    updateCache: null         // { at: ms, info } última respuesta del repositorio (se consulta como mucho cada 6 h)
   },
   values: {},
   watchers: {},
@@ -4423,16 +4429,22 @@ const UI = {
 
   renderLibrary() {
     const query = this.el.search.value.trim().toLowerCase();
-    if (typeof LibraryBrowse !== "undefined" && LibraryBrowse.render(query)) return; // álbumes, artistas o géneros
-    const filtered = Library.songs.filter((song) =>
+    if (typeof LibraryBrowse !== "undefined" && LibraryBrowse.render(query)) { // álbumes, artistas o géneros
+      if (typeof LibraryTools !== "undefined") LibraryTools.onRender(null);
+      return;
+    }
+    let filtered = Library.songs.filter((song) =>
       !query || song.name.toLowerCase().includes(query) || song.artist.toLowerCase().includes(query)
     );
+    // Orden elegido por la persona (library-tools.js): es una copia, Library.songs no cambia
+    if (typeof LibraryTools !== "undefined") filtered = LibraryTools.sorted(filtered);
     if (!filtered.length) {
       this.el.songList.innerHTML = this.emptyState(Boolean(query));
     } else {
       this.el.songList.innerHTML = filtered.map((song, i) => this.songRow(song, i)).join("");
     }
     this.markPlaying();
+    if (typeof LibraryTools !== "undefined") LibraryTools.onRender(filtered);
   },
 
   updateCount() {
