@@ -66,8 +66,8 @@ Pulsar RM is distributed as an Android APK.»
 
 Path| Purpose
 .github/workflows/build-apk.yml| Builds the signed APK (Actions → "Build APK" → Run workflow)
-android-native/java/| Native Android code copied into the Capacitor project by the workflow
-docs/| NATIVE_API.md and CHANGELOG-1.04.md
+*.java (repository root, or android-native/java/)| Native Android code copied into the Capacitor project by the workflow
+NATIVE_API.md, NOVA_INTELLIGENCE.md| Technical notes (native bridge contract, Nova Intelligence)
 index.html, script.js, native.js, features.js, style.css| The app (web)
 library-tools.js| Library sort menu (Name / Artist / Recently added, ascending / descending) and the alphabet index
 updates.js| New-version notice: reads the latest GitHub Release and offers Download now / Remind me later (notify only, no auto-update)
@@ -97,7 +97,7 @@ Previous version
 
 v1.04 — Screens, queue, library & performance update
 
-This version adds independent Lyrics, Queue, Timer, Song info and Equalizer screens, gapless playback and crossfade, background playback with Android media controls, a folder-based library with manual updates, a Hz/FPS performance section and a reorganized Settings screen. See docs/NATIVE_API.md and docs/CHANGELOG-1.04.md.
+This version adds independent Lyrics, Queue, Timer, Song info and Equalizer screens, gapless playback and crossfade, background playback with Android media controls, a folder-based library with manual updates, a Hz/FPS performance section and a reorganized Settings screen. See NATIVE_API.md.
 
 Upcoming — v2.00
 
@@ -125,6 +125,7 @@ The next major update is planned to include:
 - Lyrics · verse groups: a main verse and its background vocals now light up and fade out together. The main verse stays fully lit until its last background vocal finishes, and background vocals are never cut short at the end of their verse. Word timing is untouched: only how long a finished line stays lit changes.
 - Lyrics · smooth scrolling: the screen only moves when the group of verses changes (never because a background vocal switches on or off), driven by one damped spring that blends consecutive moves instead of restarting them, so there is no more up-and-down shaking.
 - Lyrics · fast songs: the pace of each song (slow / normal / fast) is measured from its timing; very short consecutive background fragments of the same verse are merged into one compact line (each word keeps its own time) and every fragment stays visible for a minimum readable time, without delaying the audio sync.
+- APK packaging: the build workflow now also copies `library-tools.js` and `updates.js` into the app (they were loaded by `index.html` but missing from the APK, so the library sort menu, the alphabet index and the new-version notice were not available there) and stops with a clear message if `index.html` loads any local file that is not packaged. Project information and repository structure in this README were brought up to date.
 </details>
 
 <details>
@@ -135,7 +136,6 @@ The next major update is planned to include:
 - Android: foreground service, media notification, lock-screen / Bluetooth controls, audio focus and headphone-unplug handling, background playback (needs the v1.04 APK).
 - Library: choose folders (persistent permission), manual "Update library" with a clear result (new, updated, missing, duplicates), embedded covers and tags, albums / artists / genres views.
 - Settings reorganized into 6 categories with a quick-jump bar; new "Performance & display" with Hz profiles (only those the device supports) and an FPS cap.
-- See docs/CHANGELOG-1.04.md for files, limitations and pending items.
 </details>
 
 <details>
@@ -176,7 +176,7 @@ This release marked the beginning of the project and its development as an Andro
 Detail| Information
 Project| Pulsar RM
 Full name| Pulsar Reproductor de Música
-Current version| v1.04
+Current version| v1.05
 Project type| Independent
 Main platform| Android
 Development| Active
