@@ -1,5 +1,6 @@
 package com.pulsarrm.app;
 
+import android.content.ClipData;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -29,7 +30,11 @@ import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.BridgeActivity;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Pantalla principal de Pulsar RM (Capacitor).
@@ -40,6 +45,8 @@ import org.json.JSONObject;
  *          bloqueada por el WebView, y el cambio de icono solo se aplica cuando realmente cambia.
  * v1.05: pantalla completa real (sin franja gris arriba: el WebView ocupa toda la altura y solo respeta las áreas seguras)
  *        y botón/gesto Atrás controlado por la app (Reproductor → Biblioteca → Inicio → salir).
+ * v1.06: recibe audio desde «Abrir con», «Compartir» (uno o varios archivos) y búsquedas multimedia (Asistente, otras apps);
+ *        el WebView conserva su prioridad en segundo plano para que Android no lo cierre mientras suena la música.
  */
 public class MainActivity extends BridgeActivity {
     private PulsarBridge bridge;
@@ -55,6 +62,11 @@ public class MainActivity extends BridgeActivity {
         WebView web = getBridge().getWebView();
         // La música debe poder seguir con la siguiente canción, el temporizador o la notificación sin tocar la pantalla
         try { web.getSettings().setMediaPlaybackRequiresUserGesture(false); } catch (Exception ignored) { /* el valor por defecto de Capacitor ya lo permite */ }
+        // v1.06: el audio vive en el WebView. Con prioridad «importante» aunque no se vea, Android es mucho menos propenso a
+        // cerrar su proceso cuando la app está en segundo plano con la pantalla apagada (la música no se corta).
+        if (Build.VERSION.SDK_INT >= 26) {
+            try { web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false); } catch (Exception ignored) { /* WebView antiguo */ }
+        }
         bridge = new PulsarBridge(this, web);
         web.addJavascriptInterface(bridge, "PulsarNative");
         setupEdgeToEdge(web);
@@ -183,26 +195,75 @@ public class MainActivity extends BridgeActivity {
     private void handleIncoming(Intent intent) {
         if (intent == null || intent == lastIntent) return;
         lastIntent = intent;
-        Uri data = intent.getData();
-        if (!Intent.ACTION_VIEW.equals(intent.getAction()) || data == null) return;
+        String action = intent.getAction();
+        if (action == null) return;
         try {
-            String name = null;
-            if ("content".equals(data.getScheme())) {
-                Cursor c = null;
-                try {
-                    c = getContentResolver().query(data, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null);
-                    if (c != null && c.moveToFirst() && !c.isNull(0)) name = c.getString(0);
-                } catch (Exception ignored) { /* se usa un nombre de respaldo */ }
-                finally { if (c != null) c.close(); }
+            if ("android.media.action.MEDIA_PLAY_FROM_SEARCH".equals(action)) { handleSearch(intent); return; }
+            List<Uri> uris = new ArrayList<>();
+            if (Intent.ACTION_VIEW.equals(action)) {
+                if (intent.getData() != null) uris.add(intent.getData());
+                collectClip(intent, uris);
+            } else if (Intent.ACTION_SEND.equals(action)) {
+                Uri one = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+                if (one != null) uris.add(one);
+                collectClip(intent, uris);
+            } else if (Intent.ACTION_SEND_MULTIPLE.equals(action)) {
+                ArrayList<Uri> many = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+                if (many != null) uris.addAll(many);
+                collectClip(intent, uris);
             }
-            if (name == null || name.isEmpty()) name = data.getLastPathSegment();
-            if (name == null || name.isEmpty()) name = "audio";
-            String mime = intent.getType();
-            JSONObject o = new JSONObject().put("uri", data.toString()).put("name", name).put("mime", mime == null ? "" : mime);
+            if (uris.isEmpty()) return;
+            JSONArray items = new JSONArray();
+            List<String> seen = new ArrayList<>();
+            for (Uri u : uris) {
+                if (u == null || seen.contains(u.toString()) || items.length() >= 50) continue;
+                seen.add(u.toString());
+                items.put(describe(u, intent.getType()));
+            }
+            if (items.length() == 0) return;
+            // Los campos de arriba son los del primer archivo (compatibilidad); «items» lleva todos
+            JSONObject o = new JSONObject(items.getJSONObject(0).toString()).put("items", items);
             PulsarBridge.setPendingOpen(o.toString());
             // Si la web ya está abierta lo recoge ahora; si la app está arrancando, lo pide al terminar de cargar
             PulsarEvents.emit("openAudio");
         } catch (Exception ignored) { /* un audio que no se pueda describir simplemente no se abre */ }
+    }
+
+    /** Archivos que algunas apps mandan en ClipData en vez de en data / EXTRA_STREAM. */
+    private void collectClip(Intent intent, List<Uri> out) {
+        ClipData clip = intent.getClipData();
+        if (clip == null) return;
+        for (int i = 0; i < clip.getItemCount(); i++) {
+            Uri u = clip.getItemAt(i).getUri();
+            if (u != null && !out.contains(u)) out.add(u);
+        }
+    }
+
+    /** Nombre y tipo de un archivo recibido; intenta conservar el permiso de lectura mientras Android lo permita. */
+    private JSONObject describe(Uri data, String intentMime) throws Exception {
+        String name = null;
+        String mime = null;
+        if ("content".equals(data.getScheme())) {
+            Cursor c = null;
+            try {
+                c = getContentResolver().query(data, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null);
+                if (c != null && c.moveToFirst() && !c.isNull(0)) name = c.getString(0);
+            } catch (Exception ignored) { /* se usa un nombre de respaldo */ }
+            finally { if (c != null) c.close(); }
+            try { mime = getContentResolver().getType(data); } catch (Exception ignored) { /* sin tipo */ }
+            try { getContentResolver().takePersistableUriPermission(data, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) { /* el permiso temporal basta mientras la app esté abierta */ }
+        }
+        if (name == null || name.isEmpty()) name = data.getLastPathSegment();
+        if (name == null || name.isEmpty()) name = "audio";
+        if (mime == null || mime.isEmpty() || mime.startsWith("vnd.android.cursor")) mime = intentMime;
+        return new JSONObject().put("uri", data.toString()).put("name", name).put("mime", mime == null ? "" : mime);
+    }
+
+    /** «Ok Google, pon X en Pulsar RM» y otras apps que piden reproducir por búsqueda (MEDIA_PLAY_FROM_SEARCH). */
+    private void handleSearch(Intent intent) {
+        PulsarBridge.playFromSearch(this, intent.getStringExtra("query"),
+            intent.getStringExtra("android.intent.extra.artist"), intent.getStringExtra("android.intent.extra.album"),
+            intent.getStringExtra("android.intent.extra.title"), intent.getStringExtra("android.intent.extra.genre"));
     }
 
     /* ---------- Reproducción en segundo plano ---------- */

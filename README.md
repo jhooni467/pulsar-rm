@@ -1,7 +1,7 @@
 <!-- ================================= --><!--          PULSAR RM               --><!--         README.md                --><!-- ================================= --><div align="center"><h1>🪐 PULSAR RM</h1><p><strong>Your music. Your universe.</strong></p><p>
   Local Music Player for Android
 </p><p>
-  <img src="https://img.shields.io/badge/VERSION-v1.05-8275E8?style=for-the-badge" alt="Version">
+  <img src="https://img.shields.io/badge/VERSION-v1.06-8275E8?style=for-the-badge" alt="Version">
   <img src="https://img.shields.io/badge/PLATFORM-ANDROID-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android">
   <img src="https://img.shields.io/badge/STATUS-IN_DEVELOPMENT-4788C7?style=for-the-badge" alt="Development">
 </p><p>
@@ -51,7 +51,7 @@ Repository| GitHub
 
 📦 Download
 
-<div align="center">Pulsar RM v1.05
+<div align="center">Pulsar RM v1.06
 
 Latest published version
 
@@ -89,11 +89,29 @@ Development focuses on improving stability, refining the interface and expanding
 
 Current version
 
+v1.06 — Folder audio fix
+
+Songs from authorized folders no longer fail with "FFmpegDemuxer: PTS is not defined" (the Android media route now handles partial "Range" requests correctly), and the on-screen "Preparando la canción…" message that interrupted playback was removed: if the fallback is ever needed it runs silently, resumes where the song was and keeps the next song ready.
+
+v1.06 — Native Android integration (Android Auto, voice search, share, lock screen) + "Inmersive" player style
+
+- New second player design, **Inmersive** (large cover, dynamic blurred background taken from the cover, favorites star, options menu, progress bar, big previous/pause/next, system volume bar, shortcuts to lyrics / audio devices / queue). Choose it in Settings → Appearance → *Estilo del reproductor* (with a live preview of both designs). Both styles share the same playback engine; the choice is saved. The original **Pulsar RM** design is untouched.
+- Favorites (star) are stored on the song and sent to Android Auto as a "Favoritas" list.
+
+
+- Android Auto / Bluetooth / Google Assistant: browsable library (Songs, Albums, Artists, Lists) built from a compact copy of the library that the web layer sends to Android (`setLibrary`), covers served through a read-only `ContentProvider`, search by voice ("Ok Google, play X on Pulsar RM") and in the car, and the playback queue.
+- Lock screen / notification / headset: complete metadata (title, artist, album, album artist, genre, year, track, duration, cover), queue, shuffle and repeat buttons, position re-synced every 15 s, volume keys bound to the music stream.
+- Share one or several audio files to Pulsar RM (SEND / SEND_MULTIPLE), "Open with" for more content types, and `MEDIA_PLAY_FROM_SEARCH` handling.
+- Background: the WebView renderer keeps high priority while music plays, native commands wake a sleeping WebView, and an optional "unrestricted battery" button appears in Settings when Android is limiting the app.
+- Fixed: `library-tools.js` and `updates.js` were loaded by `index.html` but not copied into the APK.
+
+Previous version
+
 v1.05 — Full-height screen & back navigation fix
 
 The app now uses the whole screen height (no empty strip above the top tabs) and the Android Back button / gesture follows the screens (Player → Library → Home → leave the app).
 
-Previous version
+Earlier version
 
 v1.04 — Screens, queue, library & performance update
 

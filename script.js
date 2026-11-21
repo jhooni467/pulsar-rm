@@ -1,4 +1,4 @@
-/* PULSAR RM 1.05 — Pantallas secundarias (Letras, Cola, Ecualizador, Información), cola real, mezcla con crossfade,
+/* PULSAR RM 1.06 — Pantallas secundarias (Letras, Cola, Ecualizador, Información), cola real, mezcla con crossfade,
    temporizador, segundo plano en Android, biblioteca por carpetas, tasa de refresco y Ajustes reorganizados.
    Archivos: native.js (puente con Android) · script.js (núcleo) · features.js (módulos de la v1.04)
    Módulos del núcleo: Store (IndexedDB) · Settings · CoverColor · Lyrics · Queue · AudioGraph · Equalizer · Library · Player · Router · UI
@@ -8,7 +8,7 @@
 
 // ÚNICO lugar donde se escribe la versión. El workflow de GitHub la lee de aquí para
 // el versionName y el versionCode del APK. Formato: "X.YY" (ej. 1.05).
-const APP_VERSION = "1.05";
+const APP_VERSION = "1.06";
 
 // Si el APK expone PulsarNative.getVersion(), se muestra la versión REAL instalada;
 // si no, se usa la constante de arriba.
@@ -242,6 +242,7 @@ const Settings = {
     // v1.03
     coverColor: false,        // la app toma el color de la portada que suena
     coverIntensity: "medium", // low | medium | high
+    playerStyle: "pulsar",    // v1.06: estilo del reproductor — pulsar (el de siempre) | inmersive (portada grande y fondo dinámico)
     hideStatusBar: false,     // oculta la barra de estado de Android
     lyricsAnim: "flow",       // flow (Fluida) | letters (Palabra por palabra) | scale (Escala)
     lyricsFont: "default",    // ver LYRIC_FONTS ("custom" = fuente importada)
@@ -3295,6 +3296,9 @@ const Player = {
   preloaded: null,   // { songId, deckIdx }
   preloadTimer: 0,
   failStreak: 0,
+  bridgeFirst: false, // v1.06: si la ruta directa de Android falló, las canciones de carpeta se leen con Android desde el principio
+  routeKey: "pulsar-media-route",
+  failKey: "pulsar-media-route-fails",
   quietUntil: 0,     // hasta esta hora, una pausa del audio es esperada (cambio de canción)
   startingFade: false,
   userPaused: false,
@@ -3316,6 +3320,7 @@ const Player = {
   },
 
   init() {
+    try { this.bridgeFirst = localStorage.getItem(this.routeKey) === APP_VERSION; } catch (error) { /* no crítico */ }
     this.decks.forEach((deck, index) => {
       const el = deck.el;
       const active = () => this.isActive(deck);
@@ -3333,6 +3338,7 @@ const Player = {
         this.updatePositionState();
         Lyrics.onTime(el.currentTime);
         this.tick();
+        if (typeof MediaBridge !== "undefined") MediaBridge.tick();
       });
       el.addEventListener("seeked", () => { if (active()) MediaBridge.update(true); });
       el.addEventListener("loadedmetadata", () => { if (active()) UI.setDuration(el.duration); });
@@ -3365,6 +3371,10 @@ const Player = {
   // Devuelve { url, revoke } con la dirección desde la que se reproduce la canción.
   async resolveSource(song) {
     if (song.uri) { // canción de una carpeta autorizada: la sirve Android desde el mismo origen de la app
+      if (this.bridgeFirst && Native.has("readChunk")) { // v1.06: esta ruta ya falló en este teléfono → se lee con Android sin intentarla
+        const read = await this.readViaBridge(song);
+        if (read) return read;
+      }
       const url = Native.audioUrl(song.uri);
       if (!url) diag("audio", "Canción de carpeta sin puente nativo (Native.available=" + Native.available + ")");
       return url ? { url, revoke: null } : null;
@@ -3578,10 +3588,20 @@ const Player = {
   handleError(deck, index) {
     if (!deck.url) return;
     console.error("Error de audio:", deck.el.error);
-    diag("audio", `${this.isActive(deck) ? "Error" : "Error (precarga)"}: ${mediaErrorText(deck.el.error)} · ${deck.url.startsWith("blob:") ? "archivo importado" : "carpeta"}`);
-    if (!this.isActive(deck)) { // era la canción preparada: se descarta sin avisar
+    const fromStream = !deck.url.startsWith("blob:");
+    diag("audio", `${this.isActive(deck) ? "Error" : "Error (precarga)"}: ${mediaErrorText(deck.el.error)} · ${fromStream ? "carpeta" : "archivo importado"}`);
+    if (fromStream) { // qué le sirvió Android al reproductor (ayuda a encontrar la causa si vuelve a pasar)
+      const served = Native.call("mediaLog");
+      if (typeof served === "string" && served) diag("audio", "Android sirvió: " + served.slice(-280));
+    }
+    if (!this.isActive(deck)) { // era la canción preparada: se descarta sin avisar y se vuelve a preparar leyéndola con Android
+      const failed = Library.byId(deck.songId);
       if (this.preloaded && this.preloaded.deckIdx === index) this.preloaded = null;
       this.release(deck);
+      if (fromStream && failed && failed.uri && Native.has("readChunk")) {
+        this.markRouteBroken(failed.id);
+        this.schedulePreload();
+      }
       return;
     }
     if (this.tryBridgeFallback(deck)) return;
@@ -3595,48 +3615,104 @@ const Player = {
     }
   },
 
+  // v1.06 — La ruta directa (/_pulsar_media) falló en este teléfono. Esta sesión (y las siguientes, si falla con 2 canciones
+  // distintas) las canciones de carpeta se leen con Android desde el principio: sin error, sin reinicio y con la siguiente ya lista.
+  markRouteBroken(songId) {
+    this.bridgeFirst = true;
+    try {
+      const ids = JSON.parse(localStorage.getItem(this.failKey) || "[]");
+      if (!ids.includes(songId)) ids.push(songId);
+      localStorage.setItem(this.failKey, JSON.stringify(ids.slice(-5)));
+      if (ids.length >= 2) localStorage.setItem(this.routeKey, APP_VERSION);
+    } catch (error) { /* no crítico */ }
+  },
+
   // Respaldo para canciones de carpeta: si la ruta /_pulsar_media falla, Android entrega el archivo por trozos
-  // (PulsarNative.readChunk) y se reproduce desde memoria.
+  // (PulsarNative.readChunk) y se reproduce desde memoria. v1.06: sin avisos en pantalla y retomando donde iba.
   tryBridgeFallback(deck) {
     const song = Library.byId(deck.songId);
     if (deck.tried || !song || !song.uri || !Native.has("readChunk") || !deck.url || deck.url.startsWith("blob:")) return false;
     deck.tried = true;
-    this.loadViaBridge(deck, song);
+    const resumeAt = deck.el.currentTime || 0;
+    this.markRouteBroken(song.id);
+    this.loadViaBridge(deck, song, resumeAt);
     return true;
   },
 
-  async loadViaBridge(deck, song) {
+  mimeFor(song) {
+    const ext = (song.fileName || "").split(".").pop().toLowerCase();
+    const types = { mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", flac: "audio/flac", ogg: "audio/ogg", oga: "audio/ogg", opus: "audio/ogg", wav: "audio/wav", weba: "audio/webm" };
+    return song.mime || types[ext] || "audio/mpeg";
+  },
+
+  async decodeBase64(b64) {
+    try { // lo decodifica el navegador por dentro (mucho más rápido que byte a byte)
+      const response = await fetch("data:application/octet-stream;base64," + b64);
+      return new Uint8Array(await response.arrayBuffer());
+    } catch (error) {
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes;
+    }
+  },
+
+  // Lee la canción completa con Android (por trozos) y devuelve { url, revoke }; null si no se pudo o se pidió otra canción.
+  async readViaBridge(song) {
     const token = this.loadToken;
-    UI.toast("Preparando la canción…", true);
-    diag("audio", "Ruta normal falló; probando lectura directa de Android");
+    const CHUNK = 2 * 1024 * 1024;
+    const parts = [];
+    let offset = 0;
     try {
-      const parts = [];
-      let offset = 0;
-      for (let guard = 0; guard < 600; guard++) { // hasta ~600 MB
-        const b64 = Native.call("readChunk", song.uri, String(offset), String(1024 * 1024));
+      for (let guard = 0; guard < 400; guard++) { // hasta ~800 MB
+        const b64 = Native.call("readChunk", song.uri, String(offset), String(CHUNK));
         if (typeof b64 !== "string" || !b64) break;
-        const bin = atob(b64);
-        const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const bytes = await this.decodeBase64(b64);
         parts.push(bytes);
         offset += bytes.length;
+        if (token !== this.loadToken) return null; // se pidió otra canción
+        if (bytes.length < CHUNK) break;           // último trozo
         await new Promise((resolve) => setTimeout(resolve, 0)); // deja respirar a la pantalla
-        if (token !== this.loadToken || deck.songId !== song.id) return; // se pidió otra canción
       }
       if (!offset) throw new Error("Android no pudo leer el archivo");
-      const ext = (song.fileName || "").split(".").pop().toLowerCase();
-      const types = { mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", flac: "audio/flac", ogg: "audio/ogg", oga: "audio/ogg", opus: "audio/ogg", wav: "audio/wav", weba: "audio/webm" };
-      const url = URL.createObjectURL(new Blob(parts, { type: song.mime || types[ext] || "audio/mpeg" }));
-      const previous = deck.revoke;
-      deck.el.src = url;
-      deck.url = url;
-      deck.revoke = () => URL.revokeObjectURL(url);
-      if (previous) previous();
-      this.objectUrl = url;
-      if (this.isActive(deck) && !this.userPaused) await deck.el.play();
-      diag("audio", "Lectura directa de Android: correcta (" + Math.round(offset / 1024) + " KB)");
     } catch (error) {
       diag("audio", "Lectura directa de Android falló: " + (error && error.message ? error.message : error));
+      return null;
+    }
+    diag("audio", "Lectura directa de Android: correcta (" + Math.round(offset / 1024) + " KB)");
+    const url = URL.createObjectURL(new Blob(parts, { type: this.mimeFor(song) }));
+    return { url, revoke: () => URL.revokeObjectURL(url) };
+  },
+
+  async loadViaBridge(deck, song, resumeAt) {
+    const token = this.loadToken;
+    diag("audio", "Ruta normal falló; leyendo con Android (sin aviso en pantalla" + (resumeAt > 1 ? ", retomando en " + Math.round(resumeAt) + " s" : "") + ")");
+    const source = await this.readViaBridge(song);
+    if (token !== this.loadToken || deck.songId !== song.id) { if (source && source.revoke) source.revoke(); return; } // se pidió otra canción
+    if (!source) {
+      if (this.isActive(deck)) UI.toast("No se pudo reproducir este archivo. Puede que su formato no sea compatible.");
+      return;
+    }
+    try {
+      const previous = deck.revoke;
+      deck.el.src = source.url;
+      deck.url = source.url;
+      deck.revoke = source.revoke;
+      if (previous) previous();
+      if (this.isActive(deck)) this.objectUrl = source.url;
+      if (resumeAt > 1) { // si falló a mitad de canción, sigue desde ahí en vez de empezar de cero
+        await new Promise((resolve) => {
+          const done = () => { deck.el.removeEventListener("loadedmetadata", done); resolve(); };
+          deck.el.addEventListener("loadedmetadata", done);
+          setTimeout(done, 3000);
+        });
+        if (token !== this.loadToken) return;
+        try { deck.el.currentTime = resumeAt; } catch (error) { /* sin metadatos todavía */ }
+      }
+      if (this.isActive(deck) && !this.userPaused) await deck.el.play();
+    } catch (error) {
+      if (error && error.name === "AbortError") return;
+      diag("audio", "Reproducir tras la lectura de Android falló: " + (error && error.message ? error.message : error));
       if (this.isActive(deck)) UI.toast("No se pudo reproducir este archivo. Puede que su formato no sea compatible.");
     }
   },
@@ -3876,6 +3952,14 @@ const Player = {
       case "stop": this.pause(); break;
       case "seek": if (Number.isFinite(Number(value))) { this.finishFade(); this.audio.currentTime = Number(value) / 1000; } break;
       case "sleep": if (typeof SleepTimer !== "undefined") SleepTimer.fire(true); break;
+      // v1.06: cola del sistema (Android 13+, Android Auto) y botones «aleatorio» / «repetir» de la pantalla de bloqueo
+      case "playId": {
+        const index = Queue.ids.indexOf(Number(value));
+        if (index >= 0) this.skipTo(index);
+        break;
+      }
+      case "shuffle": Settings.set("shuffle", !Settings.values.shuffle); if (typeof MediaBridge !== "undefined") MediaBridge.update(); break;
+      case "repeat": Settings.set("repeat", { off: "all", all: "one", one: "off" }[Settings.values.repeat] || "all"); if (typeof MediaBridge !== "undefined") MediaBridge.update(); break;
       case "interrupt": // auriculares desconectados: pausa (la persona decide cuándo seguir)
         if (!this.audio.paused) { this.userPaused = true; this.audio.pause(); this.finishFade(); }
         break;
@@ -4735,6 +4819,14 @@ const UI = {
       document.body.appendChild(box);
       box.querySelector(".confirm-cancel").focus();
     });
+  },
+
+  hideToast() {
+    const box = this.el.toast;
+    clearTimeout(this.toastTimer);
+    clearTimeout(this.toastHide);
+    box.classList.add("out");
+    this.toastHide = setTimeout(() => box.classList.add("hidden"), 220);
   },
 
   toast(message, sticky = false) {

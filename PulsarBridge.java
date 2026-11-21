@@ -12,7 +12,10 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
+import android.media.AudioManager;
 import android.os.Looper;
+import android.os.PowerManager;
+import android.provider.Settings;
 import android.provider.DocumentsContract;
 import android.util.Base64;
 import android.view.Display;
@@ -45,10 +48,15 @@ final class PulsarBridge {
     private static PulsarBridge current;
     /** Audio que otra app pidió abrir con Pulsar RM (JSON {uri,name,mime}); la web lo recoge con takePendingOpen(). */
     private static volatile String pendingOpen = null;
+    /** Orden de reproducción de Android Auto / Asistente / búsqueda (JSON {id,ids,t}); la web la recoge con takePendingPlay(). */
+    private static volatile String pendingPlay = null;
+    private static final long PLAY_REQUEST_TTL_MS = 90_000L;
     private final MainActivity activity;
     private final WebView web;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    /** Guardar la biblioteca no debe esperar a un escaneo largo: tiene su propio hilo. */
+    private final ExecutorService libWorker = Executors.newSingleThreadExecutor();
     private AtomicBoolean scanCancel = new AtomicBoolean(false);
     private volatile boolean scanning = false;
 
@@ -64,6 +72,7 @@ final class PulsarBridge {
     static void event(String type, String json) { PulsarEvents.emit(type, json); }
 
     static void action(String name, String value) {
+        PulsarEvents.wake(); // v1.06: el WebView pudo quedarse dormido tras una pausa larga con la pantalla apagada
         try {
             JSONObject o = new JSONObject().put("name", name);
             if (value != null) o.put("value", Long.parseLong(value));
@@ -76,6 +85,61 @@ final class PulsarBridge {
     }
 
     static void setPendingOpen(String json) { pendingOpen = json; }
+
+    /* ---------- Órdenes de reproducción desde fuera de la app (v1.06) ---------- */
+
+    /**
+     * Android Auto, el Asistente o una búsqueda piden reproducir estas canciones.
+     * Si la web está abierta la recoge al instante; si no, se intenta abrir la app (Android puede impedirlo con la pantalla
+     * apagada: en ese caso la orden espera 90 s y se atiende en cuanto la app se abra).
+     */
+    static void requestPlay(Context ctx, String json) {
+        pendingPlay = json;
+        if (PulsarEvents.hasWeb()) {
+            PulsarEvents.wake();
+            PulsarEvents.emit("playRequest");
+        } else if (!(ctx instanceof Activity)) {
+            launchApp(ctx); // viene del servicio (coche, Asistente) y la pantalla no existe: se intenta abrir
+        }
+    }
+
+    /** Orden de «reproducir estas ids» (la primera es la que empieza). */
+    static void requestPlayIds(Context ctx, List<Long> ids, Long startId) {
+        try {
+            JSONArray list = new JSONArray();
+            for (Long id : ids) list.put(id.longValue());
+            JSONObject o = new JSONObject().put("ids", list).put("t", System.currentTimeMillis());
+            if (startId != null) o.put("id", startId.longValue());
+            requestPlay(ctx, o.toString());
+        } catch (Exception ignored) { /* no crítico */ }
+    }
+
+    /** Búsqueda por voz o desde el coche: busca en la copia de la biblioteca y ordena reproducir el resultado. */
+    static void playFromSearch(Context ctx, String query, String artist, String album, String title, String genre) {
+        try {
+            PulsarLibrary.Snapshot snap = PulsarLibrary.get(ctx);
+            List<Long> ids = PulsarLibrary.searchIds(snap, query, artist, album, title, genre);
+            if (ids.isEmpty()) {
+                String what = (query != null && !query.trim().isEmpty()) ? query : (title != null && !title.isEmpty() ? title : (artist != null && !artist.isEmpty() ? artist : (album != null ? album : "")));
+                requestPlay(ctx, new JSONObject().put("none", true).put("query", what).put("t", System.currentTimeMillis()).toString());
+                return;
+            }
+            boolean any = (query == null || query.trim().isEmpty()) && isBlank(artist) && isBlank(album) && isBlank(title) && isBlank(genre);
+            Long start = any ? ids.get((int) (Math.random() * ids.size())) : ids.get(0); // «pon música»: empieza en una al azar
+            requestPlayIds(ctx, ids, start);
+        } catch (Exception ignored) { /* no crítico */ }
+    }
+
+    private static boolean isBlank(String s) { return s == null || s.trim().isEmpty(); }
+
+    private static void launchApp(Context ctx) {
+        try {
+            Intent i = ctx.getPackageManager().getLaunchIntentForPackage(ctx.getPackageName());
+            if (i == null) return;
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            ctx.startActivity(i);
+        } catch (Exception ignored) { /* Android no permite abrir pantallas desde segundo plano aquí: la orden queda en espera */ }
+    }
 
     /* ---------- Resultados de pantallas del sistema ---------- */
 
@@ -132,6 +196,7 @@ final class PulsarBridge {
             o.put("notifications", notificationsAllowed());
             // Las carpetas necesitan WebView.getWebViewClient() (Android 8+)
             o.put("folders", Build.VERSION.SDK_INT >= 26);
+            o.put("library", true); // v1.06: setLibrary / Android Auto
             o.put("display", displayInfo());
             return o.toString();
         } catch (Exception e) {
@@ -154,6 +219,107 @@ final class PulsarBridge {
         String value = pendingOpen;
         pendingOpen = null;
         return value == null ? "" : value;
+    }
+
+    /** v1.06 — Orden pendiente de Android Auto / Asistente / búsqueda, o "" (se entrega una sola vez y caduca a los 90 s). */
+    @JavascriptInterface public String takePendingPlay() {
+        String value = pendingPlay;
+        pendingPlay = null;
+        if (value == null) return "";
+        try {
+            long t = new JSONObject(value).optLong("t", 0);
+            if (t > 0 && System.currentTimeMillis() - t > PLAY_REQUEST_TTL_MS) return "";
+        } catch (Exception e) { return ""; }
+        return value;
+    }
+
+    /**
+     * v1.06 — La web manda una copia compacta de la biblioteca (ver PulsarLibrary) para que Android Auto, el Asistente y
+     * los controles del sistema puedan explorarla y buscar sin abrir la app. No bloquea: se guarda en otro hilo.
+     */
+    @JavascriptInterface public void setLibrary(final String json) {
+        if (json == null || json.isEmpty()) return;
+        libWorker.execute(new Runnable() {
+            @Override public void run() {
+                try {
+                    PulsarLibrary.save(activity.getApplicationContext(), json);
+                    PulsarMediaService.libraryChanged();
+                } catch (Exception ignored) { /* copia inválida: se conserva la anterior */ }
+            }
+        });
+    }
+
+    /** v1.06 — true si Android ya no limita la batería de Pulsar RM (la música en segundo plano es más fiable). */
+    @JavascriptInterface public boolean isIgnoringBatteryOptimizations() {
+        if (Build.VERSION.SDK_INT < 23) return true;
+        try {
+            PowerManager pm = (PowerManager) activity.getSystemService(Context.POWER_SERVICE);
+            return pm == null || pm.isIgnoringBatteryOptimizations(activity.getPackageName());
+        } catch (Exception e) { return true; }
+    }
+
+    /** v1.06 — Abre el aviso de Android para que Pulsar RM quede sin restricciones de batería (la persona decide). */
+    @JavascriptInterface public void requestIgnoreBatteryOptimizations() {
+        if (Build.VERSION.SDK_INT < 23) return;
+        main.post(new Runnable() {
+            @Override public void run() {
+                try {
+                    Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + activity.getPackageName()));
+                    activity.startActivity(i);
+                } catch (Exception e) {
+                    try { activity.startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)); } catch (Exception ignored) { /* este dispositivo no tiene esa pantalla */ }
+                }
+            }
+        });
+    }
+
+    /**
+     * v1.06 — Volumen de MÚSICA del teléfono (0.0 a 1.0), el mismo que mueven las teclas físicas y Bluetooth.
+     * Lo usa la barra de volumen del reproductor Inmersive. -1 si no se pudo leer.
+     */
+    @JavascriptInterface public double getVolume() {
+        try {
+            AudioManager am = (AudioManager) activity.getSystemService(Context.AUDIO_SERVICE);
+            int max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            return max <= 0 ? -1 : am.getStreamVolume(AudioManager.STREAM_MUSIC) / (double) max;
+        } catch (Exception e) { return -1; }
+    }
+
+    /** v1.06 — Cambia el volumen de música (0.0 a 1.0) sin abrir el panel del sistema: la barra de la app es el panel. */
+    @JavascriptInterface public void setVolume(double level) {
+        try {
+            AudioManager am = (AudioManager) activity.getSystemService(Context.AUDIO_SERVICE);
+            int max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            double clamped = Math.max(0.0, Math.min(1.0, level));
+            am.setStreamVolume(AudioManager.STREAM_MUSIC, (int) Math.round(clamped * max), 0);
+        } catch (Exception ignored) { /* el sistema no permitió el cambio */ }
+    }
+
+    /**
+     * v1.06 — Abre el selector de salida de audio de Android (altavoz, Bluetooth, auriculares).
+     * Android 14+: selector del sistema; Android 10–13: panel de volumen; antes: ajustes de Bluetooth.
+     * Se llama por reflexión para no depender de la versión del SDK con la que se compile.
+     */
+    @JavascriptInterface public void openAudioOutput() {
+        main.post(new Runnable() {
+            @Override public void run() {
+                boolean opened = false;
+                if (Build.VERSION.SDK_INT >= 34) {
+                    try {
+                        Class<?> router2 = Class.forName("android.media.MediaRouter2");
+                        Object router = router2.getMethod("getInstance", Context.class).invoke(null, activity);
+                        Object result = router2.getMethod("showSystemOutputSwitcher").invoke(router);
+                        opened = Boolean.TRUE.equals(result);
+                    } catch (Throwable ignored) { /* se prueba el siguiente */ }
+                }
+                if (!opened && Build.VERSION.SDK_INT >= 29) {
+                    try { activity.startActivity(new Intent("android.settings.panel.action.VOLUME")); opened = true; } catch (Exception ignored) { /* siguiente */ }
+                }
+                if (!opened) {
+                    try { activity.startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)); } catch (Exception ignored) { /* este dispositivo no tiene esa pantalla */ }
+                }
+            }
+        });
     }
 
     /* ----- Reproducción ----- */
@@ -262,12 +428,15 @@ final class PulsarBridge {
         w.setAttributes(lp);
     }
 
-    /** Respaldo de reproducción: lee un trozo (máx. 1 MB) de una canción de carpeta y lo devuelve en base64. "" = fin o error. */
+    /** v1.06 — Últimos pedidos de audio que atendió Android (para el diagnóstico). */
+    @JavascriptInterface public String mediaLog() { return MediaWebClient.logText(); }
+
+    /** Respaldo de reproducción: lee un trozo (máx. 4 MB) de una canción de carpeta y lo devuelve en base64. "" = fin o error. */
     @JavascriptInterface public String readChunk(String uri, String offset, String length) {
         InputStream in = null;
         try {
             long off = Long.parseLong(offset);
-            int len = Math.max(1, Math.min(Integer.parseInt(length), 1024 * 1024));
+            int len = Math.max(1, Math.min(Integer.parseInt(length), 4 * 1024 * 1024));
             in = activity.getContentResolver().openInputStream(Uri.parse(uri));
             if (in == null) return "";
             long skipped = 0;

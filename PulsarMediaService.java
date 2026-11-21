@@ -10,30 +10,40 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.AudioAttributes;
-import android.media.AudioFocusRequest;
 import android.media.AudioManager;
+import android.media.MediaDescription;
 import android.media.MediaMetadata;
 import android.media.browse.MediaBrowser;
 import android.media.session.MediaSession;
+import android.media.session.MediaSessionManager;
 import android.media.session.PlaybackState;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.os.Process;
 import android.service.media.MediaBrowserService;
 import android.util.Base64;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Servicio de reproducción (v1.04).
@@ -50,6 +60,13 @@ import java.util.UUID;
  * música»): así Bluetooth, Android Auto, el Asistente y los controles multimedia del sistema la reconocen.
  * Al estar exportado (el sistema necesita conectarse), las órdenes internas llevan una clave privada de la app
  * (extra "k"); cualquier orden externa sin esa clave se ignora.
+ *
+ * v1.06 — integración nativa ampliada:
+ *   · Android Auto / Bluetooth / Asistente: árbol de exploración real (Canciones, Álbumes, Artistas, Listas) construido
+ *     con la copia de la biblioteca que manda la web (PulsarLibrary), búsqueda por voz (onPlayFromSearch) y portadas por
+ *     PulsarCoverProvider. Solo se muestra a Android Auto, al sistema y a apps de confianza.
+ *   · Cola de reproducción visible en el sistema, «aleatorio» y «repetir» como acciones personalizadas, metadatos completos.
+ *   · Foco de audio: el dueño es el WebView (ver más abajo); este servicio ya no lleva código de foco inactivo.
  */
 public class PulsarMediaService extends MediaBrowserService {
     static final String ACTION_UPDATE = "com.pulsarrm.app.UPDATE";
@@ -62,6 +79,17 @@ public class PulsarMediaService extends MediaBrowserService {
     private static final String CHANNEL = "pulsar_playback";
     private static final int NOTIF_ID = 4104;
     private static final String ROOT_ID = "pulsar_root";
+    private static final String EMPTY_ID = "empty";
+    /** Apps de confianza que pueden explorar la biblioteca (además de la propia, del sistema y de las firmadas como él). */
+    private static final String[] TRUSTED_PACKAGES = {
+        "com.google.android.projection.gearhead",        // Android Auto
+        "com.google.android.apps.automotive.templates.host",
+        "com.google.android.gms",                        // servicios de Google (Auto, Asistente)
+        "com.google.android.googlequicksearchbox",       // Asistente de Google
+        "com.google.android.carassistant",
+        "com.google.android.autosimulator",              // simulador de Android Auto (desarrollo)
+        "com.android.systemui", "com.android.bluetooth", "android"
+    };
     static final String EXTRA_KEY = "k";
 
     // Ajustes que manda la web (setAudioOptions)
@@ -111,12 +139,17 @@ public class PulsarMediaService extends MediaBrowserService {
     private MediaSession session;
     private AudioManager audio;
     private PowerManager.WakeLock wake;
-    private AudioFocusRequest focusRequest;
-    private boolean hasFocus = false;
     private boolean receiverOn = false;
+    /** Hilo para leer la biblioteca y armar listas sin bloquear la pantalla ni el sistema. */
+    private final ExecutorService browseWorker = Executors.newSingleThreadExecutor();
     private boolean foreground = false;
 
     private String title = "", artist = "", album = "", coverKey = "";
+    private String albumArtist = "", genre = "", mediaId = "", coverFileName = "", repeatMode = "off", queueSig = "";
+    private int year = 0, track = 0;
+    private boolean shuffleOn = false;
+    private long currentId = -1;
+    private final Set<Long> queueIds = new HashSet<>();
     private long durationMs = 0, positionMs = 0;
     private boolean playing = false, canPrev = true, canNext = true;
     private Bitmap cover;
@@ -125,28 +158,6 @@ public class PulsarMediaService extends MediaBrowserService {
         @Override public void onReceive(Context context, Intent intent) {
             if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction()) && pauseOnNoisy && playing) {
                 PulsarBridge.action("interrupt", null);
-            }
-        }
-    };
-
-    private final AudioManager.OnAudioFocusChangeListener focusListener = new AudioManager.OnAudioFocusChangeListener() {
-        @Override public void onAudioFocusChange(int change) {
-            switch (change) {
-                case AudioManager.AUDIOFOCUS_GAIN:
-                    hasFocus = true;
-                    PulsarBridge.focus("resume");
-                    break;
-                case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
-                    PulsarBridge.focus("pause".equals(focusMode) ? "pause" : "duck");
-                    break;
-                case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
-                    PulsarBridge.focus("pause");
-                    break;
-                case AudioManager.AUDIOFOCUS_LOSS:
-                    hasFocus = false;
-                    PulsarBridge.focus("loss");
-                    break;
-                default: break;
             }
         }
     };
@@ -168,24 +179,164 @@ public class PulsarMediaService extends MediaBrowserService {
             @Override public void onSkipToPrevious() { PulsarBridge.action("previous", null); }
             @Override public void onStop() { PulsarBridge.action("stop", null); }
             @Override public void onSeekTo(long pos) { PulsarBridge.action("seek", String.valueOf(pos)); }
+            // v1.06: Android Auto, Bluetooth y el Asistente
+            @Override public void onPlayFromMediaId(String id, Bundle extras) { if (!title.isEmpty()) ensureForeground(); playMediaId(id); }
+            @Override public void onPlayFromSearch(String query, Bundle extras) {
+                if (!title.isEmpty()) ensureForeground();
+                playSearch(query, extras);
+            }
+            @Override public void onSkipToQueueItem(long id) { PulsarBridge.action("playId", String.valueOf(id)); }
+            @Override public void onCustomAction(String action, Bundle extras) {
+                if ("shuffle".equals(action) || "repeat".equals(action)) PulsarBridge.action(action, null);
+            }
         });
+        // Qué volumen controlan las teclas y Bluetooth cuando la app no está al frente: el de música
+        session.setPlaybackToLocal(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build());
         session.setActive(true);
         live = this;
         // El sistema (Bluetooth, coche, Asistente, controles multimedia) se conecta a la sesión por aquí
         setSessionToken(session.getSessionToken());
         PendingIntent open = openAppIntent();
         if (open != null) session.setSessionActivity(open);
+        // Deja lista la biblioteca para cuando el coche la pida (así la primera lista no espera a leer el archivo)
+        browseWorker.execute(new Runnable() { @Override public void run() { PulsarLibrary.get(getApplicationContext()); } });
+    }
+
+    /** La web actualizó la copia de la biblioteca: se avisa a quien esté explorándola (Android Auto) para que se refresque. */
+    static void libraryChanged() {
+        final PulsarMediaService svc = live;
+        if (svc == null || svc.closing) return;
+        svc.handler.post(new Runnable() {
+            @Override public void run() {
+                if (svc.closing) return;
+                String[] ids = {ROOT_ID, "songs", "albums", "artists", "lists"};
+                for (String id : ids) { try { svc.notifyChildrenChanged(id); } catch (Exception ignored) { /* sin clientes */ } }
+            }
+        });
     }
 
     /* ---------- MediaBrowserService: Android reconoce la app como reproductor de música ---------- */
 
     @Override public BrowserRoot onGetRoot(String clientPackageName, int clientUid, Bundle rootHints) {
-        return new BrowserRoot(ROOT_ID, null);
+        // Pistas de presentación que entienden Android Auto y los coches: listas para todo (canciones, álbumes, artistas)
+        Bundle extras = new Bundle();
+        extras.putBoolean("android.media.browse.CONTENT_STYLE_SUPPORTED", true);
+        extras.putInt("android.media.browse.CONTENT_STYLE_BROWSABLE_HINT", 1); // 1 = lista, 2 = cuadrícula
+        extras.putInt("android.media.browse.CONTENT_STYLE_PLAYABLE_HINT", 1);
+        return new BrowserRoot(ROOT_ID, extras);
+    }
+
+    /** ¿Puede esta app ver la biblioteca? La propia, el sistema, Android Auto / Asistente de Google y apps firmadas como el sistema. */
+    private boolean isTrustedCaller(String pkg, int uid) {
+        if (pkg == null) return false;
+        if (pkg.equals(getPackageName()) || uid == Process.myUid() || uid == Process.SYSTEM_UID) return true;
+        for (String p : TRUSTED_PACKAGES) if (p.equals(pkg)) return true;
+        try {
+            if (getPackageManager().checkSignatures(uid, Process.SYSTEM_UID) == PackageManager.SIGNATURE_MATCH) return true;
+            ApplicationInfo ai = getPackageManager().getApplicationInfo(pkg, 0);
+            return (ai.flags & (ApplicationInfo.FLAG_SYSTEM | ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** Quién está pidiendo ahora mismo (solo Android 9+; antes no se puede saber y se atiende como siempre). */
+    private boolean currentCallerTrusted() {
+        if (Build.VERSION.SDK_INT < 28) return true;
+        try {
+            MediaSessionManager.RemoteUserInfo info = getCurrentBrowserInfo();
+            return info == null || isTrustedCaller(info.getPackageName(), info.getUid());
+        } catch (Exception e) {
+            return true;
+        }
     }
 
     @Override public void onLoadChildren(String parentId, Result<List<MediaBrowser.MediaItem>> result) {
-        // La biblioteca vive en la web de la app; por ahora no se expone un árbol de canciones a otras apps.
-        result.sendResult(new ArrayList<MediaBrowser.MediaItem>());
+        loadChildren(parentId, result, -1, -1);
+    }
+
+    @Override public void onLoadChildren(String parentId, Result<List<MediaBrowser.MediaItem>> result, Bundle options) {
+        int page = options == null ? -1 : options.getInt(MediaBrowser.EXTRA_PAGE, -1);
+        int size = options == null ? -1 : options.getInt(MediaBrowser.EXTRA_PAGE_SIZE, -1);
+        loadChildren(parentId, result, page, size);
+    }
+
+    private void loadChildren(final String parentId, final Result<List<MediaBrowser.MediaItem>> result, final int page, final int pageSize) {
+        final boolean trusted = currentCallerTrusted();
+        result.detach();
+        browseWorker.execute(new Runnable() {
+            @Override public void run() {
+                List<MediaBrowser.MediaItem> out = new ArrayList<>();
+                try {
+                    List<PulsarLibrary.Entry> entries = new ArrayList<>();
+                    if (trusted) {
+                        PulsarLibrary.Snapshot snap = PulsarLibrary.get(getApplicationContext());
+                        entries = PulsarLibrary.children(snap, parentId);
+                        if (entries.isEmpty() && snap.isEmpty() && (ROOT_ID.equals(parentId) || "root".equals(parentId))) {
+                            entries.add(new PulsarLibrary.Entry(EMPTY_ID, "Abre Pulsar RM en el teléfono", "para cargar tu biblioteca aquí", null, true, 0));
+                        }
+                    }
+                    int from = 0, to = entries.size();
+                    if (page >= 0 && pageSize > 0) { from = Math.min(entries.size(), page * pageSize); to = Math.min(entries.size(), from + pageSize); }
+                    else if (to > 1000) to = 1000; // tope de seguridad sin paginación
+                    for (int i = from; i < to; i++) out.add(toItem(entries.get(i)));
+                } catch (Exception ignored) { /* se entrega lo que se pudo */ }
+                result.sendResult(out);
+            }
+        });
+    }
+
+    private MediaDescription describe(PulsarLibrary.Entry e) {
+        MediaDescription.Builder d = new MediaDescription.Builder().setMediaId(e.id).setTitle(e.title);
+        if (e.subtitle != null) d.setSubtitle(e.subtitle);
+        if (e.cover != null) {
+            Uri u = PulsarCoverProvider.uriFor(this, e.cover);
+            if (u != null) d.setIconUri(u);
+        }
+        if (e.durationMs > 0) {
+            Bundle ex = new Bundle();
+            ex.putLong(MediaMetadata.METADATA_KEY_DURATION, e.durationMs);
+            d.setExtras(ex);
+        }
+        return d.build();
+    }
+
+    private MediaBrowser.MediaItem toItem(PulsarLibrary.Entry e) {
+        return new MediaBrowser.MediaItem(describe(e), e.browsable ? MediaBrowser.MediaItem.FLAG_BROWSABLE : MediaBrowser.MediaItem.FLAG_PLAYABLE);
+    }
+
+    /** Tocar una canción (o un álbum, artista, lista) en el coche / Bluetooth: se reproduce la lista completa desde ahí. */
+    private void playMediaId(final String id) {
+        final Context ctx = getApplicationContext();
+        browseWorker.execute(new Runnable() {
+            @Override public void run() {
+                try {
+                    PulsarLibrary.Snapshot snap = PulsarLibrary.get(ctx);
+                    String[] song = PulsarLibrary.parseSongId(id);
+                    if (song != null) {
+                        long sid = Long.parseLong(song[0]);
+                        List<Long> ids = PulsarLibrary.idsOf(snap, song[1]);
+                        if (!ids.contains(sid)) { ids = new ArrayList<>(); ids.add(sid); }
+                        PulsarBridge.requestPlayIds(ctx, ids, sid);
+                    } else {
+                        List<Long> ids = PulsarLibrary.idsOf(snap, id);
+                        if (!ids.isEmpty()) PulsarBridge.requestPlayIds(ctx, ids, ids.get(0));
+                    }
+                } catch (Exception ignored) { /* id no válido */ }
+            }
+        });
+    }
+
+    /** «Ok Google, pon X en Pulsar RM» / orden de voz del coche. */
+    private void playSearch(final String query, Bundle extras) {
+        final Context ctx = getApplicationContext();
+        final String artist = extras == null ? null : extras.getString("android.intent.extra.artist");
+        final String album = extras == null ? null : extras.getString("android.intent.extra.album");
+        final String song = extras == null ? null : extras.getString("android.intent.extra.title");
+        final String genre = extras == null ? null : extras.getString("android.intent.extra.genre");
+        browseWorker.execute(new Runnable() {
+            @Override public void run() { PulsarBridge.playFromSearch(ctx, query, artist, album, song, genre); }
+        });
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
@@ -216,7 +367,6 @@ public class PulsarMediaService extends MediaBrowserService {
         else if (ACTION_PREV.equals(action)) { PulsarBridge.action("previous", null); }
         else if (ACTION_SLEEP.equals(action)) {
             PulsarBridge.event("sleep");
-            releaseFocus();
             if (!foreground) stopSelf(); // no había música sonando: solo se avisa a la web
         }
         return START_NOT_STICKY;
@@ -234,6 +384,17 @@ public class PulsarMediaService extends MediaBrowserService {
             positionMs = o.optLong("positionMs", 0);
             canPrev = o.optBoolean("canPrev", true);
             canNext = o.optBoolean("canNext", true);
+            albumArtist = o.optString("albumArtist", "");
+            genre = o.optString("genre", "");
+            year = o.optInt("year", 0);
+            track = o.optInt("track", 0);
+            shuffleOn = o.optBoolean("shuffle", false);
+            repeatMode = o.optString("repeat", "off");
+            String songId = o.optString("id", "");
+            mediaId = songId.isEmpty() ? "" : "s:" + songId;
+            try { currentId = songId.isEmpty() ? -1 : Long.parseLong(songId); } catch (NumberFormatException e) { currentId = -1; }
+            coverFileName = PulsarLibrary.safeFile(o.optString("coverFile", ""));
+            updateQueue(o.optJSONArray("queue"));
             boolean was = playing;
             playing = o.optBoolean("playing", false);
 
@@ -259,13 +420,37 @@ public class PulsarMediaService extends MediaBrowserService {
             keepAlive = bgPlayback && holding;
             publish();
             if (playing) {
-                if (!was) { acquireFocus(); registerNoisy(); PulsarEvents.keepWebAlive(); }
+                if (!was) { registerNoisy(); PulsarEvents.keepWebAlive(); }
                 acquireWake(); // en cada canción: renueva el tope de seguridad, así no caduca en sesiones largas
             }
         } catch (Exception e) {
             // datos incompletos: se ignoran
         }
     }
+
+    /** Cola que se ve en el sistema (Android 13+, Android Auto): se arma con la copia de la biblioteca y solo si cambió. */
+    private void updateQueue(JSONArray q) {
+        String sig = q == null ? "" : q.toString();
+        if (sig.equals(queueSig)) return;
+        queueSig = sig;
+        queueIds.clear();
+        if (session == null) return;
+        if (q == null || q.length() == 0) { session.setQueue(null); return; }
+        PulsarLibrary.Snapshot snap = PulsarLibrary.get(this);
+        List<MediaSession.QueueItem> items = new ArrayList<>();
+        for (int i = 0; i < q.length(); i++) {
+            long id = q.optLong(i, -1);
+            PulsarLibrary.Song s = snap.byId.get(id);
+            if (s == null || id < 0 || queueIds.contains(id)) continue; // los ids de la cola del sistema no pueden repetirse
+            queueIds.add(id);
+            items.add(new MediaSession.QueueItem(describe(PulsarLibrary.songEntry(s, "queue")), id));
+        }
+        if (items.isEmpty()) { session.setQueue(null); return; }
+        session.setQueue(items);
+        session.setQueueTitle("Cola de reproducción");
+    }
+
+    private int drawable(String name) { return getResources().getIdentifier(name, "drawable", getPackageName()); }
 
     private Bitmap scaled(Bitmap b) {
         if (b == null) return null;
@@ -280,18 +465,38 @@ public class PulsarMediaService extends MediaBrowserService {
             .putString(MediaMetadata.METADATA_KEY_TITLE, title)
             .putString(MediaMetadata.METADATA_KEY_ARTIST, artist)
             .putString(MediaMetadata.METADATA_KEY_ALBUM, album)
-            .putLong(MediaMetadata.METADATA_KEY_DURATION, durationMs);
+            .putString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE, title)
+            .putString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE, artist);
+        if (durationMs > 0) md.putLong(MediaMetadata.METADATA_KEY_DURATION, durationMs); // sin duración conocida, Android no muestra una barra falsa
+        if (!mediaId.isEmpty()) md.putString(MediaMetadata.METADATA_KEY_MEDIA_ID, mediaId);
+        if (!albumArtist.isEmpty()) md.putString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST, albumArtist);
+        if (!genre.isEmpty()) md.putString(MediaMetadata.METADATA_KEY_GENRE, genre);
+        if (year > 0) md.putLong(MediaMetadata.METADATA_KEY_YEAR, year);
+        if (track > 0) md.putLong(MediaMetadata.METADATA_KEY_TRACK_NUMBER, track);
         if (cover != null) md.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, cover);
+        if (!coverFileName.isEmpty()) { // Android Auto y algunos controles prefieren la imagen por dirección
+            Uri u = PulsarCoverProvider.uriFor(this, coverFileName);
+            if (u != null) md.putString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, u.toString());
+        }
         session.setMetadata(md.build());
 
         long actions = PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE
-            | PlaybackState.ACTION_STOP | PlaybackState.ACTION_SEEK_TO;
+            | PlaybackState.ACTION_STOP | PlaybackState.ACTION_SEEK_TO
+            | PlaybackState.ACTION_PLAY_FROM_MEDIA_ID | PlaybackState.ACTION_PLAY_FROM_SEARCH;
         if (canNext) actions |= PlaybackState.ACTION_SKIP_TO_NEXT;
         if (canPrev) actions |= PlaybackState.ACTION_SKIP_TO_PREVIOUS;
-        session.setPlaybackState(new PlaybackState.Builder()
+        if (!queueIds.isEmpty()) actions |= PlaybackState.ACTION_SKIP_TO_QUEUE_ITEM;
+        PlaybackState.Builder ps = new PlaybackState.Builder()
             .setActions(actions)
-            .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, positionMs, playing ? 1f : 0f)
-            .build());
+            .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, positionMs, playing ? 1f : 0f);
+        if (queueIds.contains(currentId)) ps.setActiveQueueItemId(currentId);
+        // Aleatorio y repetir como botones del sistema (pantalla de bloqueo de Android 13+, Android Auto, relojes)
+        int shuffleIcon = drawable(shuffleOn ? "ic_pulsar_shuffle_on" : "ic_pulsar_shuffle_off");
+        if (shuffleIcon != 0) ps.addCustomAction(new PlaybackState.CustomAction.Builder("shuffle", shuffleOn ? "Aleatorio: activado" : "Aleatorio: desactivado", shuffleIcon).build());
+        int repeatIcon = drawable("one".equals(repeatMode) ? "ic_pulsar_repeat_one" : ("all".equals(repeatMode) ? "ic_pulsar_repeat_all" : "ic_pulsar_repeat_off"));
+        if (repeatIcon != 0) ps.addCustomAction(new PlaybackState.CustomAction.Builder("repeat",
+            "one".equals(repeatMode) ? "Repetir: una canción" : ("all".equals(repeatMode) ? "Repetir: todas" : "Repetir: desactivado"), repeatIcon).build());
+        session.setPlaybackState(ps.build());
 
         Notification n = buildNotification();
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
@@ -365,32 +570,16 @@ public class PulsarMediaService extends MediaBrowserService {
 
     /* ---------- Foco de audio, CPU y auriculares ---------- */
 
-    private void acquireFocus() {
-        // v1.04.3: el audio suena dentro del WebView, que ya pide y gestiona su propio foco de audio (pausa en llamadas,
-        // la reanuda, etc.). Si el servicio pidiera otro foco, Android se lo quitaría al WebView (o al revés) y la
-        // canción se pausaba sola justo al empezar. Por eso el servicio no pide foco.
-        if (true) return;
-        if (hasFocus) return;
-        int result;
-        if (Build.VERSION.SDK_INT >= 26) {
-            focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                .setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
-                .setOnAudioFocusChangeListener(focusListener)
-                .setWillPauseWhenDucked(false)
-                .build();
-            result = audio.requestAudioFocus(focusRequest);
-        } else {
-            result = audio.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
-        }
-        hasFocus = result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
-    }
-
-    private void releaseFocus() {
-        if (!hasFocus) return;
-        if (Build.VERSION.SDK_INT >= 26 && focusRequest != null) audio.abandonAudioFocusRequest(focusRequest);
-        else audio.abandonAudioFocus(focusListener);
-        hasFocus = false;
-    }
+    /*
+     * FOCO DE AUDIO — a propósito, este servicio NO lo pide (v1.04.3, confirmado en v1.06).
+     * El audio suena dentro del WebView, y Chromium ya pide y gestiona su propio foco: pausa en llamadas y alarmas,
+     * baja el volumen con avisos cortos, y reanuda solo cuando el sistema se lo devuelve. Android reparte el foco por
+     * solicitud: si este servicio pidiera otro, la solicitud del WebView recibiría «pérdida» y la canción se pausaría sola
+     * justo al empezar (era el fallo de la v1.04.2). Con un único dueño no hay conflicto ni interrupciones propias.
+     * Lo que sí hace el servicio alrededor del foco: avisar al sistema del tipo de audio (USAGE_MEDIA, para volumen y
+     * Bluetooth), pausar al desconectar auriculares, despertar la web al recibir órdenes y no soltar el primer plano
+     * entre canciones. Los eventos «focus» de la web siguen aceptándose por compatibilidad, pero ya no se generan.
+     */
 
     private void acquireWake() {
         if (!bgPlayback) return;
@@ -427,7 +616,6 @@ public class PulsarMediaService extends MediaBrowserService {
         playing = false;
         keepAlive = false;
         releaseWake();
-        releaseFocus();
         if (receiverOn) { try { unregisterReceiver(noisy); } catch (Exception ignored) {} receiverOn = false; }
         stopForeground(true);
         foreground = false;
@@ -448,9 +636,9 @@ public class PulsarMediaService extends MediaBrowserService {
         holding = false;
         keepAlive = false;
         releaseWake();
-        releaseFocus();
         if (receiverOn) { try { unregisterReceiver(noisy); } catch (Exception ignored) {} receiverOn = false; }
         if (session != null) { session.setActive(false); session.release(); session = null; }
+        browseWorker.shutdown();
         super.onDestroy();
     }
 

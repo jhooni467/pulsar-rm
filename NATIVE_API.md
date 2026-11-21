@@ -48,3 +48,30 @@ Lo que hace que Android trate Pulsar RM como un reproductor de música (lo añad
 ## v1.05 — Pantalla y botón Atrás
 - **Pantalla completa real:** `MainActivity` usa `setDecorFitsSystemWindows(false)`, recorte de cámara `ALWAYS` (API 30+) / `SHORT_EDGES` (28–29) y coloca el WebView con márgenes iguales a las áreas seguras (barras visibles, recorte, teclado). `env(safe-area-inset-*)` vale 0 dentro del APK; el fondo de la ventana toma el color de las barras.
 - **Atrás:** un `OnBackPressedCallback` de `MainActivity` (con prioridad sobre el de Capacitor) ejecuta `window.PulsarBack()` en la web. Devuelve `"handled"` si la app retrocedió o cerró algo; si no (Inicio), la app pasa a segundo plano (`moveTaskToBack`) y la música sigue.
+
+
+## v1.06
+
+- `mediaLog()` → `String`: los últimos pedidos de audio que atendió `/_pulsar_media` (rango pedido, respuesta y saltos), separados por ` | `. Solo para el diagnóstico.
+- `readChunk(uri, offset, length)`: el máximo por llamada sube de 1 MB a 4 MB (la app pide 2 MB).
+
+## v1.06 — integración nativa ampliada
+
+Métodos nuevos de `PulsarNative`:
+- `setLibrary(json)`: copia compacta de la biblioteca (`{songs:[{i,t,a,al,aa,g,d,c,n,dc,y,ad}],playlists:[{i,n,s:[ids]}]}`). Se guarda en `files/library.json` (PulsarLibrary) y alimenta Android Auto, el Asistente y la búsqueda.
+- `takePendingPlay()` → JSON `{ids:[…], id, t}` o `{none:true, query}` o `""`: orden de reproducir desde fuera (coche, Asistente, búsqueda). Aviso nativo: `playRequest`. Caduca a los 90 s.
+- `isIgnoringBatteryOptimizations()` → boolean · `requestIgnoreBatteryOptimizations()`: abre el aviso de Android.
+- `takePendingOpen()` ahora puede traer `items:[{uri,name,mime}]` (varios archivos); los campos de primer nivel son los del primero.
+
+`mediaUpdate` acepta además: `albumArtist`, `genre`, `year`, `track`, `shuffle`, `repeat`, `queue` (ids de la ventana de cola).
+Órdenes nuevas hacia la web (`action`): `playId` (saltar a un elemento de la cola), `shuffle`, `repeat`.
+
+Árbol de Android Auto: `root` → `songs` (o `songs:<letra>` si hay más de 120) · `albums` → `album:<clave>` · `artists` → `artist:<nombre>` · `lists` → `list:recent`, `genre:<género>`, `pl:<id>`.
+Una canción se identifica como `s:<id>@<lista>`.
+
+## v1.06 — estilo de reproductor Inmersive
+
+- `getVolume()` → número 0.0–1.0 (volumen de música del teléfono, el de las teclas y Bluetooth) o -1 si no se pudo leer.
+- `setVolume(nivel)`: cambia ese volumen (0.0–1.0) sin abrir el panel del sistema.
+- `openAudioOutput()`: abre el selector de salida de audio de Android (14+: selector del sistema; 10–13: panel de volumen; antes: ajustes de Bluetooth).
+En el navegador estas funciones no existen: el reproductor Inmersive oculta la barra de volumen y el botón de dispositivos avisa con un mensaje.

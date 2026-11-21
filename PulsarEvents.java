@@ -34,6 +34,24 @@ final class PulsarEvents {
 
     static void emit(String type) { emit(type, "{}"); }
 
+    /** true si la pantalla de la app (y su web) existe ahora mismo. */
+    static boolean hasWeb() { return web.get() != null; }
+
+    /**
+     * v1.06 — Despierta el WebView sin condiciones. Se usa cuando Android (notificación, auriculares, Android Auto, Asistente)
+     * manda una orden: tras una pausa larga con la pantalla apagada el WebView puede estar dormido (sus temporizadores
+     * detenidos) y la orden se perdía o tardaba. Es seguro: si ya estaba activo no hace nada.
+     */
+    static void wake() {
+        MAIN.post(new Runnable() {
+            @Override public void run() {
+                WebView view = web.get();
+                if (view == null) return;
+                try { view.onResume(); view.resumeTimers(); } catch (Exception ignored) { /* el WebView se está cerrando */ }
+            }
+        });
+    }
+
     /**
      * Si suena música y se permite segundo plano, vuelve a activar el WebView aunque la pantalla esté oculta o apagada.
      * MainActivity ya lo hace al ocultarse; esto cubre que la música EMPIECE (o se reanude) cuando la pantalla ya estaba apagada.

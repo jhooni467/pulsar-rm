@@ -1,0 +1,386 @@
+/* =========================================================
+   PULSAR RM v1.06 — Estilo de reproductor «Inmersive»
+   Diseño alternativo e independiente del reproductor actual (Pulsar RM), que no se modifica:
+   cuando el estilo es Inmersive solo se oculta con la regla de abajo y se muestra #im-player.
+   Todo está bajo el prefijo «im-» / «ps-» para no chocar con style.css.
+   Ambos diseños usan el mismo motor (Player): este archivo solo es la «piel».
+   ========================================================= */
+
+/* ---------- Cambio de estilo ---------- */
+html[data-player-style="inmersive"] #view-player .now-playing { display: none; }
+html[data-player-style="inmersive"] #im-player { display: flex; }
+
+/* ---------- Fondo dinámico (detrás de toda la app; solo en el reproductor Inmersive) ---------- */
+.im-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  display: none;
+  overflow: hidden;
+  background: #05070d;
+  pointer-events: none;
+}
+html.im-on .im-bg { display: block; }
+/* El fondo base de la app (html/body) quedaría por encima del fondo dinámico: en este diseño el cuerpo es transparente */
+html.im-on body { background: transparent !important; }
+.im-bg canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+  transform: scale(1.25); /* los bordes de un desenfoque quedan transparentes: se recortan fuera de la pantalla */
+}
+.im-bg canvas.on { opacity: 1; }
+.im-bg-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.30) 0%, rgba(0, 0, 0, 0.12) 38%, rgba(0, 0, 0, 0.46) 100%);
+}
+/* Sin portada: un resplandor con el color del tema (Pulsar RM) en vez de una imagen */
+.im-bg.nocover { background: #05070d; }
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .im-bg.nocover {
+    background:
+      radial-gradient(120% 70% at 30% 18%, color-mix(in srgb, var(--accent, #7c5cff) 55%, #05070d), transparent 70%),
+      radial-gradient(100% 60% at 85% 85%, color-mix(in srgb, var(--accent, #7c5cff) 30%, #05070d), transparent 70%),
+      #05070d;
+  }
+}
+.im-bg.still canvas { transition: none; }
+
+/* ---------- Reproductor Inmersive ---------- */
+.im-player {
+  --im-fg: #ffffff;
+  --im-dim: rgba(255, 255, 255, 0.62);
+  --im-track: rgba(255, 255, 255, 0.26);
+  display: none;                 /* se muestra con html[data-player-style="inmersive"] */
+  flex-direction: column;
+  color: var(--im-fg);
+  min-height: calc(100vh - var(--pad-t, 31px) - var(--pad-b, 30px));
+  min-height: calc(100dvh - var(--pad-t, 31px) - var(--pad-b, 30px));
+  text-align: left;
+  max-width: 560px;          /* en tabletas el diseño no se estira: queda centrado */
+  margin-inline: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+.im-player .icon { width: 100%; height: 100%; display: block; }
+.im-player button {
+  appearance: none;
+  -webkit-appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.im-player button:focus-visible,
+.im-player input:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.85); outline-offset: 3px; border-radius: 10px; }
+
+/* Parte alta: solo el gesto de cerrar, como la referencia */
+.im-top { flex: none; display: flex; justify-content: center; height: 34px; }
+.im-close { width: 56px; height: 34px; padding: 6px 14px; opacity: 0.7; }
+.im-close .icon { height: 100%; }
+
+/* Portada protagonista: ocupa todo el espacio libre y se mantiene cuadrada */
+.im-cover-wrap {
+  flex: 1 1 0;
+  min-height: 150px;
+  display: grid;
+  place-items: center;
+  container-type: size;
+  margin: 2px 0 clamp(14px, 3dvh, 28px);
+}
+.im-cover {
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
+  border-radius: clamp(18px, 5.4cqw, 30px);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, var(--card-a, #1b2540), var(--card-b, #0e1424));
+  box-shadow: 0 26px 60px -18px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  color: var(--accent, #fff);
+  transform: scale(0.9);
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+/* Mientras suena la portada «respira» a tamaño completo; en pausa se encoge un poco */
+html.is-playing .im-cover { transform: scale(1); }
+.im-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.im-cover .art-default { width: 100%; height: 100%; }
+
+/* Título, artista y acciones */
+.im-info { position: relative; display: flex; align-items: center; gap: 12px; }
+.im-titles { flex: 1 1 auto; min-width: 0; }
+.im-titles h2 {
+  font-size: clamp(20px, 6.2vw, 26px);
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--im-fg);
+  text-align: left;
+}
+.im-titles p {
+  margin: 3px 0 0;
+  font-size: clamp(15px, 4.4vw, 19px);
+  color: var(--im-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+.im-titles .swap { animation: imSwap 0.35s ease-out; }
+@keyframes imSwap { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.im-actions { flex: none; display: flex; gap: 10px; }
+.im-chip {
+  width: 36px;
+  height: 36px;
+  padding: 9px !important;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16) !important;
+  color: #fff;
+  transition: transform 0.15s ease, background 0.2s ease;
+}
+.im-chip:active { transform: scale(0.9); }
+.im-star-path { fill: none; transition: fill 0.2s ease, stroke 0.2s ease; }
+.im-chip[aria-pressed="true"] .im-star-path { fill: var(--accent, #ffd54a); stroke: var(--accent, #ffd54a); }
+
+/* Menú de opciones (⋯) */
+.im-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  min-width: 236px;
+  max-width: 88vw;
+  padding: 6px;
+  border-radius: 18px;
+  background: rgba(24, 26, 36, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 18px 44px -12px rgba(0, 0, 0, 0.75);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  z-index: 6;
+}
+.im-menu.hidden { display: none; }
+.im-menu button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: 12px;
+  text-align: left;
+  font-size: 15px;
+}
+.im-menu button:active { background: rgba(255, 255, 255, 0.1); }
+.im-menu .icon { width: 20px; height: 20px; flex: none; opacity: 0.85; }
+
+/* Barra de progreso y tiempos */
+.im-progress { margin-top: clamp(16px, 3.4dvh, 30px); }
+.im-player input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+  --p: 0;
+}
+.im-player input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 6px;
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.92) calc(var(--p, 0) * 100%), var(--im-track) calc(var(--p, 0) * 100%));
+}
+.im-player input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: #fff;
+  border: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transform: scale(0);
+  transition: transform 0.15s ease;
+}
+.im-player input[type="range"]:active::-webkit-slider-thumb,
+.im-player input[type="range"]:focus-visible::-webkit-slider-thumb { transform: scale(1); }
+.im-player input[type="range"]::-moz-range-track { height: 6px; border-radius: 6px; background: var(--im-track); }
+.im-player input[type="range"]::-moz-range-progress { height: 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.92); }
+.im-player input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #fff; }
+.im-times {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  margin-top: 2px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--im-dim);
+}
+.im-times span:last-child { text-align: right; }
+.im-badge {
+  padding: 2px 9px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+/* Controles grandes */
+.im-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(26px, 10vw, 54px);
+  margin-top: clamp(8px, 2.2dvh, 22px);
+}
+.im-ctl {
+  width: clamp(56px, 16vw, 68px);
+  height: clamp(56px, 16vw, 68px);
+  padding: clamp(12px, 3.6vw, 16px) !important;
+  border-radius: 50%;
+  transition: transform 0.12s ease, opacity 0.2s ease;
+}
+.im-ctl:active { transform: scale(0.88); }
+.im-play { width: clamp(72px, 21vw, 88px); height: clamp(72px, 21vw, 88px); padding: clamp(14px, 4vw, 18px) !important; }
+.im-play .icon { filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.25)); }
+
+/* Volumen */
+.im-volume {
+  display: grid;
+  grid-template-columns: 22px 1fr 22px;
+  align-items: center;
+  gap: 12px;
+  margin-top: clamp(10px, 2.4dvh, 24px);
+}
+.im-volume.hidden { display: none; }
+.im-vol-ico { width: 20px; height: 20px; opacity: 0.6; display: block; }
+
+/* Accesos inferiores */
+.im-bottom {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  margin-top: clamp(10px, 2.6dvh, 26px);
+}
+.im-icon { width: 48px; height: 48px; padding: 11px !important; border-radius: 50%; opacity: 0.68; transition: opacity 0.2s ease, transform 0.12s ease; }
+.im-icon:active { opacity: 1; transform: scale(0.9); }
+.im-bottom .im-icon { width: 52px; height: 48px; }
+
+/* ---------- Teléfono acostado / pantallas anchas y bajas: portada a la izquierda, resto a la derecha ---------- */
+@media (orientation: landscape) and (max-height: 560px) {
+  html[data-player-style="inmersive"] #app { max-width: none; }
+  html[data-player-style="inmersive"] #im-player {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    grid-template-rows: repeat(6, auto);
+    max-width: none;
+    column-gap: clamp(20px, 5vw, 48px);
+    align-content: center;
+  }
+  .im-player > * { grid-column: 2; }
+  .im-player > .im-top { grid-column: 2; grid-row: 1; height: 26px; justify-content: flex-start; }
+  .im-close { padding-inline: 0; width: 44px; }
+  .im-player > .im-cover-wrap { grid-column: 1; grid-row: 1 / span 6; min-height: 0; margin: 0; }
+  .im-controls { margin-top: 6px; }
+  .im-ctl { width: 56px; height: 56px; padding: 11px !important; }
+  .im-play { width: 70px; height: 70px; padding: 14px !important; }
+  .im-bottom { margin-top: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .im-cover, .im-bg canvas, .im-chip, .im-ctl, .im-icon { transition: none; }
+  .im-titles .swap { animation: none; }
+}
+
+/* =========================================================
+   Ajustes → Apariencia → «Estilo del reproductor»: vista previa de cada diseño
+   (dibujos con CSS, usan los colores del tema actual)
+   ========================================================= */
+.ps-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.ps-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 8px 12px;
+  border-radius: 18px;
+  border: 1.5px solid var(--border, rgba(255, 255, 255, 0.12));
+  background: var(--surface20, rgba(255, 255, 255, 0.04));
+  color: var(--text, #fff);
+  font: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.2s ease, transform 0.12s ease, box-shadow 0.2s ease;
+}
+.ps-option:active { transform: scale(0.97); }
+.ps-option[aria-checked="true"] {
+  border-color: var(--accent, #7c5cff);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #7c5cff) 28%, transparent);
+}
+.ps-option .ps-name { font-weight: 700; margin-top: 8px; }
+.ps-option small { color: var(--muted, #8993a8); font-size: 11.5px; line-height: 1.3; }
+
+.ps-phone {
+  position: relative;
+  display: block;
+  width: 84px;
+  height: 150px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.6);
+}
+.ps-phone i, .ps-phone b { position: absolute; display: block; font-style: normal; }
+.ps-phone b { position: static; }
+
+/* Pulsar RM: tarjeta cuadrada, título, barra, controles y pestañas */
+.ps-pulsar { background: var(--bg, #0d1321); }
+.ps-pulsar .ps-cover { left: 14px; right: 14px; top: 14px; aspect-ratio: 1; border-radius: 10px; background: linear-gradient(145deg, var(--card-a, #1b2540), var(--card-b, #0e1424)); border: 1px solid var(--border, rgba(255, 255, 255, 0.12)); }
+.ps-pulsar .ps-cover::after { content: ""; position: absolute; inset: 30%; border-radius: 50%; background: var(--accent, #7c5cff); opacity: 0.85; }
+.ps-pulsar .ps-line { height: 4px; border-radius: 3px; background: var(--text, #fff); opacity: 0.8; }
+.ps-pulsar .ps-l1 { left: 28px; right: 28px; top: 78px; }
+.ps-pulsar .ps-l2 { left: 34px; right: 34px; top: 87px; opacity: 0.35; height: 3px; }
+.ps-pulsar .ps-bar { left: 12px; right: 12px; top: 99px; height: 3px; border-radius: 3px; background: linear-gradient(to right, var(--accent, #7c5cff) 40%, rgba(255, 255, 255, 0.18) 40%); }
+.ps-pulsar .ps-row { left: 10px; right: 10px; top: 108px; display: flex; justify-content: space-between; align-items: center; }
+.ps-pulsar .ps-row b { width: 8px; height: 8px; border-radius: 50%; background: var(--text, #fff); opacity: 0.55; }
+.ps-pulsar .ps-row b.ps-main { width: 16px; height: 16px; background: var(--accent, #7c5cff); opacity: 1; }
+.ps-pulsar .ps-tabs { left: 12px; right: 12px; bottom: 8px; display: flex; justify-content: space-between; }
+.ps-pulsar .ps-tabs b { width: 14px; height: 4px; border-radius: 3px; background: var(--muted, #8993a8); opacity: 0.8; }
+
+/* Inmersive: fondo con el color de la portada, portada grande, controles sin marco, volumen y accesos */
+.ps-inmersive { background: #05070d; }
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .ps-inmersive { background: radial-gradient(130% 80% at 30% 15%, color-mix(in srgb, var(--accent, #7c5cff) 70%, #05070d), transparent 70%), radial-gradient(90% 60% at 90% 90%, color-mix(in srgb, var(--accent, #7c5cff) 35%, #05070d), transparent 70%), #05070d; }
+}
+.ps-inmersive .ps-cover { left: 9px; right: 9px; top: 12px; aspect-ratio: 1; border-radius: 9px; background: linear-gradient(145deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.12)); box-shadow: 0 8px 14px -6px rgba(0, 0, 0, 0.7); }
+.ps-inmersive .ps-cover::after { content: ""; position: absolute; left: 24%; right: 24%; top: 36%; bottom: 36%; border-radius: 40%; background: var(--accent, #ff5a5f); }
+.ps-inmersive .ps-line { height: 4px; border-radius: 3px; background: #fff; opacity: 0.9; }
+.ps-inmersive .ps-l1 { left: 9px; width: 34px; top: 76px; }
+.ps-inmersive .ps-l2 { left: 9px; width: 24px; top: 84px; opacity: 0.5; height: 3px; }
+.ps-inmersive .ps-dots { right: 9px; top: 74px; display: flex; gap: 3px; }
+.ps-inmersive .ps-dots b { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.4); }
+.ps-inmersive .ps-bar { left: 9px; right: 9px; top: 98px; height: 3px; border-radius: 3px; background: linear-gradient(to right, #fff 55%, rgba(255, 255, 255, 0.28) 55%); }
+.ps-inmersive .ps-row { left: 14px; right: 14px; top: 107px; display: flex; justify-content: space-between; align-items: center; }
+.ps-inmersive .ps-row b { width: 9px; height: 9px; border-radius: 2px; background: #fff; }
+.ps-inmersive .ps-row b.ps-main { width: 12px; height: 12px; }
+.ps-inmersive .ps-vol { left: 9px; right: 9px; top: 126px; height: 3px; border-radius: 3px; background: linear-gradient(to right, rgba(255, 255, 255, 0.8) 45%, rgba(255, 255, 255, 0.25) 45%); }
+.ps-inmersive .ps-tabs { left: 14px; right: 14px; bottom: 5px; display: flex; justify-content: space-between; }
+.ps-inmersive .ps-tabs b { width: 9px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.6); }

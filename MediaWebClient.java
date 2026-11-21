@@ -40,6 +40,19 @@ final class MediaWebClient extends WebViewClient {
     private final WebViewClient base;
     private final Context context;
 
+    /* v1.06 — Registro corto de lo que se sirvió (los últimos pedidos de audio). Lo lee JavaScript con
+       PulsarNative.mediaLog() para el diagnóstico de Ajustes → Acerca de cuando una canción falla. */
+    private static final java.util.ArrayDeque<String> LOG = new java.util.ArrayDeque<>();
+    static synchronized void log(String line) {
+        LOG.addLast(line);
+        while (LOG.size() > 10) LOG.removeFirst();
+    }
+    static synchronized String logText() {
+        StringBuilder sb = new StringBuilder();
+        for (String s : LOG) { if (sb.length() > 0) sb.append(" | "); sb.append(s); }
+        return sb.toString();
+    }
+
     MediaWebClient(WebViewClient base, Context context) {
         this.base = base;
         this.context = context.getApplicationContext();
@@ -128,7 +141,8 @@ final class MediaWebClient extends WebViewClient {
             try { afd.close(); } catch (IOException ignored) {}
             return error(500, "Error");
         }
-        InputStream body = length >= 0 ? new Limited(in, length, afd) : in;
+        InputStream body = length >= 0 ? new Limited(in, length, afd, start) : in;
+        log((range != null ? range : "sin Range") + " -> " + (partial ? "206 " : "200 ") + start + "-" + end + "/" + total + " " + mime);
 
         Map<String, String> h = noCache();
         h.put("Accept-Ranges", "bytes");
@@ -170,7 +184,30 @@ final class MediaWebClient extends WebViewClient {
     private static final class Limited extends FilterInputStream {
         private long left;
         private final AssetFileDescriptor afd;
-        Limited(InputStream in, long length, AssetFileDescriptor afd) { super(in); this.left = length; this.afd = afd; }
+        private final long rangeStart;     // desde qué byte del archivo se entrega (ya colocado por media())
+        private boolean skipAbsorbed;
+        Limited(InputStream in, long length, AssetFileDescriptor afd, long rangeStart) {
+            super(in); this.left = length; this.afd = afd; this.rangeStart = rangeStart;
+        }
+        /* v1.06 — El WebView, cuando el pedido trae «Range», puede saltar él mismo los primeros bytes con skip(inicio).
+           Como ya entregamos el flujo colocado en «inicio», ese salto se contaba dos veces: la canción arrancaba bien
+           (bytes=0-) pero al pedir otro tramo (final del archivo, buscar…) llegaban bytes de otro sitio y el decodificador
+           fallaba con «PTS is not defined». Ahora el primer skip(inicio) se da por hecho sin mover nada. */
+        @Override public long skip(long n) throws IOException {
+            if (n <= 0) return 0;
+            if (rangeStart > 0 && !skipAbsorbed && n == rangeStart) {
+                skipAbsorbed = true;
+                log("skip(" + n + ") absorbido");
+                return n;
+            }
+            long s = super.skip(Math.min(n, Math.max(left, 0L)));
+            if (s > 0) left -= s;
+            log("skip(" + n + ") -> " + s);
+            return s;
+        }
+        @Override public int available() throws IOException {
+            return (int) Math.min((long) super.available(), Math.max(left, 0L));
+        }
         @Override public int read() throws IOException {
             if (left <= 0) return -1;
             int b = super.read();

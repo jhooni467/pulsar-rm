@@ -33,6 +33,20 @@ const MediaBridge = {
   coverSent: "",
   timer: 0,
   asked: false,
+  lastSend: 0,
+
+  // v1.06: la posición se corrige sola cada 15 s mientras suena (si hubo un salto, un buffer o un cambio de canción, Android no se desfasa)
+  tick() {
+    if (Date.now() - this.lastSend > 15000) this.update(true);
+  },
+
+  // Ventana de la cola que ve el sistema (Android 13+, Android Auto): unas pocas anteriores y las siguientes
+  queueWindow() {
+    const ids = Queue.ids;
+    if (!ids.length) return [];
+    const from = Math.max(0, Queue.pos - 3);
+    return ids.slice(from, from + 40).filter((id) => Queue.playable(id));
+  },
 
   update(now) {
     if (!Native.has("mediaUpdate")) return;
@@ -47,11 +61,19 @@ const MediaBridge = {
     this.askNotifications();
     const audio = Player.audio;
     const duration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : song.duration || 0;
+    this.lastSend = Date.now();
     const payload = {
       id: song.id,
       title: song.name || "Sin título",
       artist: song.artist || "",
       album: song.album || "",
+      albumArtist: song.albumArtist || "",
+      genre: song.genre || "",
+      year: Number(song.year) || 0,
+      track: Number(song.track) || 0,
+      shuffle: Boolean(Settings.values.shuffle),
+      repeat: Settings.values.repeat || "all",
+      queue: this.queueWindow(),
       coverFile: song.coverFile || "",
       durationMs: Math.round(duration * 1000),
       positionMs: Math.round((audio.currentTime || 0) * 1000),
@@ -1733,33 +1755,128 @@ const SettingsNav = {
 const ExternalOpen = {
   busy: false,
 
+  // v1.06: acepta uno o varios audios (Abrir con · Compartir · varios archivos a la vez)
   async check() {
     if (this.busy || !Native.has("takePendingOpen")) return;
     const info = Native.json("takePendingOpen");
     if (!info || !info.uri) return;
+    const items = Array.isArray(info.items) && info.items.length ? info.items : [info];
     this.busy = true;
     try {
-      const name = String(info.name || "audio");
-      UI.toast("Abriendo " + name + "…", true);
-      const response = await fetch(Native.audioUrl(info.uri));
-      if (!response.ok) throw new Error("No se pudo leer el archivo (" + response.status + ")");
-      const blob = await response.blob();
-      // lastModified fijo: abrir dos veces el mismo archivo no lo duplica en la biblioteca
-      const file = new File([blob], name, { type: info.mime || blob.type || "audio/mpeg", lastModified: 0 });
-      if (!Library.isAudioFile(file)) { UI.toast("Ese archivo no parece ser de audio."); return; }
-      let song = Library.songs.find((item) => item.fileName === file.name && item.size === file.size && item.lastModified === 0);
-      if (!song) {
-        if (Library.importing) { UI.toast("Ya hay una importación en curso."); return; }
-        await Library.importFiles([file]);
-        song = Library.songs.find((item) => item.fileName === file.name && item.size === file.size && item.lastModified === 0);
+      const files = [];
+      for (const item of items) {
+        const name = String(item.name || "audio");
+        if (items.length === 1) UI.toast("Abriendo " + name + "…", true);
+        else UI.toast("Abriendo " + (files.length + 1) + " de " + items.length + "…", true);
+        const response = await fetch(Native.audioUrl(item.uri));
+        if (!response.ok) { Diagnostics.log("abrir con", "No se pudo leer " + name + " (" + response.status + ")"); continue; }
+        const blob = await response.blob();
+        // lastModified fijo: abrir dos veces el mismo archivo no lo duplica en la biblioteca
+        const file = new File([blob], name, { type: item.mime || blob.type || "audio/mpeg", lastModified: 0 });
+        if (Library.isAudioFile(file)) files.push(file);
       }
-      if (song) Player.play(song.id, { context: Library.playableIds() });
+      if (!files.length) { UI.toast(items.length === 1 ? "Ese archivo no parece ser de audio." : "Ninguno de los archivos parece ser de audio."); return; }
+      const find = (file) => Library.songs.find((item) => item.fileName === file.name && item.size === file.size && item.lastModified === 0);
+      const fresh = files.filter((file) => !find(file));
+      if (fresh.length) {
+        if (Library.importing) { UI.toast("Ya hay una importación en curso."); return; }
+        await Library.importFiles(fresh);
+      }
+      const songs = files.map(find).filter(Boolean);
+      UI.hideToast(); // el aviso «Abriendo…» era fijo: se quita al terminar
+      // Un solo archivo: sigue la biblioteca desde él. Varios: suenan esos, en el orden recibido.
+      if (songs.length === 1) Player.play(songs[0].id, { context: Library.playableIds() });
+      else if (songs.length > 1) Player.play(songs[0].id, { context: songs.map((song) => song.id) });
     } catch (error) {
       console.error("Abrir con Pulsar RM:", error);
       Diagnostics.log("abrir con", error && error.message ? error.message : error);
       UI.toast("No se pudo abrir el audio.");
     } finally {
       this.busy = false;
+      setTimeout(() => this.check(), 400); // si llegó otro audio mientras se procesaba este
+    }
+  }
+};
+
+/* =========================================================
+   REPRODUCIR DESDE FUERA — Android Auto · Asistente · búsqueda por voz (v1.06)
+   Android (o el coche) manda una orden con las canciones a reproducir: el servicio la deja pendiente y esta pantalla
+   la recoge. Si la app se está abriendo todavía, se atiende al terminar de cargar la biblioteca.
+   ========================================================= */
+const ExternalPlay = {
+  ready: false,
+
+  check() {
+    if (!this.ready || !Native.has("takePendingPlay")) return;
+    const request = Native.json("takePendingPlay");
+    if (!request) return;
+    if (request.none) { UI.toast("No encontré «" + (request.query || "eso") + "» en tu biblioteca."); return; }
+    const ids = (request.ids || []).filter((id) => Queue.playable(id));
+    if (!ids.length) return;
+    const start = ids.includes(request.id) ? request.id : ids[0];
+    diag("android", "reproducir desde fuera: " + ids.length + " canciones");
+    Player.play(start, { context: ids });
+  }
+};
+
+/* =========================================================
+   COPIA DE LA BIBLIOTECA PARA ANDROID (v1.06)
+   Android Auto, el Asistente y la búsqueda por voz necesitan EXPLORAR y BUSCAR la biblioteca sin abrir la app: la web
+   le manda una copia compacta (títulos, artistas, álbumes, duración, portada) cada vez que cambia. No incluye audio.
+   ========================================================= */
+const LibrarySync = {
+  timer: 0,
+  last: "",
+
+  init() {
+    if (!Native.has("setLibrary")) return;
+    // Cualquier cambio en la biblioteca guardada (importar, escanear, editar, quitar) vuelve a enviar la copia
+    ["addSong", "addSongs", "updateSong", "updateSongs", "removeSong", "removeSongs", "clearAll"].forEach((name) => {
+      const original = Store[name];
+      if (typeof original !== "function") return;
+      Store[name] = (...args) => {
+        const result = original.apply(Store, args);
+        Promise.resolve(result).then(() => this.schedule(), () => {});
+        return result;
+      };
+    });
+    document.addEventListener("visibilitychange", () => { if (document.hidden) this.flush(); });
+    this.schedule();
+  },
+
+  schedule() {
+    if (!Native.has("setLibrary")) return;
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.flush(), 2500);
+  },
+
+  flush() {
+    clearTimeout(this.timer);
+    if (!Native.has("setLibrary") || !Library.songs) return;
+    try {
+      const songs = Library.songs.filter((song) => !song.missing).map((song) => ({
+        i: song.id,
+        t: song.name || "",
+        a: song.artist || "",
+        al: song.album || "",
+        aa: song.albumArtist || "",
+        g: song.genre || "",
+        d: Math.round((Number(song.duration) || 0) * 1000),
+        c: song.coverFile || "",
+        n: Number(song.track) || 0,
+        dc: Number(song.disc) || 0,
+        y: Number(song.year) || 0,
+        ad: Number(song.addedAt) || 0
+      }));
+      // Android arma «Recién agregadas» y los géneros; las favoritas (estrella del reproductor Inmersive) llegan como lista propia
+      const favorites = Library.songs.filter((song) => song.favorite && !song.missing).map((song) => song.id);
+      const playlists = favorites.length ? [{ i: "fav", n: "Favoritas", s: favorites }] : [];
+      const json = JSON.stringify({ songs, playlists });
+      if (json === this.last) return;
+      this.last = json;
+      Native.call("setLibrary", json);
+    } catch (error) {
+      Diagnostics.log("biblioteca android", error && error.message ? error.message : error);
     }
   }
 };
@@ -1811,6 +1928,9 @@ const Features = {
     this.safe("controles", () => this.refreshControls());
     this.safe("diagnóstico", () => Diagnostics.render());
     this.safe("abrir con", () => ExternalOpen.check());   // audio con el que Android abrió la app
+    this.safe("biblioteca android", () => LibrarySync.init());   // copia de la biblioteca para Android Auto y el Asistente
+    this.safe("reproducir desde fuera", () => { ExternalPlay.ready = true; ExternalPlay.check(); });
+    this.safe("estilo del reproductor", () => { if (typeof PlayerStyle !== "undefined") PlayerStyle.init(); });   // v1.06: Pulsar RM · Inmersive
     this.safe("nova", () => { if (typeof Nova !== "undefined") Nova.afterLoad(); });
     this.safe("buscar versión", () => { if (typeof UpdateCheck !== "undefined") UpdateCheck.start(); });   // en segundo plano, a los 4 s
     // Un APK nuevo puede haber perdido permisos de carpeta: se comprueba en silencio (no se lee ningún archivo)
@@ -1837,6 +1957,9 @@ const Features = {
     Native.on("sleep", () => SleepTimer.fire(true));
     Native.on("permission", () => { Native.info(true); this.renderSettings(); });
     Native.on("openAudio", () => ExternalOpen.check());
+    Native.on("playRequest", () => ExternalPlay.check());
+    // Al volver de los ajustes de Android (p. ej. tras permitir el uso sin restricciones de batería) se refresca la pantalla
+    document.addEventListener("visibilitychange", () => { if (!document.hidden && Router.current === "settings") this.renderSettings(); });
   },
 
   // Cada vez que se abre una pantalla
@@ -1845,6 +1968,7 @@ const Features = {
       LyricsScreen.onRoute(name);
       if (typeof LibraryTools !== "undefined") LibraryTools.onRoute(name);
       if (typeof UpdateCheck !== "undefined") UpdateCheck.onRoute(name);
+      if (typeof PlayerStyle !== "undefined") PlayerStyle.onRoute(name); // v1.06: fondo y volumen del estilo Inmersive
       if (name === "queue") QueueScreen.onRoute();
       else if (name === "timer") SleepTimer.refresh();
       else if (name === "info") SongInfo.onRoute();
@@ -1859,6 +1983,7 @@ const Features = {
   handle(action) {
     switch (action) {
       // Letras
+      case "battery-optimization": Native.call("requestIgnoreBatteryOptimizations"); break;
       case "lyrics-options": LyricsScreen.toggleOptions(); break;
       case "lyrics-center": Lyrics.recenter(); break;
       // Cola
@@ -1945,6 +2070,8 @@ const Features = {
         : info.notifications === false ? "Para ver los controles en la notificación y la pantalla de bloqueo, permite las notificaciones de Pulsar RM en los ajustes de Android."
           : "Android muestra los controles de Pulsar RM en la notificación y la pantalla de bloqueo.";
     }
+    const battery = $("battery-block");
+    if (battery) battery.classList.toggle("hidden", !(Native.has("isIgnoringBatteryOptimizations") && Native.call("isIgnoringBatteryOptimizations") === false));
     const audio = $("audio-hint");
     if (audio) audio.textContent = AudioGraph.ready || AudioGraph.needed()
       ? "Procesamiento de audio activo (Web Audio): ecualizador, limitador, mono y balance."

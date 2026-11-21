@@ -29,8 +29,11 @@
 <title>Pulsar RM</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="nova.css">
+<link rel="stylesheet" href="immersive.css">
 </head>
 <body>
+<!-- Fondo dinámico del estilo Inmersive: portada reducida y suavizada (solo se ve en el reproductor Inmersive) -->
+<div id="im-bg" class="im-bg" aria-hidden="true"><canvas class="im-bg-a" width="48" height="48"></canvas><canvas class="im-bg-b" width="48" height="48"></canvas><span class="im-bg-shade"></span></div>
 
 <div id="app">
 
@@ -139,6 +142,52 @@
           <button type="button" id="tab-queue" class="tab-btn" data-view="queue" aria-label="Abrir la cola"><svg class="icon tab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h11M4 12h11M4 17h7"/><path d="M18 9v8l4-4z" fill="currentColor"/></g></svg><span>Cola</span></button>
           <button type="button" id="tab-eq" class="tab-btn" data-view="eq" aria-label="Abrir el ecualizador"><svg class="eq-icon tab-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="3" x2="6" y2="21"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="18" y1="3" x2="18" y2="21"/><circle cx="6" cy="9" r="2.6" fill="currentColor"/><circle cx="12" cy="15" r="2.6" fill="currentColor"/><circle cx="18" cy="7" r="2.6" fill="currentColor"/></svg><span>Ecualizador</span></button>
         </div>
+      </div>
+
+      <!-- ===== Estilo «Inmersive»: diseño alternativo del reproductor (se activa en Ajustes → Apariencia → Estilo del reproductor).
+           Usa el mismo motor de reproducción; el diseño Pulsar RM de arriba no se toca. ===== -->
+      <div id="im-player" class="im-player" hidden>
+        <header class="im-top">
+          <button type="button" class="im-icon im-close" data-action="close" aria-label="Cerrar reproductor"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9.5l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </header>
+        <div class="im-cover-wrap"><div id="im-cover" class="im-cover"></div></div>
+        <div class="im-info">
+          <div class="im-titles">
+            <h2 id="im-title">Sin reproducción</h2>
+            <p id="im-artist">Pulsar RM</p>
+          </div>
+          <div class="im-actions">
+            <button type="button" class="im-chip" data-im="fav" aria-label="Añadir a favoritas" aria-pressed="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path class="im-star-path" d="M12 3.6l2.6 5.4 5.9.8-4.3 4.1 1.1 5.9L12 17l-5.3 2.8 1.1-5.9-4.3-4.1 5.9-.8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
+            <button type="button" class="im-chip" data-im="menu" aria-label="Más opciones" aria-haspopup="true" aria-expanded="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="6" cy="12" r="1.9" fill="currentColor"/><circle cx="12" cy="12" r="1.9" fill="currentColor"/><circle cx="18" cy="12" r="1.9" fill="currentColor"/></svg></button>
+          </div>
+          <div id="im-menu" class="im-menu hidden" role="menu">
+            <button type="button" role="menuitem" data-action="edit"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l.9-4L16 4.9a2 2 0 0 1 2.8 0l.3.3a2 2 0 0 1 0 2.8L8.5 18.6z"/><path d="M14.3 6.6l3.1 3.1"/></g></svg><span>Editar información</span></button>
+            <button type="button" role="menuitem" data-view="info"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8v.1"/></g></svg><span>Información de la canción</span></button>
+            <button type="button" role="menuitem" data-view="timer"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7"/><path d="M12 13.5V9.8M9.6 3h4.8M18.6 6.2l1.2-1.2"/></g></svg><span>Temporizador</span></button>
+            <button type="button" role="menuitem" data-view="eq"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="3" x2="6" y2="21"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="18" y1="3" x2="18" y2="21"/><circle cx="6" cy="9" r="2.6" fill="currentColor"/><circle cx="12" cy="15" r="2.6" fill="currentColor"/><circle cx="18" cy="7" r="2.6" fill="currentColor"/></g></svg><span>Ecualizador</span></button>
+            <button type="button" role="menuitem" data-action="shuffle" id="im-menu-shuffle"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h3.2c1.6 0 3 .8 3.9 2.1l3.8 5.8c.9 1.3 2.3 2.1 3.9 2.1H21"/><path d="M18.5 4.5L21 7l-2.5 2.5"/><path d="M18.5 14.5L21 17l-2.5 2.5"/><path d="M3 17h3.2c1.1 0 2.1-.4 2.9-1.1"/><path d="M13.6 8.4c.8-.7 1.8-1.1 2.9-1.1H21"/></g></svg><span>Aleatorio</span></button>
+            <button type="button" role="menuitem" data-action="repeat" id="im-menu-repeat"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11V9.5A2.5 2.5 0 0 1 6.5 7H20"/><path d="M17 4l3 3-3 3"/><path d="M20 13v1.5a2.5 2.5 0 0 1-2.5 2.5H4"/><path d="M7 20l-3-3 3-3"/></g></svg><span>Repetir</span></button>
+          </div>
+        </div>
+        <div class="im-progress">
+          <input id="im-progress" data-progress type="range" min="0" max="1000" value="0" aria-label="Progreso">
+          <div class="im-times"><span data-time="current">0:00</span><span id="im-badge" class="im-badge" hidden></span><span data-time="duration">0:00</span></div>
+        </div>
+        <div class="im-controls">
+          <button type="button" class="im-ctl" data-action="prev" aria-label="Anterior"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11.5 6.5v11L4 12zM20 6.5v11L12.5 12z" fill="currentColor" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></svg></button>
+          <button type="button" class="im-ctl im-play" id="im-toggle" data-im="toggle" aria-label="Reproducir o pausar"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7.5 4.5v15L20 12z" fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></svg></button>
+          <button type="button" class="im-ctl" data-action="next" aria-label="Siguiente"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12.5 6.5v11L20 12zM4 6.5v11L11.5 12z" fill="currentColor" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></svg></button>
+        </div>
+        <div class="im-volume" id="im-volume">
+          <span class="im-vol-ico"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9.5h3.2L11.5 6v12l-4.3-3.5H4z" fill="currentColor"/></svg></span>
+          <input id="im-volume-range" type="range" min="0" max="1000" value="500" aria-label="Volumen">
+          <span class="im-vol-ico"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3.5 9.5h3.2L11 6v12l-4.3-3.5H3.5z" fill="currentColor"/><path d="M14.5 8.8a4.6 4.6 0 0 1 0 6.4M17.2 6.2a8.2 8.2 0 0 1 0 11.6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></span>
+        </div>
+        <nav class="im-bottom" aria-label="Accesos del reproductor">
+          <button type="button" class="im-icon" data-view="lyrics" aria-label="Abrir letras"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 16.5H11l-4.5 3.8v-3.8H5A1.5 1.5 0 0 1 3.5 15V6A1.5 1.5 0 0 1 5 4.5z"/><path d="M8 9.5h8M8 12.5h5"/></g></svg></button>
+          <button type="button" class="im-icon" data-im="devices" aria-label="Dispositivos de audio"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7.2 17.4a6.6 6.6 0 1 1 9.6 0"/><path d="M9.6 14.8a3.2 3.2 0 1 1 4.8 0"/><path d="M12 15.5l3.6 4.6H8.4z" fill="currentColor"/></g></svg></button>
+          <button type="button" class="im-icon" data-view="queue" aria-label="Abrir la cola"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="19" cy="17" r="1.2" fill="currentColor"/></g></svg></button>
+        </nav>
       </div>
     </section>
 
@@ -413,6 +462,30 @@
         </div>
       </div>
 
+      <div id="player-style-card" class="card">
+        <h3>Estilo del reproductor</h3>
+        <p>Elige cómo se ve la pantalla de reproducción. Los dos usan el mismo reproductor: cambia solo el diseño y puedes alternar cuando quieras.</p>
+        <div id="player-style-grid" class="ps-grid" role="radiogroup" aria-label="Estilo del reproductor">
+          <button type="button" class="ps-option" role="radio" aria-checked="false" data-player-style-id="pulsar">
+            <span class="ps-phone ps-pulsar" aria-hidden="true">
+              <i class="ps-cover"></i><i class="ps-line ps-l1"></i><i class="ps-line ps-l2"></i><i class="ps-bar"></i>
+              <i class="ps-row"><b></b><b></b><b class="ps-main"></b><b></b><b></b></i>
+              <i class="ps-tabs"><b></b><b></b><b></b></i>
+            </span>
+            <span class="ps-name">Pulsar RM</span><small>Diseño actual</small>
+          </button>
+          <button type="button" class="ps-option" role="radio" aria-checked="false" data-player-style-id="inmersive">
+            <span class="ps-phone ps-inmersive" aria-hidden="true">
+              <i class="ps-cover"></i><i class="ps-line ps-l1"></i><i class="ps-line ps-l2"></i><i class="ps-dots"><b></b><b></b></i><i class="ps-bar"></i>
+              <i class="ps-row"><b></b><b class="ps-main"></b><b></b></i>
+              <i class="ps-vol"></i>
+              <i class="ps-tabs"><b></b><b></b><b></b></i>
+            </span>
+            <span class="ps-name">Inmersive</span><small>Portada grande y fondo dinámico</small>
+          </button>
+        </div>
+      </div>
+
       </section>
 
       <!-- ===== B · LETRAS Y ANIMACIONES ===== -->
@@ -542,6 +615,11 @@
         </div>
         <label class="eq-switch set-row"><span>Pausar al desconectar los auriculares</span>
           <input type="checkbox" data-toggle="pauseOnNoisy"><span class="eq-switch-ui" aria-hidden="true"></span></label>
+        <div class="set-block hidden" id="battery-block">
+          <span class="set-label">Ahorro de batería de Android</span>
+          <button type="button" class="chip-btn set-link" data-action="battery-optimization">Permitir uso sin restricciones</button>
+          <small class="set-hint">Si Android corta la música con la pantalla apagada, esto evita que la limite para ahorrar batería.</small>
+        </div>
         <small id="bg-hint" class="set-hint"></small>
       </div>
       </section>
@@ -789,6 +867,8 @@
 <!-- Orden de la biblioteca + indicador alfabético, y aviso de nuevas versiones. Si alguno falla, la app sigue igual. -->
 <script src="library-tools.js"></script>
 <script src="updates.js"></script>
+<!-- Estilo de reproductor «Inmersive» (alternativo, se elige en Ajustes → Apariencia). Si falla, el reproductor Pulsar RM sigue igual. -->
+<script src="immersive.js"></script>
 <!-- Nova Intelligence (etapa 1): el núcleo primero; las demás piezas se enganchan a él. Si alguno falla, la app sigue igual. -->
 <script src="nova-core.js"></script>
 <script src="nova-store.js"></script>

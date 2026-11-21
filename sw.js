@@ -28,7 +28,10 @@
 // v24: animaciones de letras — Fluida, Palabra por palabra y Escala (se quita «Fluida con glow»), con efectos especiales para palabras prolongadas (script.js, style.css, index.html); renueva la copia guardada.
 // v25: animaciones de letras refinadas — luz integrada en las letras (sin parpadeo ni mancha) en Palabra por palabra y Fluida, y Escala con ascenso progresivo sin rebotes (script.js, style.css); renueva la copia guardada.
 // v26: biblioteca — orden de canciones (Nombre / Artista / Agregado recientemente), indicador alfabético y aviso de nuevas versiones (library-tools.js, updates.js, index.html, script.js, features.js, style.css); renueva la copia guardada.
-const CACHE_NAME = "pulsar-rm-shell-v26";
+// v27 (app v1.06): audio de carpetas — el respaldo de Android ya no muestra «Preparando la canción…», retoma donde iba y la siguiente canción queda lista (script.js); renueva la copia guardada.
+// v28 (app v1.06, integración nativa): copia de la biblioteca para Android Auto, órdenes desde fuera, compartir varios audios, botón de batería (script.js, features.js, index.html).
+// v29 (app v1.06): estilo de reproductor «Inmersive» como alternativa a Pulsar RM (immersive.js, immersive.css, index.html, script.js, features.js); renueva la copia guardada.
+const CACHE_NAME = "pulsar-rm-shell-v29";
 
 const APP_SHELL = [
   "./",
@@ -39,6 +42,8 @@ const APP_SHELL = [
   "features.js",
   "library-tools.js",
   "updates.js",
+  "immersive.js",
+  "immersive.css",
   "nova-core.js",
   "nova-store.js",
   "nova-net.js",
