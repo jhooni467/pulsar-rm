@@ -1,0 +1,93 @@
+/* =========================================================
+   PULSAR RM v1.06 — Animated Covers y Canvas: estilos compartidos y presentación de Pulsar RM
+   (la presentación de Inmersive está en immersive.css, con su propio lenguaje: Apple Music / Spotify Canvas).
+   Prefijo «vs-». Nada de esto cambia el aspecto del reproductor mientras no haya contenido animado.
+   ========================================================= */
+
+/* ---------- Base común ---------- */
+.vs-media { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; pointer-events: none; background: #000; }
+.vs-layer { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; opacity: 0; transition: opacity 0.55s ease; }
+.vs-layer.on { opacity: 1; }
+
+/* Opciones de Canvas / Animated Cover dentro del menú ⋯ (cada menú les da su estilo; esto solo las separa) */
+.vs-sep { border: 0; height: 1px; margin: 6px 8px; background: currentColor; opacity: 0.12; }
+
+/* Las portadas se pueden tocar para agregar un Animated Cover */
+#big-cover, #im-cover { position: relative; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+#big-cover:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+
+/* ---------- Ventana «Agregar Animated Cover» (usa las hojas inferiores de la app) ---------- */
+.vs-sheet { display: grid; gap: 14px; justify-items: center; text-align: center; padding: 6px 2px 10px; }
+.vs-sheet-preview {
+  position: relative;
+  width: 116px;
+  height: 116px;
+  border-radius: 24px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  background: linear-gradient(145deg, var(--card-a), var(--card-b));
+  border: 1px solid var(--border);
+}
+.vs-sheet-preview > img, .vs-sheet-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.vs-sheet-preview .icon, .vs-sheet-preview svg { width: 56%; height: 56%; }
+.vs-sheet-text { margin: 0; max-width: 34ch; color: var(--muted); font-size: 13.5px; line-height: 1.55; }
+.vs-sheet-text strong { color: var(--text); font-size: 15px; }
+.vs-sheet .chip-btn { width: 100%; max-width: 320px; }
+
+/* =========================================================
+   PULSAR RM — su propia presentación
+   Animated Cover: la misma tarjeta cuadrada de siempre, con el video dentro, un aro del color del tema que respira mientras suena
+   y una pequeña etiqueta. Canvas: una tarjeta vertical (9:16) en el mismo escenario, con el mismo borde y esquinas.
+   ========================================================= */
+html:not([data-player-style="inmersive"]) #big-cover.has-anim {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent), 0 12px 34px -12px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+html:not([data-player-style="inmersive"]) #big-cover.has-anim::after {
+  content: "ANIMATED";
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  z-index: 2;
+  padding: 5px 8px 4px;
+  border-radius: 20px;
+  font: 700 9px/1 system-ui, sans-serif;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+html.is-playing:not([data-player-style="inmersive"]) #big-cover.has-anim,
+html.is-playing:not([data-player-style="inmersive"]) .stage[data-vs-canvas="on"] .vs-p-canvas { animation: vsBreathe 3.2s ease-in-out infinite; }
+@keyframes vsBreathe {
+  0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent), 0 12px 30px -12px color-mix(in srgb, var(--accent) 45%, transparent); }
+  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent), 0 14px 40px -10px color-mix(in srgb, var(--accent) 70%, transparent); }
+}
+
+/* Canvas en Pulsar RM: la tarjeta vertical ocupa el escenario y reemplaza a la portada mientras está activo */
+.vs-p-canvas { display: none; }
+html:not([data-player-style="inmersive"]) .stage[data-vs-canvas="on"][data-mode="cover"] { container-type: size; }
+html:not([data-player-style="inmersive"]) .stage[data-vs-canvas="on"][data-mode="cover"] #big-cover { display: none; }
+html:not([data-player-style="inmersive"]) .stage[data-vs-canvas="on"][data-mode="cover"] .vs-p-canvas {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 9 / 16;
+  height: min(100cqh, calc(92cqw * 16 / 9));
+  margin: 0 auto;
+  border-radius: 26px;
+  background: linear-gradient(145deg, var(--card-a), var(--card-b));
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent), 0 14px 38px -12px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vs-layer { transition: none; }
+  html.is-playing #big-cover.has-anim, html.is-playing .vs-p-canvas { animation: none !important; }
+}

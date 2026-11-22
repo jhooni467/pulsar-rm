@@ -21,6 +21,7 @@ const PlayerStyle = {
   volTimer: 0,
   volHoldUntil: 0,
   volDragging: false,
+  canvasExpanded: false,   // Canvas a pantalla completa (solo estilo Inmersive con un Canvas activo)
 
   /* ---------- Estado ---------- */
 
@@ -56,11 +57,13 @@ const PlayerStyle = {
     const back = Router.handleBack;
     Router.handleBack = function (...args) {
       if (PlayerStyle.menuOpen()) { PlayerStyle.closeMenu(); return true; }
+      if (PlayerStyle.canvasExpanded) { PlayerStyle.collapseCanvas(); return true; }
       return back.apply(this, args);
     };
 
     this.bind();
     this.setupVolume();
+    if (typeof Visuals !== "undefined") Visuals.on(() => this.checkCanvas());
     Settings.watch("playerStyle", () => this.apply());
     Settings.watch(["shuffle", "repeat"], () => this.syncMenu());
     this.apply();
@@ -95,7 +98,13 @@ const PlayerStyle = {
     });
     document.addEventListener("click", (event) => {
       if (this.menuOpen() && !event.target.closest("#im-menu") && !event.target.closest('[data-im="menu"]')) this.closeMenu();
+      // Canvas (v1.06): tocar la zona del video lo amplía; ya ampliado, tocar en cualquier parte (menos estrella/⋯) regresa al reproductor
+      if (this.canvasMode()) {
+        if (this.canvasExpanded) { if (!event.target.closest(".im-info")) this.collapseCanvas(); }
+        else if (event.target.closest(".im-cover-wrap")) this.expandCanvas();
+      }
     });
+    window.addEventListener("resize", () => { if (this.canvasExpanded) this.measureShift(); });
     document.addEventListener("keydown", (event) => { if (event.key === "Escape" && this.menuOpen()) this.closeMenu(); });
 
     // Tarjeta de Ajustes: elegir estilo
@@ -115,6 +124,7 @@ const PlayerStyle = {
     this.syncCard();
     this.onRoute(Router.current);
     if (this.active) this.syncAll();
+    if (typeof Visuals !== "undefined") Visuals.sync(); // el contenido visual pasa de un diseño al otro
   },
 
   syncCard() {
@@ -131,6 +141,48 @@ const PlayerStyle = {
     if (on) { this.syncAll(); this.startVolumePoll(); }
     else { this.stopVolumePoll(); this.closeMenu(); }
     if (name === "settings") this.syncCard();
+    this.checkCanvas();
+  },
+
+  /* ---------- Canvas (estilo Inmersive) ----------
+     Con un Canvas activo, el video vertical ocupa toda la pantalla detrás de la interfaz (capa #vs-canvas-layer, acercado y con
+     degradados para que se lea el texto). Tocar la zona del video lo AMPLÍA: la interfaz se desvanece, queda el video completo y
+     solo título, artista, estrella y ⋯ bajan al borde inferior. Tocar de nuevo (o Atrás) regresa. La música no se interrumpe:
+     es solo una transición visual, no hay ningún reproductor de video aparte. */
+
+  canvasMode() {
+    return this.ready && this.active && Router.current === "player" && document.documentElement.classList.contains("vs-canvas");
+  },
+
+  // Cuánto debe bajar el bloque título/estrella/⋯ para quedar pegado abajo en la vista ampliada
+  measureShift() {
+    const info = this.el.root.querySelector(".im-info");
+    if (!info) return;
+    this.el.root.style.setProperty("--vs-dy", "0px");
+    const rect = info.getBoundingClientRect();
+    const padBottom = parseFloat(getComputedStyle(document.getElementById("app")).paddingBottom) || 24;
+    const target = document.documentElement.clientHeight - padBottom - 10;
+    this.el.root.style.setProperty("--vs-dy", Math.max(0, Math.round(target - rect.bottom)) + "px");
+  },
+
+  expandCanvas() {
+    if (this.canvasExpanded || !this.canvasMode()) return;
+    this.closeMenu();
+    this.measureShift();
+    this.canvasExpanded = true;
+    document.documentElement.classList.add("vs-full");
+  },
+
+  collapseCanvas() {
+    if (!this.canvasExpanded) return;
+    this.canvasExpanded = false;
+    this.closeMenu();
+    document.documentElement.classList.remove("vs-full");
+  },
+
+  // Si el Canvas deja de estar disponible (se desactiva, cambia de canción sin Canvas, otro diseño…), se sale de la vista ampliada
+  checkCanvas() {
+    if (this.canvasExpanded && !this.canvasMode()) this.collapseCanvas();
   },
 
   /* ---------- Sincronizar con el motor ---------- */

@@ -1931,6 +1931,7 @@ const Features = {
     this.safe("biblioteca android", () => LibrarySync.init());   // copia de la biblioteca para Android Auto y el Asistente
     this.safe("reproducir desde fuera", () => { ExternalPlay.ready = true; ExternalPlay.check(); });
     this.safe("estilo del reproductor", () => { if (typeof PlayerStyle !== "undefined") PlayerStyle.init(); });   // v1.06: Pulsar RM · Inmersive
+    this.safe("animated covers y canvas", () => { if (typeof Visuals !== "undefined") return Visuals.init(); });   // v1.06: contenido visual compartido
     this.safe("nova", () => { if (typeof Nova !== "undefined") Nova.afterLoad(); });
     this.safe("buscar versión", () => { if (typeof UpdateCheck !== "undefined") UpdateCheck.start(); });   // en segundo plano, a los 4 s
     // Un APK nuevo puede haber perdido permisos de carpeta: se comprueba en silencio (no se lee ningún archivo)
@@ -1969,6 +1970,7 @@ const Features = {
       if (typeof LibraryTools !== "undefined") LibraryTools.onRoute(name);
       if (typeof UpdateCheck !== "undefined") UpdateCheck.onRoute(name);
       if (typeof PlayerStyle !== "undefined") PlayerStyle.onRoute(name); // v1.06: fondo y volumen del estilo Inmersive
+      if (typeof Visuals !== "undefined") Visuals.onRoute(name);          // v1.06: Animated Covers y Canvas
       if (name === "queue") QueueScreen.onRoute();
       else if (name === "timer") SleepTimer.refresh();
       else if (name === "info") SongInfo.onRoute();

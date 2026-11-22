@@ -31,7 +31,8 @@
 // v27 (app v1.06): audio de carpetas — el respaldo de Android ya no muestra «Preparando la canción…», retoma donde iba y la siguiente canción queda lista (script.js); renueva la copia guardada.
 // v28 (app v1.06, integración nativa): copia de la biblioteca para Android Auto, órdenes desde fuera, compartir varios audios, botón de batería (script.js, features.js, index.html).
 // v29 (app v1.06): estilo de reproductor «Inmersive» como alternativa a Pulsar RM (immersive.js, immersive.css, index.html, script.js, features.js); renueva la copia guardada.
-const CACHE_NAME = "pulsar-rm-shell-v29";
+// v30 (app v1.06): Animated Covers y Canvas (visuals.js, visuals.css, immersive.*, index.html, features.js); renueva la copia guardada.
+const CACHE_NAME = "pulsar-rm-shell-v30";
 
 const APP_SHELL = [
   "./",
@@ -44,6 +45,8 @@ const APP_SHELL = [
   "updates.js",
   "immersive.js",
   "immersive.css",
+  "visuals.js",
+  "visuals.css",
   "nova-core.js",
   "nova-store.js",
   "nova-net.js",

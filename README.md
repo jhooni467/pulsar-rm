@@ -97,6 +97,9 @@ v1.06 — Native Android integration (Android Auto, voice search, share, lock sc
 
 - New second player design, **Inmersive** (large cover, dynamic blurred background taken from the cover, favorites star, options menu, progress bar, big previous/pause/next, system volume bar, shortcuts to lyrics / audio devices / queue). Choose it in Settings → Appearance → *Estilo del reproductor* (with a live preview of both designs). Both styles share the same playback engine; the choice is saved. The original **Pulsar RM** design is untouched.
 - Favorites (star) are stored on the song and sent to Android Auto as a "Favoritas" list.
+- **Animated Covers**: tap the cover in either player → "Agregar Animated Cover" → pick a short video (MP4/WebM) or animated image (GIF/WebP). It replaces the still cover, loops silently and adapts to each design (Pulsar RM: its own card with an accent ring; Inmersive: large Apple-Music-style cover).
+- **Canvas** (per song, from the ⋯ menu: Agregar / Activar / Desactivar / Cambiar Canvas; deactivating keeps the file). Pulsar RM shows it as a vertical card in its own stage; Inmersive shows it full-screen behind the player (Spotify Canvas style) and tapping it expands it (UI fades out, only title/artist/star/⋯ remain); tap again or Back to return, music keeps playing.
+- Files are stored per song inside the app (IndexedDB), so they survive closing the app; videos are always muted and only play while music plays and the player is visible.
 
 
 - Android Auto / Bluetooth / Google Assistant: browsable library (Songs, Albums, Artists, Lists) built from a compact copy of the library that the web layer sends to Android (`setLibrary`), covers served through a read-only `ContentProvider`, search by voice ("Ok Google, play X on Pulsar RM") and in the car, and the playback queue.
