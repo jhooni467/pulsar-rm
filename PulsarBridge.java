@@ -182,6 +182,10 @@ final class PulsarBridge {
     }
 
     @JavascriptInterface public void setPendingIcon(String variant) { activity.savePendingIcon("light".equals(variant)); }
+    /** v1.06 — Pantalla completa del estilo Inmersive: el WebView ocupa toda la pantalla y las barras del sistema son transparentes. */
+    @JavascriptInterface public void setEdgeToEdge(boolean on, boolean darkIcons) { activity.setEdgeToEdge(on, darkIcons); }
+    /** v1.06 — {"top":px,"bottom":px} con la altura real de las barras del sistema (para reservarles espacio). */
+    @JavascriptInterface public String getBarInsets() { return activity.barInsetsJson(); }
     @JavascriptInterface public void setBars(final String statusHex, final String navHex, final boolean darkIcons) { activity.setBars(statusHex, navHex, darkIcons); }
     @JavascriptInterface public void setStatusBarHidden(final boolean hidden) { activity.setStatusHidden(hidden); }
     /** v1.05: áreas seguras aplicadas al WebView, en píxeles: {top,bottom,left,right} (se muestran en Diagnóstico). */

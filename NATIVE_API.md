@@ -75,3 +75,8 @@ Una canción se identifica como `s:<id>@<lista>`.
 - `setVolume(nivel)`: cambia ese volumen (0.0–1.0) sin abrir el panel del sistema.
 - `openAudioOutput()`: abre el selector de salida de audio de Android (14+: selector del sistema; 10–13: panel de volumen; antes: ajustes de Bluetooth).
 En el navegador estas funciones no existen: el reproductor Inmersive oculta la barra de volumen y el botón de dispositivos avisa con un mensaje.
+
+## v1.06 — pantalla completa del estilo Inmersive
+
+- `setEdgeToEdge(activo, iconosOscuros)`: el WebView ocupa toda la pantalla y las barras del sistema pasan a ser transparentes (con `false` vuelven los colores del tema guardados con `setBars`). Con la pantalla completa activa, `setBars` solo guarda los colores.
+- `getBarInsets()` → `{"top":px,"bottom":px}`: altura real de las barras, para que la web les reserve espacio con padding (`--im-st` / `--im-nv`).

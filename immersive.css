@@ -10,46 +10,58 @@
 html[data-player-style="inmersive"] #view-player .now-playing { display: none; }
 html[data-player-style="inmersive"] #im-player { display: flex; }
 
-/* ---------- Fondo dinámico (detrás de toda la app; solo en el reproductor Inmersive) ---------- */
+/* ---------- Paleta dinámica compartida (reproductor + letras) ----------
+   Se calcula de la portada (o del Animated Cover) y se anima al cambiar de canción. Todo lo que es «de color» del estilo
+   Inmersive la usa: fondo, sombras de la portada, resplandor y la pantalla de letras. Nunca queda sin valor. */
+@property --im-c1 { syntax: "<color>"; inherits: true; initial-value: #101a33; }
+@property --im-c2 { syntax: "<color>"; inherits: true; initial-value: #3a4f8f; }
+@property --im-c3 { syntax: "<color>"; inherits: true; initial-value: #070a14; }
+html[data-player-style="inmersive"] {
+  --im-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  transition: --im-c1 0.9s ease, --im-c2 0.9s ease, --im-c3 0.9s ease;
+}
+
+/* ---------- Fondo dinámico (detrás de toda la app; en el reproductor y en las letras del estilo Inmersive) ----------
+   Tres capas y ninguna puede dejar la pantalla negra:
+     1. base   — degradado con la paleta de la portada (siempre presente, también si la imagen falla o tarda);
+     2. capas  — la portada reducida y suavizada como imagen (data:), que se funden una sobre otra sin huecos;
+     3. velo   — oscurece un poco para que el texto se lea. */
 .im-bg {
   position: fixed;
   inset: 0;
   z-index: -1;
   display: none;
   overflow: hidden;
-  background: #05070d;
+  background: var(--im-c3, #070a14);
   pointer-events: none;
 }
-html.im-on .im-bg { display: block; }
+html.im-bgon .im-bg { display: block; }
 /* El fondo base de la app (html/body) quedaría por encima del fondo dinámico: en este diseño el cuerpo es transparente */
-html.im-on body { background: transparent !important; }
-.im-bg canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  transition: opacity 0.8s ease;
-  transform: scale(1.25); /* los bordes de un desenfoque quedan transparentes: se recortan fuera de la pantalla */
-}
-.im-bg canvas.on { opacity: 1; }
-.im-bg-shade {
+html.im-bgon body { background: transparent !important; }
+.im-bg-base {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0.30) 0%, rgba(0, 0, 0, 0.12) 38%, rgba(0, 0, 0, 0.46) 100%);
+    radial-gradient(120% 70% at 25% 15%, var(--im-c2, #3a4f8f), transparent 70%),
+    radial-gradient(100% 60% at 85% 88%, var(--im-c1, #101a33), transparent 72%),
+    var(--im-c3, #070a14);
 }
-/* Sin portada: un resplandor con el color del tema (Pulsar RM) en vez de una imagen */
-.im-bg.nocover { background: #05070d; }
-@supports (color: color-mix(in srgb, red 50%, blue)) {
-  .im-bg.nocover {
-    background:
-      radial-gradient(120% 70% at 30% 18%, color-mix(in srgb, var(--accent, #7c5cff) 55%, #05070d), transparent 70%),
-      radial-gradient(100% 60% at 85% 85%, color-mix(in srgb, var(--accent, #7c5cff) 30%, #05070d), transparent 70%),
-      #05070d;
-  }
+.im-bg-layer {
+  position: absolute;
+  inset: -12%;                       /* de sobra para que el borde del suavizado nunca se vea */
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+  transform: translateZ(0);
 }
-.im-bg.still canvas { transition: none; }
+.im-bg-layer.on { opacity: 1; }
+.im-bg-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.34) 0%, rgba(0, 0, 0, 0.16) 36%, rgba(0, 0, 0, 0.5) 100%);
+}
+.im-bg.still .im-bg-layer { transition: none; }
 
 /* ---------- Reproductor Inmersive ---------- */
 .im-player {
@@ -170,7 +182,21 @@ html.is-playing .im-cover { transform: scale(1); }
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
   z-index: 6;
+  opacity: 0;
+  transform: translateY(10px) scale(0.94);
+  transform-origin: bottom right;
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
 }
+.im-menu.open { opacity: 1; transform: none; pointer-events: auto; }
+.im-menu.open button { animation: imItemIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.im-menu.open button:nth-child(2) { animation-delay: 30ms; }
+.im-menu.open button:nth-child(3) { animation-delay: 60ms; }
+.im-menu.open button:nth-child(4) { animation-delay: 90ms; }
+.im-menu.open button:nth-child(5) { animation-delay: 120ms; }
+.im-menu.open button:nth-child(6) { animation-delay: 150ms; }
+.im-menu.open .vs-menu-items button { animation-delay: 180ms; }
+@keyframes imItemIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .im-menu.hidden { display: none; }
 .im-menu button {
   display: flex;
@@ -243,24 +269,40 @@ html.is-playing .im-cover { transform: scale(1); }
   letter-spacing: 0.3px;
 }
 
-/* Controles grandes */
+/* Controles grandes (v1.06: un poco más grandes, centrados en una rejilla y con respuesta al tocar) */
 .im-controls {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: center;
-  gap: clamp(26px, 10vw, 54px);
-  margin-top: clamp(8px, 2.2dvh, 22px);
+  justify-items: center;
+  column-gap: clamp(6px, 3vw, 18px);
+  margin-top: clamp(10px, 2.4dvh, 24px);
 }
 .im-ctl {
-  width: clamp(56px, 16vw, 68px);
-  height: clamp(56px, 16vw, 68px);
-  padding: clamp(12px, 3.6vw, 16px) !important;
+  position: relative;
+  width: clamp(66px, 19vw, 80px);
+  height: clamp(66px, 19vw, 80px);
+  padding: clamp(15px, 4.4vw, 19px) !important;
   border-radius: 50%;
-  transition: transform 0.12s ease, opacity 0.2s ease;
+  display: grid;
+  place-items: center;
+  transition: transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.25s ease, opacity 0.2s ease;
 }
-.im-ctl:active { transform: scale(0.88); }
-.im-play { width: clamp(72px, 21vw, 88px); height: clamp(72px, 21vw, 88px); padding: clamp(14px, 4vw, 18px) !important; }
-.im-play .icon { filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.25)); }
+.im-ctl::before {   /* halo que aparece al tocar */
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.25s ease, transform 0.3s var(--im-ease, ease);
+}
+.im-ctl:active { transform: scale(0.86); transition-duration: 0.12s; }
+.im-ctl:active::before { opacity: 1; transform: scale(1); }
+.im-play { width: clamp(88px, 25vw, 104px); height: clamp(88px, 25vw, 104px); padding: clamp(19px, 5.4vw, 24px) !important; }
+.im-play .icon { filter: drop-shadow(0 2px 12px rgba(0, 0, 0, 0.3)); }
+.im-play .icon, .im-ctl .icon { position: relative; transition: transform 0.3s var(--im-ease, ease); }
 
 /* Volumen */
 .im-volume {
@@ -300,8 +342,8 @@ html.is-playing .im-cover { transform: scale(1); }
   .im-close { padding-inline: 0; width: 44px; }
   .im-player > .im-cover-wrap { grid-column: 1; grid-row: 1 / span 6; min-height: 0; margin: 0; }
   .im-controls { margin-top: 6px; }
-  .im-ctl { width: 56px; height: 56px; padding: 11px !important; }
-  .im-play { width: 70px; height: 70px; padding: 14px !important; }
+  .im-ctl { width: 62px; height: 62px; padding: 13px !important; }
+  .im-play { width: 78px; height: 78px; padding: 16px !important; }
   .im-bottom { margin-top: 12px; }
 }
 
@@ -400,7 +442,7 @@ html.is-playing .im-cover { transform: scale(1); }
   z-index: -1;           /* detrás de la app, encima del fondo dinámico (viene después en el documento) */
   display: none;
   overflow: hidden;
-  background: #000;
+  background: transparent;
   pointer-events: none;
 }
 html.im-on.vs-canvas .vs-canvas-layer { display: block; }
@@ -436,3 +478,304 @@ html.vs-full .im-info { transform: translateY(var(--vs-dy, 0px)); }
 @media (prefers-reduced-motion: reduce) {
   .vs-canvas-media, .vs-scrim, .im-info, .im-top, .im-progress, .im-controls, .im-volume, .im-bottom { transition: none; }
 }
+
+/* La barra de progreso de la pantalla de letras (Inmersive) comparte estos estilos */
+html[data-player-style="inmersive"] #view-lyrics input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+  --p: 0;
+}
+html[data-player-style="inmersive"] #view-lyrics input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 6px;
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.92) calc(var(--p, 0) * 100%), var(--im-track) calc(var(--p, 0) * 100%));
+}
+html[data-player-style="inmersive"] #view-lyrics input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: #fff;
+  border: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transform: scale(0);
+  transition: transform 0.15s ease;
+}
+html[data-player-style="inmersive"] #view-lyrics input[type="range"]:active::-webkit-slider-thumb, html[data-player-style="inmersive"] #view-lyrics input[type="range"]:focus-visible::-webkit-slider-thumb { transform: scale(1); }
+html[data-player-style="inmersive"] #view-lyrics input[type="range"]::-moz-range-track { height: 6px; border-radius: 6px; background: var(--im-track); }
+html[data-player-style="inmersive"] #view-lyrics input[type="range"]::-moz-range-progress { height: 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.92); }
+html[data-player-style="inmersive"] #view-lyrics input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #fff; }
+
+
+/* =========================================================
+   v1.06 — Refinamiento de Inmersive: portada con profundidad, transiciones, pantalla completa y letras
+   Todo bajo html[data-player-style="inmersive"]: el diseño Pulsar RM no cambia.
+   ========================================================= */
+
+/* ---------- Pantalla completa: el WebView ocupa toda la pantalla y la app reserva el espacio de las barras ---------- */
+html.im-edge #app {
+  --pad-t: calc(var(--im-st, 0px) + 6px);
+  --pad-b: calc(var(--im-nv, 0px) + clamp(14px, 3dvh, 28px));
+}
+html.im-edge, html.im-edge #app, html.im-edge .view {
+  --sub-pad-t: calc(var(--im-st, 0px) + 6px);
+  --sub-pad-b: calc(var(--im-nv, 0px) + clamp(12px, 2.4dvh, 24px));
+}
+html.im-edge .toast { top: calc(12px + var(--im-st, 0px)); }
+html.im-edge .sheet { padding-bottom: calc(var(--im-nv, 0px) + 12px); }
+
+/* ---------- Portada: sombras suaves, profundidad y resplandor con la paleta ---------- */
+.im-cover-wrap { position: relative; }
+.im-cover-wrap::before {                         /* resplandor ambiental: crece mientras suena */
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(min(100cqw, 100cqh) * 1.34);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--im-c2, #3a4f8f) 70%, transparent), transparent);
+  transform: translate(-50%, -47%) scale(0.9);
+  opacity: 0;
+  transition: opacity 1s ease, transform 1.1s var(--im-ease, ease);
+  pointer-events: none;
+}
+html.is-playing .im-cover-wrap::before { opacity: 0.6; transform: translate(-50%, -47%) scale(1.04); }
+.im-cover {
+  position: relative;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 12px 26px -8px rgba(0, 0, 0, 0.45),
+    0 38px 78px -22px color-mix(in srgb, var(--im-c1, #101a33) 45%, rgba(0, 0, 0, 0.8)),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+  transition: transform 0.7s cubic-bezier(0.34, 1.4, 0.64, 1), box-shadow 0.8s ease;
+}
+.im-cover::after {                               /* brillo suave de la esquina superior: da volumen */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(158deg, rgba(255, 255, 255, 0.16), transparent 36%, transparent 68%, rgba(0, 0, 0, 0.16));
+  pointer-events: none;
+  z-index: 3;
+}
+/* Cambio de canción: la portada nueva entra desde abajo y la anterior se desvanece (sin saltos) */
+.im-cover.swap-in { animation: imCoverIn 0.7s var(--im-ease, ease) backwards; }
+@keyframes imCoverIn { from { opacity: 0; transform: scale(0.88) translateY(18px); filter: blur(8px); } }
+.im-cover-ghost {
+  position: absolute !important;
+  left: 50%;
+  top: 50%;
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
+  transform: translate(-50%, -50%) !important;
+  pointer-events: none;
+  transition: none !important;
+  animation: imCoverOut 0.55s var(--im-ease, ease) forwards;
+  z-index: 1;
+}
+@keyframes imCoverOut { to { opacity: 0; transform: translate(-50%, -50%) scale(1.07) !important; filter: blur(8px); } }
+
+/* Animated Cover (estilo Apple Music): se revela con un fundido que «asienta» la imagen y flota muy despacio mientras suena */
+#im-cover .vs-layer { transform: scale(1.09); filter: brightness(1.28) saturate(1.2); transition: opacity 0.8s ease, transform 1.3s var(--im-ease, ease), filter 1.1s ease; }
+#im-cover .vs-layer.on { transform: none; filter: none; }
+html.is-playing #im-cover.has-anim { animation: imFloat 10s ease-in-out infinite; }
+@keyframes imFloat { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
+
+/* ---------- Pantallas secundarias, ventanas y opciones: entradas y salidas suaves ---------- */
+html[data-player-style="inmersive"] .view.sub.active,
+html[data-player-style="inmersive"] #view-player.active { animation: imViewIn 0.52s var(--im-ease, ease) backwards; }
+html[data-player-style="inmersive"][data-nav="back"] .view.sub.active,
+html[data-player-style="inmersive"][data-nav="back"] #view-player.active { animation-name: imViewBack; }
+@keyframes imViewIn { from { opacity: 0; transform: translateY(28px) scale(0.985); } }
+@keyframes imViewBack { from { opacity: 0; transform: scale(1.035); filter: blur(6px); } }
+.im-ghost { position: fixed; z-index: 45; margin: 0; overflow: hidden; pointer-events: none; }
+.im-ghost.fwd { animation: imGhostFwd 0.4s var(--im-ease, ease) forwards; }
+.im-ghost.back { animation: imGhostBack 0.4s var(--im-ease, ease) forwards; }
+@keyframes imGhostFwd { to { opacity: 0; transform: scale(0.95) translateY(-12px); filter: blur(6px); } }
+@keyframes imGhostBack { to { opacity: 0; transform: translateY(34px) scale(0.985); } }
+
+/* Ventanas (hojas inferiores y diálogos): entran con resorte suave y salen igual de suaves */
+html[data-player-style="inmersive"] .sheet.sheet-open .sheet-backdrop { animation: imFade 0.35s ease backwards; }
+html[data-player-style="inmersive"] .sheet.sheet-open .sheet-panel { animation: imSheetUp 0.55s var(--im-ease, ease) backwards; }
+html[data-player-style="inmersive"] .confirm .confirm-backdrop { animation: imFade 0.3s ease backwards; }
+html[data-player-style="inmersive"] .confirm .confirm-panel { animation: imPop 0.45s var(--im-ease, ease) backwards; }
+.im-leaving { pointer-events: none !important; }
+.im-leaving .sheet-backdrop, .im-leaving .confirm-backdrop { animation: imFadeOut 0.3s ease forwards !important; }
+.im-leaving .sheet-panel { animation: imSheetDown 0.36s var(--im-ease, ease) forwards !important; }
+.im-leaving .confirm-panel { animation: imPopOut 0.28s ease forwards !important; }
+@keyframes imFade { from { opacity: 0; } }
+@keyframes imFadeOut { to { opacity: 0; } }
+@keyframes imSheetUp { from { opacity: 0; transform: translateY(60px) scale(0.98); } }
+@keyframes imSheetDown { to { opacity: 0; transform: translateY(70px) scale(0.98); } }
+@keyframes imPop { from { opacity: 0; transform: scale(0.92) translateY(10px); } }
+@keyframes imPopOut { to { opacity: 0; transform: scale(0.94) translateY(8px); } }
+
+/* Panel «Personalizar la letra»: se despliega y se pliega (no aparece ni desaparece de golpe) */
+html[data-player-style="inmersive"] #lyrics-options {
+  max-height: 640px;
+  overflow: hidden;
+  transition: max-height 0.5s var(--im-ease, ease), opacity 0.3s ease, transform 0.45s var(--im-ease, ease), margin 0.3s ease, padding 0.3s ease;
+}
+html[data-player-style="inmersive"] #lyrics-options.hidden {
+  display: block !important;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-10px);
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: max-height 0.4s var(--im-ease, ease), opacity 0.25s ease, transform 0.35s ease, margin 0.3s ease, padding 0.3s ease, visibility 0s 0.4s;
+}
+
+/* ---------- Pantalla de letras (estilo Apple Music) ----------
+   Mismo fondo dinámico y misma paleta que el reproductor. La línea que suena es grande y brillante; las anteriores y siguientes
+   se apagan y se desenfocan según su distancia, y todo se desliza con la misma curva que el resto de Inmersive. */
+html[data-player-style="inmersive"] .lyrics-backdrop { display: none !important; }
+html[data-player-style="inmersive"] #view-lyrics {
+  --text: #ffffff;
+  --muted: rgba(255, 255, 255, 0.64);
+  --surface: rgba(255, 255, 255, 0.14);
+  --border: rgba(255, 255, 255, 0.16);
+  --lyric-dim: rgba(255, 255, 255, 0.34);
+  --lyric-dim2: rgba(255, 255, 255, 0.46);
+  --lyric-past: rgba(255, 255, 255, 0.34);
+  --lyric-plain: rgba(255, 255, 255, 0.82);
+  color: #fff;
+}
+html[data-player-style="inmersive"] #view-lyrics .sub-top { background: linear-gradient(to bottom, rgba(0, 0, 0, 0.34), transparent); gap: 10px; }
+html[data-player-style="inmersive"] #view-lyrics .sub-title { text-align: left; }
+html[data-player-style="inmersive"] #view-lyrics .sub-title strong { color: #fff; font-size: 16px; font-weight: 700; }
+html[data-player-style="inmersive"] #view-lyrics .sub-title small { color: rgba(255, 255, 255, 0.62); }
+html[data-player-style="inmersive"] #view-lyrics .close-player { color: #fff; }
+html[data-player-style="inmersive"] #view-lyrics .close-player:active { background: rgba(255, 255, 255, 0.16); }
+.im-ly-cover { display: none; }
+html[data-player-style="inmersive"] .im-ly-cover {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 11px;
+  overflow: hidden;
+  background: linear-gradient(145deg, var(--card-a, #1b2540), var(--card-b, #0e1424));
+  color: var(--accent, #fff);
+  box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+.im-ly-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.im-ly-cover svg { width: 62%; height: 62%; }
+
+/* barra de insignia + sincronización + edición: cristal sobre el fondo */
+html[data-player-style="inmersive"] #view-lyrics .lyrics-badge { background: rgba(255, 255, 255, 0.16); color: rgba(255, 255, 255, 0.82); border-color: transparent; }
+html[data-player-style="inmersive"] #view-lyrics .mini-btn,
+html[data-player-style="inmersive"] #view-lyrics .delay-group,
+html[data-player-style="inmersive"] #view-lyrics .link-btn {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+html[data-player-style="inmersive"] #view-lyrics .mini-btn:active { background: rgba(255, 255, 255, 0.28); transform: scale(0.94); }
+html[data-player-style="inmersive"] #view-lyrics .lyrics-options {
+  background: rgba(20, 22, 32, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  backdrop-filter: blur(22px) saturate(1.3);
+}
+
+/* las letras: grandes, a la izquierda, con profundidad */
+html[data-player-style="inmersive"] #view-lyrics .lyric-line:not(.plain) {
+  max-width: 100%;
+  font-size: calc(var(--lyric-size, 24px) * 1.36);
+  font-weight: 800;
+  letter-spacing: -0.012em;
+  line-height: 1.16;
+  margin-bottom: 0.78em;
+  transform: scale(calc(0.93 - var(--d, 0) * 0.012));
+  transition: color 0.5s ease, transform 0.75s var(--im-ease, ease), filter 0.7s ease, opacity 0.7s ease;
+}
+html[data-player-style="inmersive"] #view-lyrics .lyric-line.active:not(.plain) { transform: scale(1); text-shadow: 0 0 34px rgba(255, 255, 255, 0.22); }
+html[data-player-style="inmersive"] #view-lyrics .lyrics .lyric-line:not(.active):not(.plain):not(.gap):not(.sec) {
+  opacity: max(0.16, calc(1 - var(--d, 1) * 0.15));
+  filter: blur(min(calc(var(--d, 1) * 0.75px), 4px));
+}
+html[data-player-style="inmersive"] #view-lyrics .lyric-line.past:not(.active):not(.plain) { color: var(--lyric-past); }
+html[data-player-style="inmersive"] #view-lyrics .lyric-line.plain { font-size: 17px; line-height: 1.5; }
+html[data-player-style="inmersive"] #view-lyrics .lyrics {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 13%, #000 78%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 13%, #000 78%, transparent 100%);
+}
+
+/* barra inferior: la misma que la del reproductor */
+html[data-player-style="inmersive"] #view-lyrics .sub-dock { padding-top: 8px; }
+html[data-player-style="inmersive"] #view-lyrics .controls.compact { margin-top: 8px; gap: clamp(6px, 3vw, 18px); justify-content: center; }
+html[data-player-style="inmersive"] #view-lyrics .controls.compact button { color: #fff; font-size: 28px; min-width: 56px; min-height: 56px; transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+html[data-player-style="inmersive"] #view-lyrics .controls.compact button:active { transform: scale(0.86); }
+html[data-player-style="inmersive"] #view-lyrics .controls.compact .round-btn {
+  width: 68px;
+  height: 68px;
+  font-size: 28px;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  box-shadow: none;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+html[data-player-style="inmersive"] #view-lyrics .progress-container span { color: rgba(255, 255, 255, 0.62); }
+
+@media (prefers-reduced-motion: reduce) {
+  .im-cover-ghost, .im-ghost, .im-menu.open button { animation: none !important; }
+  .im-cover.swap-in, html.is-playing #im-cover.has-anim { animation: none; }
+  html[data-player-style="inmersive"] .view.sub.active, html[data-player-style="inmersive"] #view-player.active { animation: none; }
+  .im-leaving .sheet-panel, .im-leaving .confirm-panel { animation: none !important; }
+}
+
+/* estrella de favoritos: rebote al marcar */
+.im-chip.pop { animation: imStarPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes imStarPop { 0% { transform: scale(1); } 35% { transform: scale(1.28); } 100% { transform: scale(1); } }
+.im-menu { transition-property: opacity, transform; }
+@media (prefers-reduced-motion: reduce) { .im-chip.pop, .im-menu { animation: none; transition: none; } }
+
+/* =========================================================
+   INMERSIVE con Animated Cover — como la referencia (Apple Music)
+   La portada animada deja de ser una tarjeta: ocupa todo el ancho, sin borde ni marco, y sus bordes se funden con el fondo dinámico
+   (que toma los colores del propio video). Se ve «el objeto en su escena», no una imagen pegada sobre otra.
+   ========================================================= */
+.im-cover-wrap:has(#im-cover.has-anim) {
+  margin-left: calc(-1 * var(--gutter, 22px));
+  margin-right: calc(-1 * var(--gutter, 22px));
+  margin-top: -34px;                       /* sube bajo el gesto de cerrar: la imagen llena la parte alta */
+  margin-bottom: clamp(2px, 1dvh, 10px);
+}
+#im-cover.has-anim {
+  width: min(100cqw, 100cqh);
+  height: min(100cqw, 100cqh);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform: scale(1);
+  /* bordes suaves: se desvanece arriba, abajo y a los lados hacia el fondo */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16%, #000 74%, transparent 100%), linear-gradient(to right, transparent 0, #000 7%, #000 93%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16%, #000 74%, transparent 100%), linear-gradient(to right, transparent 0, #000 7%, #000 93%, transparent 100%);
+  mask-composite: intersect;
+}
+#im-cover.has-anim::after { display: none; }
+.im-cover-wrap:has(#im-cover.has-anim)::before { opacity: 0 !important; }   /* el resplandor ya lo da el propio video */
+#im-cover.has-anim .vs-layer, #im-cover.has-anim .vs-media { border-radius: 0; }

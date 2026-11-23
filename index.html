@@ -34,7 +34,7 @@
 </head>
 <body>
 <!-- Fondo dinámico del estilo Inmersive: portada reducida y suavizada (solo se ve en el reproductor Inmersive) -->
-<div id="im-bg" class="im-bg" aria-hidden="true"><canvas class="im-bg-a" width="48" height="48"></canvas><canvas class="im-bg-b" width="48" height="48"></canvas><span class="im-bg-shade"></span></div>
+<div id="im-bg" class="im-bg" aria-hidden="true"><div class="im-bg-base"></div><div class="im-bg-layer im-bg-a"></div><div class="im-bg-layer im-bg-b"></div><span class="im-bg-shade"></span></div>
 <!-- Canvas del estilo Inmersive: video vertical a pantalla completa detrás de la interfaz (se ve solo con un Canvas activo) -->
 <div id="vs-canvas-layer" class="vs-canvas-layer" aria-hidden="true"><div class="vs-canvas-media"></div><span class="vs-scrim vs-scrim-top"></span><span class="vs-scrim vs-scrim-bottom"></span></div>
 
@@ -200,6 +200,7 @@
       <div id="lyrics-backdrop" class="lyrics-backdrop" aria-hidden="true"></div>
       <header class="sub-top">
         <button type="button" class="close-player" data-action="back" aria-label="Volver"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6l-6 6 6 6"/></g></svg></button>
+        <span id="im-ly-cover" class="im-ly-cover" aria-hidden="true"></span>
         <div class="sub-title"><strong id="lyrics-song">Sin reproducción</strong><small id="lyrics-song-artist">Pulsar RM</small></div>
         <button type="button" id="lyrics-options-btn" class="close-player" data-action="lyrics-options" aria-label="Personalizar la letra" aria-expanded="false"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></g></svg></button>
       </header>

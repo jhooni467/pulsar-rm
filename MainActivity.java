@@ -119,6 +119,44 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    /* v1.06 — Pantalla completa del estilo Inmersive. Normalmente el WebView se coloca DENTRO de las áreas seguras y la zona de la
+       barra de estado se ve con el color del tema (la «franja»). Con edgeToEdge el WebView ocupa toda la pantalla, las barras
+       son transparentes y la web reserva ella misma el espacio con padding (ver PulsarNative.getBarInsets). */
+    private boolean edgeToEdge = false, edgeDark = false;
+    private int barTop = 0, barBottom = 0;
+
+    void setEdgeToEdge(final boolean on, final boolean darkIcons) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                if (edgeToEdge == on && edgeDark == darkIcons) return;
+                edgeToEdge = on;
+                edgeDark = darkIcons;
+                try {
+                    Window w = getWindow();
+                    if (on) {
+                        w.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+                        w.setStatusBarColor(Color.TRANSPARENT);
+                        w.setNavigationBarColor(Color.TRANSPARENT);
+                        if (Build.VERSION.SDK_INT >= 29) { w.setStatusBarContrastEnforced(false); w.setNavigationBarContrastEnforced(false); }
+                        WindowInsetsControllerCompat c = WindowCompat.getInsetsController(w, w.getDecorView());
+                        c.setAppearanceLightStatusBars(darkIcons);       // true = iconos oscuros (pantallas claras); false = claros
+                        c.setAppearanceLightNavigationBars(darkIcons);
+                    } else {
+                        SharedPreferences p = prefs();
+                        String status = p.getString("barStatus", "#080b16");
+                        applyBars(status, p.getString("barNav", status), p.getBoolean("barDarkIcons", false));
+                    }
+                    ViewCompat.requestApplyInsets(getBridge().getWebView());
+                } catch (Exception ignored) { /* si algo falla, queda el diseño con barras normales */ }
+            }
+        });
+    }
+
+    /** Altura REAL de las barras (px), aunque el WebView las ocupe: la web la usa para no dejar el contenido bajo ellas. */
+    String barInsetsJson() {
+        return "{\"top\":" + barTop + ",\"bottom\":" + barBottom + "}";
+    }
+
     private void applySafeAreas(View v, WindowInsetsCompat insets) {
         Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
         Insets cut = insets.getInsets(WindowInsetsCompat.Type.displayCutout());
@@ -129,6 +167,13 @@ public class MainActivity extends BridgeActivity {
         int bottom = Math.max(bars.bottom, cut.bottom);
         if (Build.VERSION.SDK_INT >= 30) bottom = Math.max(bottom, insets.getInsets(WindowInsetsCompat.Type.ime()).bottom);
         else bottom = Math.max(bottom, insets.getSystemWindowInsetBottom());   // teclado en Android 10 o anterior
+        barTop = top;
+        barBottom = Math.max(insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom, cut.bottom);
+        if (edgeToEdge) { // el WebView ocupa toda la pantalla; solo el teclado y los lados (recorte, modo horizontal) se respetan
+            int ime = Build.VERSION.SDK_INT >= 30 ? insets.getInsets(WindowInsetsCompat.Type.ime()).bottom : 0;
+            top = 0;
+            bottom = ime > barBottom ? ime : 0;
+        }
         insTop = top; insBottom = bottom; insLeft = left; insRight = right;
         ViewGroup.LayoutParams lp = v.getLayoutParams();
         if (lp instanceof ViewGroup.MarginLayoutParams) {
@@ -360,6 +405,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void applyBars(String statusHex, String navHex, boolean darkIcons) {
+        if (edgeToEdge) return; // con la pantalla completa del estilo Inmersive las barras son transparentes; los colores se guardan igual
         try {
             int status = Color.parseColor(statusHex);
             int nav = Color.parseColor(navHex);

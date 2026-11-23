@@ -42,7 +42,7 @@ const PlayerStyle = {
       fav: document.querySelector('#im-player [data-im="fav"]'), menu: $("im-menu"),
       menuButton: document.querySelector('#im-player [data-im="menu"]'), toggle: $("im-toggle"),
       badge: $("im-badge"), volume: $("im-volume"), volumeRange: $("im-volume-range"),
-      menuShuffle: $("im-menu-shuffle"), menuRepeat: $("im-menu-repeat"), card: $("player-style-card")
+      menuShuffle: $("im-menu-shuffle"), menuRepeat: $("im-menu-repeat"), card: $("player-style-card"), lyCover: $("im-ly-cover")
     };
     if (!this.el.root || !this.el.bg) return; // el marcado no está: no se hace nada y todo sigue con Pulsar RM
     this.el.bgA = this.el.bg.querySelector(".im-bg-a");
@@ -63,6 +63,10 @@ const PlayerStyle = {
 
     this.bind();
     this.setupVolume();
+    this.initBackdrop();
+    this.wrapRouter();
+    this.watchOverlays();
+    Settings.watch("mode", () => this.syncEdge(Router.current));
     if (typeof Visuals !== "undefined") Visuals.on(() => this.checkCanvas());
     Settings.watch("playerStyle", () => this.apply());
     Settings.watch(["shuffle", "repeat"], () => this.syncMenu());
@@ -134,14 +138,42 @@ const PlayerStyle = {
   },
 
   // Se llama al cambiar de pantalla (Features.onRoute): el fondo dinámico y el volumen solo viven en el reproductor
+  // Se llama al cambiar de pantalla (Features.onRoute): fondo, volumen, pantalla completa y Canvas
   onRoute(name) {
     if (!this.ready) return;
+    const root = document.documentElement;
     const on = this.active && name === "player";
-    document.documentElement.classList.toggle("im-on", on);
+    const withBackdrop = this.active && (name === "player" || name === "lyrics"); // el reproductor y las letras comparten el fondo
+    root.classList.toggle("im-on", on);
+    root.classList.toggle("im-bgon", withBackdrop);
+    if (withBackdrop) this.ensureBackground();
     if (on) { this.syncAll(); this.startVolumePoll(); }
     else { this.stopVolumePoll(); this.closeMenu(); }
+    if (name === "lyrics" && this.active) this.syncTrack(Player.currentId !== null ? Library.byId(Player.currentId) : null);
     if (name === "settings") this.syncCard();
     this.checkCanvas();
+    this.syncEdge(name);
+  },
+
+  /* ---------- Pantalla completa (sin franja arriba) ----------
+     En las pantallas inmersivas del estilo Inmersive el WebView ocupa TODA la pantalla y las barras de Android son
+     transparentes; la app reserva el espacio de las barras con padding (--im-st arriba, --im-nv abajo, en px CSS).
+     En el resto de pantallas se vuelve a lo de siempre. En el navegador (sin Android) no hace nada. */
+  syncEdge(name) {
+    const root = document.documentElement;
+    const native = Native.has("setEdgeToEdge") && Native.has("getBarInsets");
+    const want = native && this.active && Router.immersive(name);
+    if (want) {
+      const insets = Native.json("getBarInsets") || {};
+      const ratio = window.devicePixelRatio || 1;
+      root.style.setProperty("--im-st", Math.round((Number(insets.top) || 0) / ratio) + "px");
+      root.style.setProperty("--im-nv", Math.round((Number(insets.bottom) || 0) / ratio) + "px");
+    }
+    root.classList.toggle("im-edge", Boolean(want));
+    if (!native) return;
+    // iconos oscuros solo en pantallas claras que no tienen el fondo oscuro del reproductor
+    const lightScreen = (name !== "player" && name !== "lyrics") && root.dataset.mode === "light";
+    Native.call("setEdgeToEdge", Boolean(want), Boolean(want && lightScreen));
   },
 
   /* ---------- Canvas (estilo Inmersive) ----------
@@ -201,6 +233,9 @@ const PlayerStyle = {
       UI.swapText(this.el.title, "Sin reproducción");
       UI.swapText(this.el.artist, "Pulsar RM");
       UI.setCover(this.el.cover, null);
+      UI.setCover(this.el.lyCover, null);
+      this.lastCover = undefined;
+      this.lastSongId = null;
       this.paintBackground(null);
       this.setBadge("");
       this.setFavorite(false);
@@ -209,10 +244,39 @@ const PlayerStyle = {
     UI.swapText(this.el.title, song.name || "Sin título");
     UI.swapText(this.el.artist, song.artist || "");
     const url = Covers.get(song);
-    UI.setCover(this.el.cover, url);
+    this.setCoverSmooth(url, song.id);
+    UI.setCover(this.el.lyCover, url);
     this.paintBackground(url);
     this.setBadge(this.badgeFor(song));
     this.setFavorite(Boolean(song.favorite));
+  },
+
+  // Cambio de portada: la nueva entra desde abajo y la anterior se desvanece (no hay saltos ni cortes bruscos)
+  setCoverSmooth(url, songId) {
+    const cover = this.el.cover;
+    const animate = this.lastSongId !== null && this.lastSongId !== undefined && this.lastSongId !== songId && this.lastCover !== url
+      && this.active && Router.current === "player" && !(typeof UI.prefersReducedMotion === "function" && UI.prefersReducedMotion());
+    let ghost = null;
+    if (animate && cover.firstElementChild) {
+      ghost = cover.cloneNode(true);
+      ghost.removeAttribute("id");
+      ghost.removeAttribute("role");
+      ghost.removeAttribute("tabindex");
+      ghost.classList.remove("swap-in", "has-anim");
+      ghost.classList.add("im-cover-ghost");
+      ghost.querySelectorAll(".vs-layer, video").forEach((node) => node.remove());
+      cover.parentElement.appendChild(ghost);
+      setTimeout(() => ghost.remove(), 650);
+    }
+    UI.setCover(cover, url);
+    if (animate) {
+      cover.classList.remove("swap-in");
+      void cover.offsetWidth;
+      cover.classList.add("swap-in");
+      setTimeout(() => cover.classList.remove("swap-in"), 800);
+    }
+    this.lastCover = url;
+    this.lastSongId = songId;
   },
 
   syncPlay() {
@@ -263,25 +327,35 @@ const PlayerStyle = {
     if (!song) { UI.toast("Reproduce una canción para añadirla a favoritas."); return; }
     song.favorite = !song.favorite;
     this.setFavorite(song.favorite);
+    this.el.fav.classList.remove("pop");
+    void this.el.fav.offsetWidth;
+    this.el.fav.classList.add("pop");
     UI.toast(song.favorite ? "Añadida a favoritas" : "Quitada de favoritas");
     Store.updateSong(song).catch((error) => console.warn("No se pudo guardar el favorito:", error));
   },
 
   /* ---------- Menú ⋯ ---------- */
 
-  menuOpen() { return this.ready && !this.el.menu.classList.contains("hidden"); },
+  menuOpen() { return this.ready && this.el.menu.classList.contains("open"); },
 
-  toggleMenu() {
-    const open = !this.menuOpen();
-    this.el.menu.classList.toggle("hidden", !open);
-    this.el.menuButton.setAttribute("aria-expanded", String(open));
-    if (open) this.syncMenu();
+  toggleMenu() { if (this.menuOpen()) this.closeMenu(); else this.openMenu(); },
+
+  // Entra y sale con animación: «.hidden» (display:none) solo se pone cuando termina de salir
+  openMenu() {
+    clearTimeout(this.menuTimer);
+    this.el.menu.classList.remove("hidden");
+    void this.el.menu.offsetWidth;
+    this.el.menu.classList.add("open");
+    this.el.menuButton.setAttribute("aria-expanded", "true");
+    this.syncMenu();
   },
 
   closeMenu() {
     if (!this.ready || !this.menuOpen()) return;
-    this.el.menu.classList.add("hidden");
+    this.el.menu.classList.remove("open");
     this.el.menuButton.setAttribute("aria-expanded", "false");
+    clearTimeout(this.menuTimer);
+    this.menuTimer = setTimeout(() => { if (!this.menuOpen()) this.el.menu.classList.add("hidden"); }, 280);
   },
 
   /* ---------- Dispositivos de audio ---------- */
@@ -330,38 +404,348 @@ const PlayerStyle = {
     if (this.volTimer) { clearInterval(this.volTimer); this.volTimer = 0; }
   },
 
-  /* ---------- Fondo dinámico ----------
-     La portada se reduce a 48×48 con desenfoque y saturación (barato) y el navegador la estira con suavidad:
-     da el efecto de colores difuminados sin filtros pesados en pantalla. Al cambiar de canción se funde con la anterior. */
+  /* ---------- Fondo dinámico (v1.06: a prueba de fallos) ----------
+     Antes el fondo eran dos <canvas>: Android puede descartar su contenido (memoria, segundo plano, pérdida de la GPU) y la
+     pantalla quedaba negra hasta cambiar de canción. Ahora:
+       · la portada se reduce a 48×48 con desenfoque y se guarda como imagen (data:), que no se pierde;
+       · debajo siempre hay un degradado con la PALETA de la portada (--im-c1/2/3), así que nunca queda negro;
+       · la carga de la imagen se espera (decode) y se reintenta; si falla el desenfoque se usa otro método;
+       · las capas se funden una SOBRE otra (la anterior sigue opaca debajo): no hay bajón de brillo en el cambio;
+       · un vigilante comprueba el fondo al volver a la app, al entrar al reproductor y cada pocos segundos, y lo repinta si hace falta. */
 
-  paintBackground(url) {
+  bgCache: new Map(),   // url → { data, palette } (las últimas portadas, para repintar al instante)
+  bgLast: null,
+  bgRetries: 0,
+
+  bgHealthy() {
+    const { bgA, bgB } = this.el;
+    const top = this.bgTop;
+    return Boolean(top && top.classList.contains("on") && top.style.backgroundImage && top.style.backgroundImage !== "none") || (this.bgFallback === true && !bgA.classList.contains("on") && !bgB.classList.contains("on"));
+  },
+
+  paintBackground(url, force) {
     const bg = this.el.bg;
-    if (!bg || url === this.bgUrl) return;
+    if (!bg) return;
+    if (!force && url === this.bgUrl && this.bgHealthy()) return;
+    // con un Animated Cover/Canvas el reproductor y las letras comparten la paleta del video: no se pisa con la de la portada fija
+    if (!force && this.bgUrl === "media" && this.mediaStillValid() && this.bgHealthy()) return;
     this.bgUrl = url;
     const token = ++this.bgToken;
+    clearTimeout(this.bgRetryTimer);
     bg.classList.toggle("still", typeof UI.prefersReducedMotion === "function" && UI.prefersReducedMotion());
-    const clear = () => { bg.classList.add("nocover"); this.el.bgA.classList.remove("on"); this.el.bgB.classList.remove("on"); };
-    if (!url) { clear(); return; }
-    const image = new Image();
-    image.onload = () => {
-      if (token !== this.bgToken || !image.naturalWidth) return;
-      const next = this.bgFlip ? this.el.bgA : this.el.bgB;
-      const previous = this.bgFlip ? this.el.bgB : this.el.bgA;
-      this.bgFlip = !this.bgFlip;
-      const size = next.width;
-      const ctx = next.getContext("2d");
-      ctx.clearRect(0, 0, size, size);
-      try { ctx.filter = "blur(3px) saturate(1.7) brightness(0.92)"; } catch (error) { /* sin filtros: queda la imagen reducida */ }
-      const k = Math.max(size / image.naturalWidth, size / image.naturalHeight) * 1.15; // un poco más grande para que el borde no se vea
-      const w = image.naturalWidth * k;
-      const h = image.naturalHeight * k;
-      ctx.drawImage(image, (size - w) / 2, (size - h) / 2, w, h);
-      try { ctx.filter = "none"; } catch (error) { /* nada */ }
+    if (!url) { this.useFallback(); return; }
+    const cached = this.bgCache.get(url);
+    if (cached) { this.showRender(cached, token); return; }
+    this.loadImage(url, token).then((image) => {
+      if (token !== this.bgToken) return;
+      if (!image) throw new Error("no se pudo cargar la portada");
+      const render = this.render(image);
+      this.bgCache.set(url, render);
+      if (this.bgCache.size > 8) this.bgCache.delete(this.bgCache.keys().next().value);
+      this.showRender(render, token);
+    }).catch((error) => { if (token === this.bgToken) this.failBackground(url, error); });
+  },
+
+  // Espera a que la imagen esté lista de verdad (decode) y reintenta un par de veces
+  async loadImage(url, token) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (token !== this.bgToken) return null;
+      try {
+        const image = new Image();
+        image.decoding = "async";
+        image.src = url;
+        await image.decode();
+        if (image.naturalWidth > 0) return image;
+      } catch (error) { /* se reintenta */ }
+      await new Promise((resolve) => setTimeout(resolve, 180 * (attempt + 1)));
+    }
+    return null;
+  },
+
+  // Imagen o fotograma de video → { data: imagen 48×48 suavizada, palette: {c1,c2,c3} }
+  render(source) {
+    const w = source.videoWidth || source.naturalWidth || source.width;
+    const h = source.videoHeight || source.naturalHeight || source.height;
+    if (!w || !h) throw new Error("fuente sin tamaño");
+    const size = 48;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const k = Math.max(size / w, size / h) * 1.15;       // un poco más grande: el borde del desenfoque no se ve
+    const dw = w * k, dh = h * k, dx = (size - dw) / 2, dy = (size - dh) / 2;
+    let blurred = false;
+    try { ctx.filter = "blur(3px) saturate(1.3) brightness(0.78)"; blurred = typeof ctx.filter === "string" && ctx.filter !== "none"; } catch (error) { blurred = false; }
+    ctx.drawImage(source, dx, dy, dw, dh);
+    try { ctx.filter = "none"; } catch (error) { /* nada */ }
+    if (!blurred) this.softBlur(ctx, source, size, dx, dy, dw, dh); // recuperación: sin filtro, se suaviza reduciendo y ampliando
+    let palette = null;
+    try { palette = this.paletteOf(ctx, size); } catch (error) { palette = null; }
+    const data = canvas.toDataURL("image/jpeg", 0.86);
+    if (!data || data.length < 300) throw new Error("imagen de fondo vacía");
+    return { data, palette: palette || this.themePalette() };
+  },
+
+  softBlur(ctx, source, size, dx, dy, dw, dh) {
+    const tiny = document.createElement("canvas");
+    tiny.width = tiny.height = 9;
+    const tctx = tiny.getContext("2d");
+    tctx.imageSmoothingQuality = "high";
+    tctx.drawImage(source, dx * 9 / size, dy * 9 / size, dw * 9 / size, dh * 9 / size);
+    ctx.clearRect(0, 0, size, size);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(tiny, 0, 0, size, size);
+  },
+
+  // Tres colores de la imagen: uno medio y oscuro (c1), el más vivo (c2) y el más oscuro (c3)
+  paletteOf(ctx, size) {
+    const data = ctx.getImageData(0, 0, size, size).data;
+    const cells = 6, step = size / cells;
+    let tr = 0, tg = 0, tb = 0, n = 0, vivid = null, dark = null;
+    for (let cy = 0; cy < cells; cy++) {
+      for (let cx = 0; cx < cells; cx++) {
+        let r = 0, g = 0, b = 0, count = 0;
+        for (let y = Math.floor(cy * step); y < Math.floor((cy + 1) * step); y++) {
+          for (let x = Math.floor(cx * step); x < Math.floor((cx + 1) * step); x++) {
+            const i = (y * size + x) * 4;
+            r += data[i]; g += data[i + 1]; b += data[i + 2]; count++;
+          }
+        }
+        if (!count) continue;
+        r /= count; g /= count; b /= count;
+        tr += r; tg += g; tb += b; n++;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b), lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        const sat = max ? (max - min) / max : 0;
+        const vividScore = sat * (0.35 + lum) * (lum > 0.08 ? 1 : 0.2);
+        if (!vivid || vividScore > vivid.score) vivid = { r, g, b, score: vividScore };
+        if (!dark || lum < dark.lum) dark = { r, g, b, lum };
+      }
+    }
+    if (!n) throw new Error("sin píxeles");
+    const avg = { r: tr / n, g: tg / n, b: tb / n };
+    const mix = (c, t, k) => ({ r: c.r * (1 - k) + t.r * k, g: c.g * (1 - k) + t.g * k, b: c.b * (1 - k) + t.b * k });
+    const black = { r: 6, g: 9, b: 18 };
+    const c2 = this.tone(vivid || avg, 0.3, 0.5, 1.0);
+    return { c1: this.rgb(mix(avg, black, 0.5)), c2: this.rgb(c2), c3: this.rgb(mix(dark || avg, black, 0.72)) };
+  },
+
+  // Ajusta el brillo de un color a [lmin, lmax] (en HSL) y le da un poco más de vida
+  tone(c, lmin, lmax, satBoost) {
+    const r = c.r / 255, g = c.g / 255, b = c.b / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0, l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      h /= 6;
+    }
+    l = Math.min(lmax, Math.max(lmin, l));
+    s = Math.min(1, s * satBoost);
+    const f = (p, q, t) => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+    if (s === 0) return { r: l * 255, g: l * 255, b: l * 255 };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s, pp = 2 * l - q;
+    return { r: f(pp, q, h + 1 / 3) * 255, g: f(pp, q, h) * 255, b: f(pp, q, h - 1 / 3) * 255 };
+  },
+
+  rgb(c) { return "rgb(" + Math.round(c.r) + "," + Math.round(c.g) + "," + Math.round(c.b) + ")"; },
+
+  // Paleta del tema (color de acento de Pulsar RM): se usa cuando no hay portada o no se pudo leer
+  themePalette() {
+    let hex = "";
+    try { hex = cssToHex(getComputedStyle(document.documentElement).getPropertyValue("--accent")); } catch (error) { hex = ""; }
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
+    const base = m ? { r: parseInt(m[1].slice(0, 2), 16), g: parseInt(m[1].slice(2, 4), 16), b: parseInt(m[1].slice(4, 6), 16) } : { r: 90, g: 110, b: 190 };
+    const black = { r: 6, g: 9, b: 18 };
+    const mix = (c, t, k) => ({ r: c.r * (1 - k) + t.r * k, g: c.g * (1 - k) + t.g * k, b: c.b * (1 - k) + t.b * k });
+    return { c1: this.rgb(mix(base, black, 0.62)), c2: this.rgb(this.tone(base, 0.34, 0.6, 1)), c3: this.rgb(mix(base, black, 0.9)) };
+  },
+
+  applyPalette(palette) {
+    const root = document.documentElement;
+    root.style.setProperty("--im-c1", palette.c1);
+    root.style.setProperty("--im-c2", palette.c2);
+    root.style.setProperty("--im-c3", palette.c3);
+  },
+
+  // Muestra la imagen nueva ENCIMA de la anterior; la anterior solo se apaga cuando la nueva ya está opaca
+  showRender(render, token) {
+    const { bg, bgA, bgB } = this.el;
+    const next = this.bgTop === bgA ? bgB : bgA;
+    const previous = this.bgTop === bgA ? bgA : bgB;
+    const probe = new Image();
+    const apply = () => {
+      if (token !== this.bgToken) return;
+      if (next.classList.contains("on")) { // era la capa de abajo de un cambio anterior: se apaga sin animar (queda tapada)
+        next.style.transition = "none";
+        next.classList.remove("on");
+        void next.offsetWidth;
+        next.style.transition = "";
+      }
+      next.style.backgroundImage = 'url("' + render.data + '")';
+      next.style.zIndex = "2";
+      previous.style.zIndex = "1";
+      this.applyPalette(render.palette);
       bg.classList.remove("nocover");
+      this.bgFallback = false;
+      void next.offsetWidth;
       next.classList.add("on");
-      previous.classList.remove("on");
+      this.bgTop = next;
+      this.bgLast = render;
+      this.bgRetries = 0;
+      clearTimeout(this.bgSettle);
+      this.bgSettle = setTimeout(() => { if (token === this.bgToken && this.bgTop === next) previous.classList.remove("on"); }, 1150);
     };
-    image.onerror = () => { if (token === this.bgToken) clear(); };
-    image.src = url;
+    probe.src = render.data;
+    if (typeof probe.decode === "function") probe.decode().then(apply, apply); else { probe.onload = apply; probe.onerror = apply; }
+  },
+
+  // Sin portada (o ya agotados los reintentos): fondo con la paleta del tema; las capas se funden hacia fuera
+  useFallback() {
+    const { bg, bgA, bgB } = this.el;
+    this.applyPalette(this.themePalette());
+    bg.classList.add("nocover");
+    bgA.classList.remove("on");
+    bgB.classList.remove("on");
+    this.bgTop = null;
+    this.bgFallback = true;
+  },
+
+  failBackground(url, error) {
+    Diagnostics.log("fondo", String(error && error.message ? error.message : error));
+    if (this.bgRetries < 3) { // se mantiene lo que ya había (coherente con la canción anterior) y se reintenta con calma
+      this.bgRetries++;
+      const token = this.bgToken;
+      this.bgRetryTimer = setTimeout(() => { if (token === this.bgToken) this.paintBackground(url, true); }, 1500 * this.bgRetries);
+      if (!this.bgLast) this.useFallback();
+      return;
+    }
+    this.useFallback();
+  },
+
+  // Vuelve a pintar el fondo si hace falta (al entrar, al volver a la app, y cada pocos segundos mientras se ve)
+  ensureBackground() {
+    if (!this.ready || !this.active) return;
+    const song = Player.currentId !== null ? Library.byId(Player.currentId) : null;
+    const url = song ? Covers.get(song) : null;
+    // con un video en movimiento el fondo sigue al video (bgUrl = «media»): solo se repinta si dejó de estar sano o el video ya no está
+    if (this.bgUrl === "media" && this.mediaStillValid() && this.bgHealthy()) return;
+    if (url !== this.bgUrl || !this.bgHealthy()) this.paintBackground(url, true);
+  },
+
+  // El fondo «media» sigue valiendo mientras la canción sea la misma y conserve su Animated Cover o su Canvas activo
+  mediaStillValid() {
+    if (typeof Visuals === "undefined" || Player.currentId === null || this.mediaSongId !== Player.currentId) return false;
+    return Visuals.hasCover(Player.currentId) || Visuals.canvasOn(Player.currentId);
+  },
+
+  // ¿Hay un Animated Cover o Canvas (video) montado para este diseño?
+  hasMedia() {
+    if (typeof Visuals === "undefined" || !Visuals.mounted) return false;
+    const mounted = Visuals.mounted.iCanvas || Visuals.mounted.iCover;
+    return Boolean(mounted && mounted.media && mounted.media.tagName === "VIDEO" && mounted.layer.isConnected);
+  },
+
+  initBackdrop() {
+    this.bgTop = null;
+    this.bgFallback = true;
+    this.applyPalette(this.themePalette());
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) this.ensureBackground(); });
+    window.addEventListener("pageshow", () => this.ensureBackground());
+    setInterval(() => {
+      if (document.hidden || !document.documentElement.classList.contains("im-bgon")) return;
+      this.ensureBackground();
+    }, 4000);
+    // con un Animated Cover / Canvas en movimiento, el fondo sigue sus colores (más seguido, para que los bordes de la imagen se fundan)
+    setInterval(() => { if (!document.hidden) this.followMedia(); }, 2200);
+    if (typeof Visuals !== "undefined") Visuals.on(() => setTimeout(() => this.followMedia(), 400));
+    Settings.watch(["mode", "theme"], () => { if (this.bgFallback) this.applyPalette(this.themePalette()); });
+  },
+
+  // Con un Animated Cover (o un Canvas) en movimiento, la paleta y el fondo siguen los colores del video
+  followMedia() {
+    if (!this.active || Router.current !== "player" || typeof Visuals === "undefined" || !Visuals.mounted) return;
+    if (!this.hasMedia()) { if (this.bgUrl === "media") this.ensureBackground(); return; }   // el video se quitó: vuelve el fondo de la portada
+    const mounted = Visuals.mounted.iCanvas || Visuals.mounted.iCover;
+    const video = mounted.media;
+    if (video.paused || video.readyState < 2) return;
+    try {
+      const render = this.render(video);
+      this.bgUrl = "media";
+      this.mediaSongId = Player.currentId;
+      this.showRender(render, this.bgToken);
+    } catch (error) { /* se queda con el fondo de la portada */ }
+  },
+
+  /* ---------- Transiciones entre pantallas ----------
+     Al cambiar de pantalla la anterior no desaparece de golpe: se deja una copia (fantasma) que se aleja y se desvanece mientras la
+     nueva entra (animación en immersive.css). Es solo visual: Router.show se ejecuta igual y al instante, sin esperas ni toques perdidos. */
+
+  rank(name) { return name === "home" || name === "library" ? 0 : name === "player" ? 1 : 2; },
+
+  wrapRouter() {
+    const show = Router.show;
+    Router.show = function (name) {
+      const previousEl = document.querySelector(".view.active");
+      const previous = previousEl ? previousEl.dataset.viewName : null;
+      let ghost = null;
+      let direction = "fwd";
+      if (PlayerStyle.ready && PlayerStyle.active && previousEl && previous && previous !== name
+          && !(PlayerStyle.rank(previous) === 0 && PlayerStyle.rank(name) === 0)
+          && !(typeof UI.prefersReducedMotion === "function" && UI.prefersReducedMotion())) {
+        direction = PlayerStyle.rank(name) < PlayerStyle.rank(previous) ? "back" : "fwd";
+        try { ghost = PlayerStyle.makeGhost(previousEl); } catch (error) { ghost = null; }
+      }
+      document.documentElement.dataset.nav = direction;
+      const result = show.apply(this, arguments);
+      if (ghost) PlayerStyle.playGhost(ghost, direction);
+      return result;
+    };
+  },
+
+  makeGhost(view) {
+    const rect = view.getBoundingClientRect();
+    if (rect.width < 40 || rect.height < 40) return null;
+    const ghost = view.cloneNode(true);
+    ghost.classList.remove("active");
+    ghost.classList.add("im-ghost");
+    ghost.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
+    ghost.querySelectorAll("[data-progress], [data-time], [data-action], [data-view], [data-im], [data-vs]").forEach((node) => {
+      ["data-progress", "data-time", "data-action", "data-view", "data-im", "data-vs"].forEach((name) => node.removeAttribute(name));
+    });
+    ghost.querySelectorAll("video, audio, canvas, input, .vs-layer").forEach((node) => { if (node.tagName !== "INPUT") node.remove(); });
+    ghost.setAttribute("aria-hidden", "true");
+    Object.assign(ghost.style, { display: "block", left: rect.left + "px", top: rect.top + "px", width: rect.width + "px", height: rect.height + "px" });
+    const lyrics = view.querySelector(".lyrics");
+    ghost._scroll = lyrics ? lyrics.scrollTop : 0;
+    return ghost;
+  },
+
+  playGhost(ghost, direction) {
+    const host = document.getElementById("app") || document.body;
+    host.appendChild(ghost);
+    const lyrics = ghost.querySelector(".lyrics");
+    if (lyrics) lyrics.scrollTop = ghost._scroll || 0;
+    ghost.classList.add(direction);
+    const done = () => ghost.remove();
+    ghost.addEventListener("animationend", done, { once: true });
+    setTimeout(done, 700);
+  },
+
+  /* ---------- Ventanas (hojas inferiores y diálogos) ----------
+     La app las quita del documento al cerrarlas. Aquí se detecta y se vuelven a dejar un momento con la animación de salida,
+     así no se cierran de golpe. */
+  watchOverlays() {
+    const observer = new MutationObserver((records) => {
+      if (!this.active || (typeof UI.prefersReducedMotion === "function" && UI.prefersReducedMotion())) return;
+      records.forEach((record) => record.removedNodes.forEach((node) => {
+        if (!(node instanceof HTMLElement) || node.dataset.imLeaving || !node.matches(".sheet, .confirm")) return;
+        node.dataset.imLeaving = "1";
+        node.classList.add("im-leaving");
+        document.body.appendChild(node);
+        setTimeout(() => node.remove(), 450);
+      }));
+    });
+    observer.observe(document.body, { childList: true });
   }
 };

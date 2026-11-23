@@ -32,7 +32,8 @@
 // v28 (app v1.06, integración nativa): copia de la biblioteca para Android Auto, órdenes desde fuera, compartir varios audios, botón de batería (script.js, features.js, index.html).
 // v29 (app v1.06): estilo de reproductor «Inmersive» como alternativa a Pulsar RM (immersive.js, immersive.css, index.html, script.js, features.js); renueva la copia guardada.
 // v30 (app v1.06): Animated Covers y Canvas (visuals.js, visuals.css, immersive.*, index.html, features.js); renueva la copia guardada.
-const CACHE_NAME = "pulsar-rm-shell-v30";
+// v31 (app v1.06): refinamiento de Inmersive — fondo a prueba de fallos, pantalla completa, transiciones, letras (immersive.*, visuals.*, index.html); renueva la copia guardada.
+const CACHE_NAME = "pulsar-rm-shell-v31";
 
 const APP_SHELL = [
   "./",

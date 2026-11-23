@@ -21,6 +21,7 @@ const Visuals = {
   mounted: {},
   listeners: [],
   syncToken: 0,
+  failed: new Set(),   // contenido que este dispositivo no pudo reproducir (no se vuelve a intentar hasta cambiarlo)
 
   /* ---------- Arranque ---------- */
 
@@ -351,7 +352,7 @@ const Visuals = {
     const entry = song ? this.entry(song.id) : null;
     const onPlayer = Router.current === "player";
     const inmersive = typeof PlayerStyle !== "undefined" && PlayerStyle.ready && PlayerStyle.active;
-    const canvas = Boolean(entry && entry.c && entry.on);
+    const canvas = Boolean(entry && entry.c && entry.on && !this.failed.has("c:" + song.id + ":" + entry.c.t));
     return {
       id: song ? song.id : null,
       entry,
@@ -414,7 +415,22 @@ const Visuals = {
     this.mounted[name] = { key, layer, media };
     // aparece con un fundido cuando ya hay imagen (sin parpadeos ni cuadros vacíos)
     const show = () => layer.classList.add("on");
-    if (media.tagName === "VIDEO") { media.addEventListener("loadeddata", show, { once: true }); setTimeout(show, 1500); } else if (media.complete) show(); else media.addEventListener("load", show, { once: true });
+    if (media.tagName === "VIDEO") {
+      media.addEventListener("loadeddata", show, { once: true });
+      media.addEventListener("error", () => this.failMount(name, layer, key, target.kind), { once: true });
+      // si en 9 s no hay imagen, este dispositivo no puede mostrarlo: se quita (nunca queda una capa negra encima)
+      setTimeout(() => { if (!layer.classList.contains("on") && this.mounted[name] && this.mounted[name].layer === layer) this.failMount(name, layer, key, target.kind); }, 9000);
+    } else if (media.complete) show();
+    else { media.addEventListener("load", show, { once: true }); media.addEventListener("error", () => this.failMount(name, layer, key, target.kind), { once: true }); }
+  },
+
+  failMount(name, layer, key, kind) {
+    if (!this.mounted[name] || this.mounted[name].layer !== layer) return;
+    Diagnostics.log("visual", "no se pudo reproducir " + key);
+    this.failed.add(key);
+    this.unmount(name);
+    if (kind === "c") UI.toast("Este dispositivo no puede reproducir ese Canvas. Prueba con otro archivo (MP4 H.264 o WebM).");
+    this.sync();
   },
 
   // Los videos solo corren mientras suena la música y el reproductor está a la vista (ahorra batería y CPU)

@@ -99,6 +99,7 @@ v1.06 — Native Android integration (Android Auto, voice search, share, lock sc
 - Favorites (star) are stored on the song and sent to Android Auto as a "Favoritas" list.
 - **Animated Covers**: tap the cover in either player → "Agregar Animated Cover" → pick a short video (MP4/WebM) or animated image (GIF/WebP). It replaces the still cover, loops silently and adapts to each design (Pulsar RM: its own card with an accent ring; Inmersive: large Apple-Music-style cover).
 - **Canvas** (per song, from the ⋯ menu: Agregar / Activar / Desactivar / Cambiar Canvas; deactivating keeps the file). Pulsar RM shows it as a vertical card in its own stage; Inmersive shows it full-screen behind the player (Spotify Canvas style) and tapping it expands it (UI fades out, only title/artist/star/⋯ remain); tap again or Back to return, music keeps playing.
+- **Inmersive refinement**: full-screen (no strip under the status bar: the WebView extends under transparent system bars and the app reserves the space itself), a background that can no longer go black (palette gradient + image layers + automatic recovery), softer shadows and cover transitions, Apple-Music-style lyrics screen sharing the same dynamic background and palette, animated menus / windows / screen transitions, and Animated Covers shown full-width with soft edges blending into the background.
 - Files are stored per song inside the app (IndexedDB), so they survive closing the app; videos are always muted and only play while music plays and the player is visible.
 
 
