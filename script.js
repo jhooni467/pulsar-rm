@@ -1496,6 +1496,7 @@ const Lyrics = {
   delay: 0,
   active: -1,        // primera línea encendida (o la que se queda encendida en una pausa corta)
   lit: [],           // índices de TODAS las líneas encendidas (pueden ser varias a la vez)
+  anchorRatio: null, // v1.06: null = la letra que suena se centra (como siempre); un número (0–1) la coloca a esa altura del área (estilo Inmersive)
   raw: [],           // líneas que suenan según el tiempo (antes de acoplar las voces de fondo a su verso)
   anchorKey: -1,     // v1.06: grupo de versos que manda en el desplazamiento (solo se desplaza cuando CAMBIA)
   frameIdx: [],      // líneas que se enmarcan en pantalla: el grupo más reciente y los que aún se cantan (con todos sus mini versos)
@@ -2044,7 +2045,8 @@ const Lyrics = {
     this.anchorTop = top;
     this.trackLayout(); // los espacios que están cerrándose o abriéndose por encima del ancla no deben moverla
     const span = bottom - top;
-    const target = span > geo.height * 0.7 ? top - geo.height * 0.28 : top - (geo.height - span) / 2;
+    const target = this.anchorRatio !== null ? top - geo.height * this.anchorRatio
+      : span > geo.height * 0.7 ? top - geo.height * 0.28 : top - (geo.height - span) / 2;
     const goal = Math.min(geo.max, Math.max(0, Math.round(target)));
     const smooth = !instant && !UI.prefersReducedMotion();
     const pace = this.data && this.data.pace;

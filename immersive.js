@@ -57,6 +57,7 @@ const PlayerStyle = {
     const back = Router.handleBack;
     Router.handleBack = function (...args) {
       if (PlayerStyle.menuOpen()) { PlayerStyle.closeMenu(); return true; }
+      if (PlayerStyle.lyMenuOpen()) { PlayerStyle.closeLyMenu(); return true; }
       if (PlayerStyle.canvasExpanded) { PlayerStyle.collapseCanvas(); return true; }
       return back.apply(this, args);
     };
@@ -109,6 +110,17 @@ const PlayerStyle = {
       }
     });
     window.addEventListener("resize", () => { if (this.canvasExpanded) this.measureShift(); });
+
+    // Pantalla de letras (Inmersive): estrella, menú ⋯ y controles que aparecen al tocar
+    document.addEventListener("click", (event) => {
+      const action = event.target.closest("[data-im-ly]");
+      if (action) { this.handleLy(action.dataset.imLy); return; }
+      if (this.lyMenuOpen() && !event.target.closest("#im-ly-menu")) this.closeLyMenu();
+    });
+    document.addEventListener("pointerdown", (event) => {
+      if (!this.active || Router.current !== "lyrics" || event.target.closest(".sub-top")) return;
+      this.showLyricsUi(4200);
+    }, { passive: true });
     document.addEventListener("keydown", (event) => { if (event.key === "Escape" && this.menuOpen()) this.closeMenu(); });
 
     // Tarjeta de Ajustes: elegir estilo
@@ -146,6 +158,14 @@ const PlayerStyle = {
     const withBackdrop = this.active && (name === "player" || name === "lyrics"); // el reproductor y las letras comparten el fondo
     root.classList.toggle("im-on", on);
     root.classList.toggle("im-bgon", withBackdrop);
+    if (typeof Lyrics !== "undefined") {   // Inmersive pone la línea que suena en el tercio superior (Apple Music); Pulsar RM la centra
+      const wanted = this.active ? 0.12 : null;
+      if (Lyrics.anchorRatio !== wanted) { Lyrics.anchorRatio = wanted; if (name === "lyrics") setTimeout(() => Lyrics.center(true), 60); }
+    }
+    const lyrics = this.active && name === "lyrics";
+    root.classList.toggle("im-ly", lyrics);
+    if (lyrics) this.showLyricsUi(2600);                       // al entrar, los controles se ven un momento y se esconden solos
+    else { root.classList.remove("im-ly-ui", "im-ly-tools"); this.closeLyMenu(); }
     if (withBackdrop) this.ensureBackground();
     if (on) { this.syncAll(); this.startVolumePoll(); }
     else { this.stopVolumePoll(); this.closeMenu(); }
@@ -317,9 +337,11 @@ const PlayerStyle = {
   /* ---------- Favoritos ---------- */
 
   setFavorite(on) {
-    if (!this.el.fav) return;
-    this.el.fav.setAttribute("aria-pressed", String(on));
-    this.el.fav.setAttribute("aria-label", on ? "Quitar de favoritas" : "Añadir a favoritas");
+    [this.el.fav, document.getElementById("im-ly-fav")].forEach((button) => {
+      if (!button) return;
+      button.setAttribute("aria-pressed", String(on));
+      button.setAttribute("aria-label", on ? "Quitar de favoritas" : "Añadir a favoritas");
+    });
   },
 
   toggleFavorite() {
@@ -327,9 +349,12 @@ const PlayerStyle = {
     if (!song) { UI.toast("Reproduce una canción para añadirla a favoritas."); return; }
     song.favorite = !song.favorite;
     this.setFavorite(song.favorite);
-    this.el.fav.classList.remove("pop");
-    void this.el.fav.offsetWidth;
-    this.el.fav.classList.add("pop");
+    [this.el.fav, document.getElementById("im-ly-fav")].forEach((button) => {
+      if (!button) return;
+      button.classList.remove("pop");
+      void button.offsetWidth;
+      button.classList.add("pop");
+    });
     UI.toast(song.favorite ? "Añadida a favoritas" : "Quitada de favoritas");
     Store.updateSong(song).catch((error) => console.warn("No se pudo guardar el favorito:", error));
   },
@@ -526,7 +551,7 @@ const PlayerStyle = {
     const mix = (c, t, k) => ({ r: c.r * (1 - k) + t.r * k, g: c.g * (1 - k) + t.g * k, b: c.b * (1 - k) + t.b * k });
     const black = { r: 6, g: 9, b: 18 };
     const c2 = this.tone(vivid || avg, 0.3, 0.5, 1.0);
-    return { c1: this.rgb(mix(avg, black, 0.5)), c2: this.rgb(c2), c3: this.rgb(mix(dark || avg, black, 0.72)) };
+    return { c1: this.rgb(mix(avg, black, 0.5)), c2: this.rgb(c2), c3: this.rgb(mix(dark || avg, black, 0.72)), c4: this.rgb(this.tone(avg, 0.46, 0.64, 0.3)) };
   },
 
   // Ajusta el brillo de un color a [lmin, lmax] (en HSL) y le da un poco más de vida
@@ -558,7 +583,7 @@ const PlayerStyle = {
     const base = m ? { r: parseInt(m[1].slice(0, 2), 16), g: parseInt(m[1].slice(2, 4), 16), b: parseInt(m[1].slice(4, 6), 16) } : { r: 90, g: 110, b: 190 };
     const black = { r: 6, g: 9, b: 18 };
     const mix = (c, t, k) => ({ r: c.r * (1 - k) + t.r * k, g: c.g * (1 - k) + t.g * k, b: c.b * (1 - k) + t.b * k });
-    return { c1: this.rgb(mix(base, black, 0.62)), c2: this.rgb(this.tone(base, 0.34, 0.6, 1)), c3: this.rgb(mix(base, black, 0.9)) };
+    return { c1: this.rgb(mix(base, black, 0.62)), c2: this.rgb(this.tone(base, 0.34, 0.6, 1)), c3: this.rgb(mix(base, black, 0.9)), c4: this.rgb(this.tone(base, 0.46, 0.64, 0.3)) };
   },
 
   applyPalette(palette) {
@@ -566,6 +591,7 @@ const PlayerStyle = {
     root.style.setProperty("--im-c1", palette.c1);
     root.style.setProperty("--im-c2", palette.c2);
     root.style.setProperty("--im-c3", palette.c3);
+    root.style.setProperty("--im-c4", palette.c4 || palette.c2);
   },
 
   // Muestra la imagen nueva ENCIMA de la anterior; la anterior solo se apaga cuando la nueva ya está opaca
@@ -747,5 +773,47 @@ const PlayerStyle = {
       }));
     });
     observer.observe(document.body, { childList: true });
+  },
+
+  /* ---------- Pantalla de letras (Inmersive) ---------- */
+
+  lyMenuOpen() { const menu = document.getElementById("im-ly-menu"); return Boolean(menu && menu.classList.contains("open")); },
+
+  openLyMenu() {
+    const menu = document.getElementById("im-ly-menu"), button = document.getElementById("im-ly-more");
+    if (!menu) return;
+    clearTimeout(this.lyMenuTimer);
+    menu.classList.remove("hidden");
+    void menu.offsetWidth;
+    menu.classList.add("open");
+    if (button) button.setAttribute("aria-expanded", "true");
+  },
+
+  closeLyMenu() {
+    const menu = document.getElementById("im-ly-menu"), button = document.getElementById("im-ly-more");
+    if (!menu || !menu.classList.contains("open")) return;
+    menu.classList.remove("open");
+    if (button) button.setAttribute("aria-expanded", "false");
+    clearTimeout(this.lyMenuTimer);
+    this.lyMenuTimer = setTimeout(() => { if (!menu.classList.contains("open")) menu.classList.add("hidden"); }, 280);
+  },
+
+  handleLy(action) {
+    switch (action) {
+      case "fav": this.toggleFavorite(); break;
+      case "menu": if (this.lyMenuOpen()) this.closeLyMenu(); else this.openLyMenu(); break;
+      case "options": this.closeLyMenu(); LyricsScreen.toggleOptions(); break;
+      case "tools": this.closeLyMenu(); document.documentElement.classList.toggle("im-ly-tools"); break;
+      case "controls": this.closeLyMenu(); this.showLyricsUi(7000); break;
+      default: break;
+    }
+  },
+
+  // Los controles de reproducción de las letras aparecen al tocar y se esconden solos (la referencia no los muestra en reposo)
+  showLyricsUi(ms) {
+    const root = document.documentElement;
+    root.classList.add("im-ly-ui");
+    clearTimeout(this.lyUiTimer);
+    this.lyUiTimer = setTimeout(() => root.classList.remove("im-ly-ui"), ms || 4200);
   }
 };
